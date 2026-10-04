@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="16" y1="16" x2="112" y2="112" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F1F5F9"/>
+      <stop offset="1" stop-color="#E2E8F0"/>
+    </linearGradient>
+    <linearGradient id="boxGrad" x1="32" y1="36" x2="96" y2="100" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#1D4ED8"/>
+    </linearGradient>
+    <linearGradient id="boxSide" x1="64" y1="56" x2="96" y2="100" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#1E40AF"/>
+    </linearGradient>
+    <linearGradient id="boxTop" x1="32" y1="36" x2="96" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#60A5FA"/>
+      <stop offset="1" stop-color="#3B82F6"/>
+    </linearGradient>
+    <linearGradient id="tapeGrad" x1="48" y1="44" x2="80" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FCD34D"/>
+      <stop offset="1" stop-color="#F59E0B"/>
+    </linearGradient>
+    <filter id="dropShadow" x="18" y="24" width="92" height="92" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#0F172A" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <!-- Background Circle / Rounded Rect -->
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#bgGrad)"/>
+  <rect x="8" y="8" width="112" height="112" rx="28" stroke="#CBD5E1" stroke-width="2"/>
+
+  <!-- 3D Box with Shadow -->
+  <g filter="url(#dropShadow)">
+    <!-- Box Left Face -->
+    <path d="M32 54L64 70V102L32 86V54Z" fill="url(#boxGrad)"/>
+    <!-- Box Right Face -->
+    <path d="M64 70L96 54V86L64 102V70Z" fill="url(#boxSide)"/>
+    <!-- Box Top Face -->
+    <path d="M32 54L64 38L96 54L64 70L32 54Z" fill="url(#boxTop)"/>
+    
+    <!-- Top Flaps / Tape Line -->
+    <path d="M52 44L76 56L64 62L40 50L52 44Z" fill="url(#tapeGrad)" opacity="0.9"/>
+    <!-- Center Crease -->
+    <path d="M64 70V102" stroke="#1E3A8A" stroke-width="1.5" stroke-opacity="0.4"/>
+    <path d="M64 38L64 70" stroke="#93C5FD" stroke-width="1.5" stroke-opacity="0.6"/>
+
+    <!-- Subtle Label on Front Left -->
+    <rect x="40" y="68" width="14" height="18" rx="2" fill="#FFFFFF" fill-opacity="0.85"/>
+    <line x1="43" y1="72" x2="51" y2="72" stroke="#64748B" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="43" y1="76" x2="49" y2="76" stroke="#64748B" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="43" y1="80" x2="47" y2="80" stroke="#64748B" stroke-width="1.5" stroke-linecap="round"/>
+  </g>
+
+  <!-- Sparkles / Modern Accent -->
+  <circle cx="98" cy="30" r="3" fill="#3B82F6"/>
+  <circle cx="28" cy="98" r="2.5" fill="#94A3B8"/>
+</svg>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="title">
+  <title id="title">Boundary Cafe menu item illustration</title><circle cx="160" cy="160" r="136" fill="#FFF8EE"/>
+  <circle cx="160" cy="170" r="91" fill="#FFFFFF" stroke="#0836D8" stroke-width="8"/>
+  <circle cx="160" cy="170" r="61" fill="#FFF8EE" stroke="#FF8A00" stroke-width="7"/>
+  <path d="M74 65v76c0 18 14 32 32 32M92 65v76M110 65v76M246 65v108M246 65c-24 15-29 56 0 70" fill="none" stroke="#F4511E" stroke-width="8" stroke-linecap="round"/>
+  <path d="M132 170c15-22 41-22 56 0-15 22-41 22-56 0Z" fill="#7A3E24"/>
+</svg>

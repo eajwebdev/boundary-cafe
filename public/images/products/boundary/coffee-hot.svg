@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="title">
+  <title id="title">Hot coffee illustration</title><circle cx="160" cy="160" r="136" fill="#FFF8EE"/>
+  <path d="M86 126h135v84c0 34-27 61-61 61h-13c-34 0-61-27-61-61v-84Z" fill="#FFFFFF" stroke="#0836D8" stroke-width="8"/>
+  <path d="M221 150h15c25 0 25 51 0 51h-15" fill="none" stroke="#0836D8" stroke-width="8"/>
+  <path d="M104 151c35 15 69 15 99 0v55c0 27-21 47-47 47h-8c-25 0-44-20-44-47v-55Z" fill="#7A3E24"/>
+  <path d="M127 104c-16-24 13-27 0-52M160 104c-16-24 13-27 0-52M193 104c-16-24 13-27 0-52" fill="none" stroke="#F4511E" stroke-width="7" stroke-linecap="round"/>
+</svg>

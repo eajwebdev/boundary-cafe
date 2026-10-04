@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="title">
+  <title id="title">Shareable plate illustration</title><circle cx="160" cy="160" r="136" fill="#FFF8EE"/>
+  <ellipse cx="160" cy="177" rx="116" ry="82" fill="#FFFFFF" stroke="#0836D8" stroke-width="8"/>
+  <ellipse cx="160" cy="177" rx="88" ry="58" fill="#FF8A00" opacity=".35" stroke="#7A3E24" stroke-width="6"/>
+  <path d="M91 184c21-34 37 28 58-8s35 27 55-7 30 18 30 18" fill="none" stroke="#F4511E" stroke-width="11" stroke-linecap="round"/>
+  <path d="M102 149c19 15 30-19 48-4s30-13 49 2 25-5 25-5" fill="none" stroke="#FF8A00" stroke-width="9" stroke-linecap="round"/>
+  <circle cx="117" cy="205" r="8" fill="#0836D8"/><circle cx="185" cy="206" r="8" fill="#0836D8"/>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="title">
+  <title id="title">Burger illustration</title><circle cx="160" cy="160" r="136" fill="#FFF8EE"/>
+  <path d="M70 147c5-49 40-79 90-79s85 30 90 79H70Z" fill="#FF8A00" stroke="#0836D8" stroke-width="8"/>
+  <path d="M67 158h186" stroke="#05258F" stroke-width="9" stroke-linecap="round"/>
+  <path d="m79 177 36 20 45-20 45 20 36-20" fill="none" stroke="#F4511E" stroke-width="15" stroke-linejoin="round"/>
+  <path d="M79 210h162v15c0 19-15 34-34 34h-94c-19 0-34-15-34-34v-15Z" fill="#FF8A00" stroke="#0836D8" stroke-width="8"/>
+  <path d="M96 209h128" stroke="#7A3E24" stroke-width="21" stroke-linecap="round"/>
+</svg>

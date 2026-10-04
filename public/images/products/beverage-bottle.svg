@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <rect width="120" height="120" rx="20" fill="#f0f9ff" />
+  <rect x="55" y="24" width="10" height="8" rx="2" fill="#0284c7" />
+  <path d="M54 32 L66 32 L70 44 L70 82 C70 86 50 86 50 82 L50 44 Z" fill="#bae6fd" stroke="#0284c7" stroke-width="1.5" />
+  <rect x="50" y="52" width="20" height="16" fill="#0284c7" />
+  <text x="60" y="63" text-anchor="middle" font-family="sans-serif" font-size="7" font-weight="bold" fill="#ffffff">WATER</text>
+  <text x="60" y="105" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="bold" fill="#0369a1">WATER / JUICE</text>
+</svg>

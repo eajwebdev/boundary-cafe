@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="title">
+  <title id="title">Non-coffee fruit drink illustration</title><circle cx="160" cy="160" r="136" fill="#FFF8EE"/>
+  <path d="M101 91h118l-16 163c-1 10-10 18-20 18h-46c-10 0-19-8-20-18L101 91Z" fill="#FFFFFF" stroke="#0836D8" stroke-width="8"/>
+  <path d="M113 144h94l-10 106c-1 6-6 10-12 10h-50c-6 0-11-4-12-10l-10-106Z" fill="#F4511E" opacity=".82"/>
+  <circle cx="140" cy="180" r="8" fill="#FFF8EE"/><circle cx="181" cy="211" r="7" fill="#FFF8EE"/><circle cx="168" cy="163" r="5" fill="#FFF8EE"/>
+  <path d="M188 111c6-30 27-48 53-48-5 25-22 45-53 48Z" fill="#FF8A00" stroke="#7A3E24" stroke-width="6"/>
+  <path d="M96 91h128" stroke="#05258F" stroke-width="8" stroke-linecap="round"/>
+</svg>

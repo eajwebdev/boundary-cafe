@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="title">
+  <title id="title">Cafe dessert illustration</title><circle cx="160" cy="160" r="136" fill="#FFF8EE"/>
+  <path d="M78 222 158 70l93 152H78Z" fill="#FFFFFF" stroke="#0836D8" stroke-width="8" stroke-linejoin="round"/>
+  <path d="m98 211 60-113 70 113H98Z" fill="#FF8A00" opacity=".75"/>
+  <path d="M108 192h108M124 160h73M142 127h36" stroke="#7A3E24" stroke-width="9" stroke-linecap="round"/>
+  <path d="M158 70c8-24 32-27 43-10-6 18-24 25-43 10Z" fill="#F4511E" stroke="#05258F" stroke-width="6"/>
+  <path d="M66 239h198" stroke="#05258F" stroke-width="8" stroke-linecap="round"/>
+</svg>

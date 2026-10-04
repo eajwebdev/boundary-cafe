@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="title">
+  <title id="title">Iced coffee illustration</title><circle cx="160" cy="160" r="136" fill="#FFF8EE"/>
+  <path d="M102 82h116l-15 171c-1 11-10 19-21 19h-44c-11 0-20-8-21-19L102 82Z" fill="#FFFFFF" stroke="#0836D8" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M113 144h94l-9 103c-1 7-7 12-14 12h-48c-7 0-13-5-14-12l-9-103Z" fill="#7A3E24"/>
+  <path d="m132 107 27 8-8 27-27-8 8-27Zm51 4 24 10-10 24-24-10 10-24Z" fill="#FFFFFF" opacity=".75" stroke="#05258F" stroke-width="5"/>
+  <path d="M96 82h128" stroke="#05258F" stroke-width="8" stroke-linecap="round"/><path d="m181 49-21 130" stroke="#F4511E" stroke-width="7" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>EA POS Pro — Marketing Brochure</title>
+<style>
+/* ══ BASE ════════════════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:10.5pt}
+body{
+  font-family:'Segoe UI',Calibri,Arial,sans-serif;
+  color:#111827;
+  background:#e8ecf3;
+  line-height:1.7;
+}
+a{color:inherit;text-decoration:none}
+
+/* ══ PRINT ═══════════════════════════════════════════════════════════════ */
+@media print{
+  body{background:#fff}
+  .panel{box-shadow:none!important;border:1pt solid #d1d5db}
+  .no-print{display:none}
+  .brochure{gap:0}
+  .page-break{page-break-after:always}
+}
+
+/* ══ UTILITY ══════════════════════════════════════════════════════════════ */
+.accent   {color:#1d4ed8}
+.gold     {color:#d97706}
+.green    {color:#16a34a}
+.red      {color:#dc2626}
+.muted    {color:#6b7280}
+.bold     {font-weight:700}
+.center   {text-align:center}
+.tag{
+  display:inline-block;
+  background:#dbeafe;color:#1e40af;
+  font-size:7.5pt;font-weight:700;
+  border-radius:99px;
+  padding:2px 10px;
+  margin:2px 3px 2px 0;
+  letter-spacing:.4px;
+}
+.tag.green{background:#dcfce7;color:#15803d}
+.tag.gold {background:#fef3c7;color:#92400e}
+.tag.red  {background:#fee2e2;color:#991b1b}
+.tag.purple{background:#ede9fe;color:#6d28d9}
+
+/* ══ TOOLBAR (screen only) ═══════════════════════════════════════════════ */
+.toolbar{
+  position:sticky;top:0;z-index:99;
+  background:#1e3a8a;
+  padding:10px 24px;
+  display:flex;align-items:center;justify-content:space-between;
+  color:#fff;font-size:9.5pt;
+}
+.toolbar strong{font-size:11pt}
+.btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:7px 18px;border-radius:8px;
+  font-size:9.5pt;font-weight:700;cursor:pointer;border:none;
+  transition:all .15s;
+}
+.btn-white{background:#fff;color:#1e3a8a}
+.btn-white:hover{background:#dbeafe}
+.btn-outline{background:transparent;color:#fff;border:1.5px solid rgba(255,255,255,.5)}
+.btn-outline:hover{background:rgba(255,255,255,.1)}
+
+/* ══ OUTER WRAPPER ═══════════════════════════════════════════════════════ */
+.brochure{
+  max-width:1100px;
+  margin:28px auto;
+  display:flex;flex-direction:column;
+  gap:20px;
+  padding:0 16px 40px;
+}
+
+/* ══ PANEL SHELL ═════════════════════════════════════════════════════════ */
+.panel{
+  background:#fff;
+  border-radius:16px;
+  overflow:hidden;
+  box-shadow:0 2px 20px rgba(0,0,0,.10);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PANEL 1 — COVER / FRONT
+═══════════════════════════════════════════════════════════════════════════ */
+.cover{
+  background:linear-gradient(135deg,#0f2460 0%,#1a3a8f 50%,#2563eb 100%);
+  color:#fff;
+  padding:0;
+  min-height:520px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+}
+.cover-left{
+  padding:64px 48px 64px 56px;
+  display:flex;flex-direction:column;justify-content:center;
+}
+.cover-right{
+  background:rgba(255,255,255,.07);
+  display:flex;flex-direction:column;justify-content:center;align-items:center;
+  padding:40px 32px;
+  border-left:1px solid rgba(255,255,255,.12);
+}
+.cover-logo{
+  display:inline-flex;align-items:center;gap:12px;
+  margin-bottom:36px;
+}
+.logo-box{
+  width:52px;height:52px;
+  border-radius:14px;
+  background:linear-gradient(135deg,#f59e0b,#f97316);
+  display:flex;align-items:center;justify-content:center;
+  font-size:22pt;font-weight:900;color:#fff;
+  box-shadow:0 4px 16px rgba(249,115,22,.5);
+}
+.logo-name{
+  font-size:15pt;font-weight:800;
+  letter-spacing:.5px;
+  line-height:1.2;
+}
+.logo-name span{color:#fbbf24}
+.cover-headline{
+  font-size:30pt;font-weight:900;
+  line-height:1.15;
+  margin-bottom:10px;
+  letter-spacing:-.5px;
+}
+.cover-headline em{
+  font-style:normal;
+  color:#fbbf24;
+  display:block;
+}
+.cover-sub{
+  font-size:13.5pt;
+  opacity:.85;
+  margin-bottom:28px;
+}
+.cover-tagline{
+  font-size:10pt;
+  font-style:italic;
+  color:#bfdbfe;
+  margin-bottom:32px;
+  border-left:3px solid #fbbf24;
+  padding-left:12px;
+}
+.cover-checks{
+  display:flex;flex-direction:column;gap:8px;
+  margin-bottom:36px;
+}
+.cover-check{
+  display:flex;align-items:center;gap:10px;
+  font-size:10pt;font-weight:600;
+}
+.cover-check .icon{
+  width:22px;height:22px;border-radius:50%;
+  background:#22c55e;
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;color:#fff;flex-shrink:0;
+}
+.cover-contact{
+  background:rgba(255,255,255,.1);
+  border:1px solid rgba(255,255,255,.2);
+  border-radius:12px;
+  padding:16px 20px;
+  font-size:9pt;
+}
+.cover-contact strong{display:block;font-size:10pt;margin-bottom:6px;color:#fbbf24}
+.cover-contact p{opacity:.85;margin-top:3px}
+/* device mockup */
+.device-wrap{
+  position:relative;
+  width:280px;
+  margin-bottom:24px;
+}
+.device-outer{
+  background:linear-gradient(145deg,#1e293b,#0f172a);
+  border-radius:24px;
+  padding:14px;
+  box-shadow:0 20px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.1);
+}
+.device-screen{
+  background:linear-gradient(160deg,#1e3a8a,#2563eb);
+  border-radius:14px;
+  padding:16px;
+  min-height:170px;
+  display:flex;flex-direction:column;gap:8px;
+}
+.screen-bar{height:6px;border-radius:3px;background:rgba(255,255,255,.3);width:60%}
+.screen-bar.short{width:40%}
+.screen-bar.xs{width:25%}
+.screen-grid{
+  display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:4px;
+}
+.screen-tile{
+  height:36px;border-radius:8px;
+  background:rgba(255,255,255,.15);
+}
+.screen-tile.active{background:rgba(251,191,36,.6)}
+.device-badge{
+  position:absolute;top:-12px;right:-12px;
+  background:#f59e0b;color:#1c1917;
+  font-size:7.5pt;font-weight:900;
+  border-radius:99px;padding:4px 12px;
+  box-shadow:0 4px 12px rgba(245,158,11,.4);
+  white-space:nowrap;
+}
+.stat-chips{
+  display:flex;flex-wrap:wrap;gap:8px;justify-content:center;width:100%;
+}
+.stat-chip{
+  background:rgba(255,255,255,.12);
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:10px;
+  padding:10px 14px;
+  text-align:center;
+  min-width:80px;
+}
+.stat-chip .num{font-size:16pt;font-weight:900;color:#fbbf24;line-height:1}
+.stat-chip .lbl{font-size:7.5pt;opacity:.7;margin-top:3px}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PANEL ROW (3 columns inside)
+═══════════════════════════════════════════════════════════════════════════ */
+.triple-row{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  background:#fff;
+  border-radius:16px;
+  overflow:hidden;
+  box-shadow:0 2px 20px rgba(0,0,0,.10);
+}
+.inner-panel{
+  padding:40px 32px;
+  border-right:1px solid #f1f5f9;
+}
+.inner-panel:last-child{border-right:none}
+
+/* ── Column headers ── */
+.col-header{
+  display:flex;align-items:center;gap:10px;
+  margin-bottom:24px;
+  padding-bottom:16px;
+  border-bottom:3px solid;
+}
+.col-header.blue {border-color:#2563eb}
+.col-header.green{border-color:#16a34a}
+.col-header.gold {border-color:#d97706}
+.col-icon{
+  width:40px;height:40px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:17px;
+  flex-shrink:0;
+}
+.col-icon.blue  {background:#dbeafe;color:#1d4ed8}
+.col-icon.green {background:#dcfce7;color:#15803d}
+.col-icon.gold  {background:#fef3c7;color:#b45309}
+.col-title{font-size:14pt;font-weight:800;line-height:1.1}
+.col-title small{display:block;font-size:8.5pt;font-weight:500;color:#6b7280;margin-top:2px}
+
+/* ── Section titles inside columns ── */
+.section-title{
+  font-size:8.5pt;font-weight:800;
+  text-transform:uppercase;letter-spacing:.8px;
+  color:#6b7280;
+  margin:20px 0 10px;
+}
+.section-title:first-of-type{margin-top:0}
+
+/* ── Feature rows ── */
+.feat-list{display:flex;flex-direction:column;gap:10px}
+.feat-item{display:flex;gap:10px;align-items:flex-start}
+.feat-icon{
+  width:30px;height:30px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;flex-shrink:0;margin-top:1px;
+}
+.feat-icon.blue  {background:#eff6ff;color:#2563eb}
+.feat-icon.green {background:#f0fdf4;color:#16a34a}
+.feat-icon.amber {background:#fffbeb;color:#d97706}
+.feat-icon.purple{background:#f5f3ff;color:#7c3aed}
+.feat-icon.red   {background:#fef2f2;color:#dc2626}
+.feat-icon.cyan  {background:#ecfeff;color:#0891b2}
+.feat-icon.rose  {background:#fff1f2;color:#e11d48}
+.feat-icon.teal  {background:#f0fdfa;color:#0d9488}
+.feat-body{}
+.feat-body strong{display:block;font-size:9.5pt;font-weight:700;color:#111827}
+.feat-body p{font-size:8.5pt;color:#6b7280;margin-top:1px}
+
+/* ── Business type pills ── */
+.biz-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.biz-pill{
+  background:#f1f5f9;
+  border:1px solid #e2e8f0;
+  border-radius:8px;
+  padding:5px 10px;
+  font-size:8pt;font-weight:600;color:#374151;
+  display:flex;align-items:center;gap:5px;
+}
+
+/* ── Package cards ── */
+.pkg-card{
+  border-radius:14px;
+  border:2px solid #e5e7eb;
+  padding:22px 20px;
+  margin-bottom:16px;
+  position:relative;
+  transition:all .15s;
+}
+.pkg-card.featured{
+  border-color:#2563eb;
+  box-shadow:0 4px 20px rgba(37,99,235,.15);
+}
+.pkg-card.premium{
+  border-color:#d97706;
+  background:linear-gradient(135deg,#fffbeb 0%,#fef9ee 100%);
+}
+.pkg-badge{
+  position:absolute;top:-12px;left:50%;transform:translateX(-50%);
+  background:#2563eb;color:#fff;
+  font-size:7.5pt;font-weight:800;
+  border-radius:99px;padding:3px 14px;
+  white-space:nowrap;letter-spacing:.4px;
+}
+.pkg-badge.gold{background:linear-gradient(90deg,#d97706,#f59e0b)}
+.pkg-name{
+  font-size:13pt;font-weight:800;
+  margin-bottom:3px;
+}
+.pkg-name.blue  {color:#1d4ed8}
+.pkg-name.green {color:#15803d}
+.pkg-name.gold  {color:#b45309}
+.pkg-sub{font-size:8.5pt;color:#6b7280;margin-bottom:14px}
+.pkg-price{
+  font-size:22pt;font-weight:900;
+  line-height:1;margin-bottom:4px;
+}
+.pkg-price.blue  {color:#1d4ed8}
+.pkg-price.green {color:#15803d}
+.pkg-price.gold  {color:#b45309}
+.pkg-price-note{font-size:8pt;color:#9ca3af;margin-bottom:14px}
+.pkg-includes{
+  display:flex;flex-direction:column;gap:5px;
+  margin-bottom:14px;
+}
+.pkg-line{
+  display:flex;align-items:flex-start;gap:7px;
+  font-size:8.5pt;color:#374151;
+}
+.pkg-line .chk{
+  width:16px;height:16px;border-radius:4px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:9px;color:#fff;flex-shrink:0;margin-top:1px;
+}
+.chk.blue  {background:#2563eb}
+.chk.green {background:#16a34a}
+.chk.gold  {background:#d97706}
+.pkg-cta{
+  display:block;width:100%;
+  padding:9px 0;border-radius:9px;
+  font-size:9pt;font-weight:700;
+  text-align:center;cursor:pointer;
+  border:none;
+}
+.pkg-cta.blue  {background:#2563eb;color:#fff}
+.pkg-cta.green {background:#16a34a;color:#fff}
+.pkg-cta.gold  {background:linear-gradient(90deg,#d97706,#f59e0b);color:#fff}
+.compare-note{
+  font-size:8pt;color:#9ca3af;
+  text-align:center;margin-top:4px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PANEL 3 — BACK / CTA
+═══════════════════════════════════════════════════════════════════════════ */
+.back-panel{
+  background:linear-gradient(135deg,#0f2460 0%,#1a3a8f 60%,#1e40af 100%);
+  color:#fff;
+  padding:56px 56px 48px;
+}
+.back-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:32px;
+  margin-bottom:48px;
+}
+.back-col-title{
+  font-size:11pt;font-weight:800;
+  color:#fbbf24;
+  margin-bottom:14px;
+  display:flex;align-items:center;gap:8px;
+}
+.back-list{display:flex;flex-direction:column;gap:9px}
+.back-item{
+  display:flex;align-items:flex-start;gap:9px;
+  font-size:9.5pt;
+  opacity:.92;
+}
+.back-item .dot{
+  width:18px;height:18px;border-radius:50%;
+  background:rgba(34,197,94,.3);border:1.5px solid #22c55e;
+  display:flex;align-items:center;justify-content:center;
+  font-size:9px;color:#22c55e;
+  flex-shrink:0;margin-top:1px;
+}
+/* CTA bar */
+.cta-bar{
+  background:rgba(255,255,255,.1);
+  border:1px solid rgba(255,255,255,.2);
+  border-radius:16px;
+  padding:32px 36px;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:24px;
+  flex-wrap:wrap;
+}
+.cta-left .headline{font-size:17pt;font-weight:900;margin-bottom:4px}
+.cta-left .sub{font-size:10pt;opacity:.8}
+.cta-right{
+  display:flex;flex-direction:column;gap:10px;
+  min-width:220px;
+}
+.cta-contact{
+  display:flex;align-items:center;gap:10px;
+  font-size:10pt;
+}
+.cta-contact .ci{
+  width:32px;height:32px;border-radius:9px;
+  background:rgba(255,255,255,.15);
+  display:flex;align-items:center;justify-content:center;
+  font-size:15px;flex-shrink:0;
+}
+.cta-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  background:linear-gradient(90deg,#f59e0b,#f97316);
+  color:#fff;font-size:11pt;font-weight:800;
+  padding:14px 28px;border-radius:12px;
+  box-shadow:0 4px 20px rgba(249,115,22,.4);
+  cursor:pointer;border:none;margin-top:8px;
+  transition:opacity .15s;
+}
+.cta-btn:hover{opacity:.9}
+.back-tagline{
+  text-align:center;
+  margin-top:24px;
+  font-size:11pt;
+  font-style:italic;
+  opacity:.6;
+  letter-spacing:.5px;
+}
+/* ══ COMPARISON TABLE ═══════════════════════════════════════════════════ */
+.cmp-wrap{padding:40px 40px 36px}
+.cmp-title{font-size:14pt;font-weight:800;margin-bottom:6px}
+.cmp-sub{font-size:9pt;color:#6b7280;margin-bottom:24px}
+.cmp-table{width:100%;border-collapse:collapse;font-size:9pt}
+.cmp-table thead th{
+  padding:10px 14px;
+  background:#1e3a8a;color:#fff;
+  font-weight:700;text-align:left;
+}
+.cmp-table thead th:first-child{border-radius:8px 0 0 0}
+.cmp-table thead th:last-child {border-radius:0 8px 0 0}
+.cmp-table tbody tr:nth-child(even){background:#f8fafc}
+.cmp-table tbody td{
+  padding:9px 14px;
+  border-bottom:1px solid #f1f5f9;
+  color:#374151;
+}
+.cmp-table tbody td:first-child{font-weight:600}
+.chk-yes{color:#16a34a;font-size:12pt}
+.chk-no {color:#d1d5db;font-size:12pt}
+.chk-partial{color:#d97706;font-size:10pt;font-weight:700}
+
+/* ══ RESPONSIVE ══════════════════════════════════════════════════════════ */
+@media(max-width:800px){
+  .cover{grid-template-columns:1fr}
+  .cover-right{display:none}
+  .triple-row{grid-template-columns:1fr}
+  .inner-panel{border-right:none;border-bottom:1px solid #f1f5f9}
+  .back-grid{grid-template-columns:1fr}
+  .cta-bar{flex-direction:column}
+}
+</style>
+</head>
+<body>
+
+<!-- ══ TOOLBAR ═══════════════════════════════════════════════════════════ -->
+<div class="toolbar no-print">
+  <div>
+    <strong>EA POS Pro</strong> — Marketing Brochure
+    <span style="opacity:.6;margin-left:12px;font-size:8.5pt">Print or Save as PDF for distribution</span>
+  </div>
+  <div style="display:flex;gap:10px">
+    <button class="btn btn-outline" onclick="window.print()">🖨 Print / Save PDF</button>
+    <a href="/proposal/index.html" class="btn btn-white">📄 View Sales Proposal</a>
+  </div>
+</div>
+
+<div class="brochure">
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     PANEL 1 — COVER
+═══════════════════════════════════════════════════════════════════════ -->
+<div class="panel">
+<div class="cover">
+  <!-- LEFT: branding + pitch -->
+  <div class="cover-left">
+    <div class="cover-logo">
+      <div class="logo-box">E</div>
+      <div class="logo-name">
+        EA <span>POS Pro</span>
+        <div style="font-size:8pt;font-weight:500;opacity:.7;letter-spacing:.3px">by EA Software Solutions</div>
+      </div>
+    </div>
+
+    <div class="cover-headline">
+      Run Your Business
+      <em>Smarter.</em>
+    </div>
+    <div class="cover-sub">
+      The Complete Point-of-Sale System for Modern Filipino Businesses
+    </div>
+    <div class="cover-tagline">
+      "Faster Sales. Better Control. Smarter Decisions."
+    </div>
+
+    <div class="cover-checks">
+      <div class="cover-check"><div class="icon">✔</div>Easy to use — zero technical skills required</div>
+      <div class="cover-check"><div class="icon">✔</div>All-in-one — POS, inventory, reports, cash & more</div>
+      <div class="cover-check"><div class="icon">✔</div>Real-time dashboard with AI-powered analytics</div>
+      <div class="cover-check"><div class="icon">✔</div>Multi-branch &amp; multi-user support</div>
+      <div class="cover-check"><div class="icon">✔</div>Works on PC, Tablet, and Android phones</div>
+    </div>
+
+    <div class="cover-contact">
+      <strong>📞 EA Software Solutions</strong>
+      <p>📱 +63 XXX XXX XXXX</p>
+      <p>📧 info@easoftware.ph</p>
+      <p>🌐 www.easoftware.ph</p>
+    </div>
+  </div>
+
+  <!-- RIGHT: device mockup + stats -->
+  <div class="cover-right">
+    <div class="device-wrap">
+      <div class="device-badge">⚡ Live Dashboard</div>
+      <div class="device-outer">
+        <div class="device-screen">
+          <div class="screen-bar"></div>
+          <div class="screen-bar short"></div>
+          <div class="screen-grid">
+            <div class="screen-tile active"></div>
+            <div class="screen-tile"></div>
+            <div class="screen-tile"></div>
+            <div class="screen-tile"></div>
+            <div class="screen-tile active"></div>
+            <div class="screen-tile"></div>
+            <div class="screen-tile"></div>
+            <div class="screen-tile"></div>
+            <div class="screen-tile active"></div>
+          </div>
+          <div class="screen-bar xs" style="margin-top:6px"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-chips">
+      <div class="stat-chip">
+        <div class="num">8+</div>
+        <div class="lbl">POS Layouts</div>
+      </div>
+      <div class="stat-chip">
+        <div class="num">15+</div>
+        <div class="lbl">Modules</div>
+      </div>
+      <div class="stat-chip">
+        <div class="num">24/7</div>
+        <div class="lbl">Support</div>
+      </div>
+      <div class="stat-chip">
+        <div class="num">100%</div>
+        <div class="lbl">Web-based</div>
+      </div>
+    </div>
+
+    <div style="margin-top:20px;text-align:center">
+      <div class="biz-grid" style="justify-content:center">
+        <div class="biz-pill">🛒 Retail</div>
+        <div class="biz-pill">☕ Cafe</div>
+        <div class="biz-pill">🍽 Restaurant</div>
+        <div class="biz-pill">💊 Pharmacy</div>
+        <div class="biz-pill">✂ Salon</div>
+        <div class="biz-pill">🏪 Mini Mart</div>
+        <div class="biz-pill">🏥 Clinic</div>
+        <div class="biz-pill">🎓 School</div>
+      </div>
+      <div style="font-size:8pt;opacity:.6;margin-top:10px">...and many more business types</div>
+    </div>
+  </div>
+</div>
+</div><!-- /panel -->
+
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     PANEL 2 — THREE COLUMN INSIDE
+═══════════════════════════════════════════════════════════════════════ -->
+<div class="triple-row panel">
+
+  <!-- ── COL 1: ABOUT / OVERVIEW ── -->
+  <div class="inner-panel">
+    <div class="col-header blue">
+      <div class="col-icon blue">📋</div>
+      <div class="col-title">What is EA POS Pro?<small>About &amp; Overview</small></div>
+    </div>
+
+    <p style="font-size:9pt;color:#374151;margin-bottom:16px">
+      <strong>EA POS Pro</strong> is an all-in-one cloud-based Point of Sale system designed for Filipino businesses of all sizes. Whether you run a small sari-sari store, a busy restaurant, or a multi-branch retail chain — EA POS Pro adapts to your workflow.
+    </p>
+    <p style="font-size:9pt;color:#374151;margin-bottom:20px">
+      Built with a modern real-time dashboard and smart analytics, it gives you full visibility of your business so you can make better decisions — every single day.
+    </p>
+
+    <div class="section-title">Core Benefits</div>
+    <div class="feat-list">
+      <div class="feat-item">
+        <div class="feat-icon blue">⚡</div>
+        <div class="feat-body">
+          <strong>Lightning-Fast Checkout</strong>
+          <p>Barcode scanning, quick product search, and one-tap checkout for faster sales.</p>
+        </div>
+      </div>
+      <div class="feat-item">
+        <div class="feat-icon green">📦</div>
+        <div class="feat-body">
+          <strong>Real-Time Stock Tracking</strong>
+          <p>Know your inventory levels instantly. Get low-stock alerts before you run out.</p>
+        </div>
+      </div>
+      <div class="feat-item">
+        <div class="feat-icon amber">📊</div>
+        <div class="feat-body">
+          <strong>Instant Reports</strong>
+          <p>Daily, weekly, and monthly reports generated automatically — no manual counting.</p>
+        </div>
+      </div>
+      <div class="feat-item">
+        <div class="feat-icon purple">🤖</div>
+        <div class="feat-body">
+          <strong>AI-Powered Dashboard</strong>
+          <p>Smart KPIs, sales trends, and performance insights from your own business data.</p>
+        </div>
+      </div>
+      <div class="feat-item">
+        <div class="feat-icon cyan">🌐</div>
+        <div class="feat-body">
+          <strong>Multi-Device Support</strong>
+          <p>PC, tablet, and Android phone — same system, any device, anywhere.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title" style="margin-top:22px">Perfect For</div>
+    <div class="biz-grid">
+      <div class="biz-pill">🛒 Retail Stores</div>
+      <div class="biz-pill">🏪 Mini Mart</div>
+      <div class="biz-pill">☕ Cafes</div>
+      <div class="biz-pill">🍽 Restaurants</div>
+      <div class="biz-pill">💊 Pharmacies</div>
+      <div class="biz-pill">✂ Salons</div>
+      <div class="biz-pill">🎓 Schools</div>
+      <div class="biz-pill">🏥 Clinics</div>
+      <div class="biz-pill">🔧 Hardware</div>
+      <div class="biz-pill">🧺 Laundry</div>
+    </div>
+  </div>
+
+  <!-- ── COL 2: FEATURES / MODULES ── -->
+  <div class="inner-panel">
+    <div class="col-header green">
+      <div class="col-icon green">⚙</div>
+      <div class="col-title">Key Features<small>Modules &amp; Capabilities</small></div>
+    </div>
+
+    <div class="feat-list">
+      <div class="feat-item">
+        <div class="feat-icon blue">🧾</div>
+        <div class="feat-body">
+          <strong>Sales &amp; POS</strong>
+          <p>Fast checkout · Barcode &amp; QR scanning · Cash, GCash, Card · VAT support · Void &amp; refund</p>
+        </div>
+      </div>
+      <div class="feat-item">
+        <div class="feat-icon amber">📦</div>
+        <div class="feat-body">
+          <strong>Inventory Management</strong>
+          <p>Real-time stock · Low stock alerts · Product variants &amp; bundles · Purchase orders · Stock loss tracking</p>
+        </div>
+      </div>
+      <div class="feat-item">
+        <div class="feat-icon green">💰</div>
+        <div class="feat-body">
+          <strong>Cash Management</strong>
+          <p>Cash sessions · Cash counts · Petty cash vouchers · Expense tracking by category</p>
+        </div>
+      </div>
+      <div class="feat-item">
+        <div class="feat-icon purple">📊</div>
+        <div class="feat-body">
+          <strong>Reports &amp; Analytics</strong>
+          <p>Daily summary · Sales report · Inventory report · Expense report · Ingredient usage · Stock loss · PDF export</p>
+        </div>
+      </div>
+      <div class="feat-item">
+        <div class="feat-icon red">🏷</div>
+        <div class="feat-body">
+          <strong>Promos &amp; Discounts</strong>
+          <p>Percentage or fixed discounts · Promo codes · Product or category-specific promos · Minimum purchase rules</p>
+        </div>
+      </div>
+      <div class="feat-item">
+        <div class="feat-icon cyan">👥</div>
+        <div class="feat-body">
+          <strong>User &amp; Access Control</strong>
+          <p>Multiple roles (Super Admin, Admin, Manager, Cashier) · Per-menu permissions · Activity logs</p>
+        </div>
+      </div>
+      <div class="feat-item">
+        <div class="feat-icon teal">🏢</div>
+        <div class="feat-body">
+          <strong>Multi-Branch Support</strong>
+          <p>Manage multiple branches from one system · Branch-level reports &amp; settings</p>
+        </div>
+      </div>
+      <div class="feat-item">
+        <div class="feat-icon rose">🚚</div>
+        <div class="feat-body">
+          <strong>Supplier Management</strong>
+          <p>Track suppliers · Create &amp; process purchase orders · Goods received notes</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title" style="margin-top:20px">POS Layout Options</div>
+    <div class="biz-grid">
+      <div class="biz-pill">🖥 PC / Standard</div>
+      <div class="biz-pill">📱 Tablet</div>
+      <div class="biz-pill">🛒 Grocery</div>
+      <div class="biz-pill">☕ Cafe</div>
+      <div class="biz-pill">🍽 Restaurant</div>
+      <div class="biz-pill">✂ Salon</div>
+      <div class="biz-pill">🖥 Kiosk</div>
+      <div class="biz-pill">📱 Android Phone</div>
+    </div>
+  </div>
+
+  <!-- ── COL 3: PACKAGES ── -->
+  <div class="inner-panel">
+    <div class="col-header gold">
+      <div class="col-icon gold">💎</div>
+      <div class="col-title">Package Options<small>One-Time Investment · No Monthly Fees</small></div>
+    </div>
+
+    <!-- STARTER -->
+    <div class="pkg-card">
+      <div class="pkg-name blue">🔵 STARTER</div>
+      <div class="pkg-sub">For small shops &amp; sari-sari stores</div>
+      <div class="pkg-price blue">₱15,000</div>
+      <div class="pkg-price-note">One-time · hardware not included</div>
+      <div class="pkg-includes">
+        <div class="pkg-line"><div class="chk blue">✔</div>POS Software License (1 user)</div>
+        <div class="pkg-line"><div class="chk blue">✔</div>Basic Sales &amp; Checkout</div>
+        <div class="pkg-line"><div class="chk blue">✔</div>Product &amp; Stock Management</div>
+        <div class="pkg-line"><div class="chk blue">✔</div>Daily Sales Report</div>
+        <div class="pkg-line"><div class="chk blue">✔</div>Cash Session Tracking</div>
+        <div class="pkg-line"><div class="chk blue">✔</div>Installation &amp; Onboarding</div>
+        <div class="pkg-line"><div class="chk blue">✔</div>3 Months Email Support</div>
+      </div>
+      <button class="pkg-cta blue">Get Starter →</button>
+    </div>
+
+    <!-- STANDARD -->
+    <div class="pkg-card featured">
+      <div class="pkg-badge">⭐ MOST POPULAR</div>
+      <div class="pkg-name green" style="margin-top:8px">🟢 STANDARD</div>
+      <div class="pkg-sub">For growing retail &amp; F&B businesses</div>
+      <div class="pkg-price green">₱28,000</div>
+      <div class="pkg-price-note">One-time · hardware not included</div>
+      <div class="pkg-includes">
+        <div class="pkg-line"><div class="chk green">✔</div>Everything in Starter</div>
+        <div class="pkg-line"><div class="chk green">✔</div>Up to 3 Users</div>
+        <div class="pkg-line"><div class="chk green">✔</div>Expense &amp; Petty Cash Module</div>
+        <div class="pkg-line"><div class="chk green">✔</div>Supplier &amp; Purchase Orders</div>
+        <div class="pkg-line"><div class="chk green">✔</div>Promos &amp; Discount Module</div>
+        <div class="pkg-line"><div class="chk green">✔</div>Full Reports Suite (PDF export)</div>
+        <div class="pkg-line"><div class="chk green">✔</div>6 Months Support</div>
+      </div>
+      <button class="pkg-cta green">Get Standard →</button>
+    </div>
+
+    <!-- ADVANCED -->
+    <div class="pkg-card premium">
+      <div class="pkg-badge gold">👑 BEST VALUE</div>
+      <div class="pkg-name gold" style="margin-top:8px">🟡 ADVANCED</div>
+      <div class="pkg-sub">For multi-branch &amp; growing chains</div>
+      <div class="pkg-price gold">₱45,000</div>
+      <div class="pkg-price-note">One-time · hardware not included</div>
+      <div class="pkg-includes">
+        <div class="pkg-line"><div class="chk gold">✔</div>Everything in Standard</div>
+        <div class="pkg-line"><div class="chk gold">✔</div>Unlimited Users</div>
+        <div class="pkg-line"><div class="chk gold">✔</div>Multi-Branch Management</div>
+        <div class="pkg-line"><div class="chk gold">✔</div>AI-Powered Dashboard</div>
+        <div class="pkg-line"><div class="chk gold">✔</div>Losses &amp; Damage Tracking</div>
+        <div class="pkg-line"><div class="chk gold">✔</div>Priority Support</div>
+        <div class="pkg-line"><div class="chk gold">✔</div>1 Year Support &amp; Updates</div>
+      </div>
+      <button class="pkg-cta gold">Get Advanced →</button>
+    </div>
+
+    <p class="compare-note">💻 Hardware bundles available. Ask for custom quotes. All packages include free installation &amp; training.</p>
+  </div>
+
+</div><!-- /triple-row -->
+
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     COMPARISON TABLE
+═══════════════════════════════════════════════════════════════════════ -->
+<div class="panel">
+<div class="cmp-wrap">
+  <div class="cmp-title">📊 Package Comparison</div>
+  <div class="cmp-sub">All packages include free installation, training, and data migration support.</div>
+  <table class="cmp-table">
+    <thead>
+      <tr>
+        <th style="width:35%">Feature</th>
+        <th style="text-align:center">🔵 Starter<br><small style="font-weight:400;opacity:.8">₱15,000</small></th>
+        <th style="text-align:center;background:#1a3a8f">🟢 Standard<br><small style="font-weight:400;opacity:.8">₱28,000</small></th>
+        <th style="text-align:center;background:#92400e">🟡 Advanced<br><small style="font-weight:400;opacity:.8">₱45,000</small></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>POS / Fast Checkout</td><td class="center chk-yes">✔</td><td class="center chk-yes">✔</td><td class="center chk-yes">✔</td></tr>
+      <tr><td>Barcode &amp; QR Scanning</td><td class="center chk-yes">✔</td><td class="center chk-yes">✔</td><td class="center chk-yes">✔</td></tr>
+      <tr><td>Multiple Payment Methods</td><td class="center chk-yes">✔</td><td class="center chk-yes">✔</td><td class="center chk-yes">✔</td></tr>
+      <tr><td>Product &amp; Stock Management</td><td class="center chk-yes">✔</td><td class="center chk-yes">✔</td><td class="center chk-yes">✔</td></tr>
+      <tr><td>Daily Sales Report</td><td class="center chk-yes">✔</td><td class="center chk-yes">✔</td><td class="center chk-yes">✔</td></tr>
+      <tr><td>Cash Session Tracking</td><td class="center chk-yes">✔</td><td class="center chk-yes">✔</td><td class="center chk-yes">✔</td></tr>
+      <tr><td>Number of Users</td><td class="center">1 User</td><td class="center">Up to 3</td><td class="center">Unlimited</td></tr>
+      <tr><td>Expense &amp; Petty Cash Module</td><td class="center chk-no">—</td><td class="center chk-yes">✔</td><td class="center chk-yes">✔</td></tr>
+      <tr><td>Supplier &amp; Purchase Orders</td><td class="center chk-no">—</td><td class="center chk-yes">✔</td><td class="center chk-yes">✔</td></tr>
+      <tr><td>Promos &amp; Discount Engine</td><td class="center chk-no">—</td><td class="center chk-yes">✔</td><td class="center chk-yes">✔</td></tr>
+      <tr><td>Full Reports + PDF Export</td><td class="center chk-partial">Basic</td><td class="center chk-yes">✔</td><td class="center chk-yes">✔</td></tr>
+      <tr><td>Multi-Branch Management</td><td class="center chk-no">—</td><td class="center chk-no">—</td><td class="center chk-yes">✔</td></tr>
+      <tr><td>AI-Powered Dashboard</td><td class="center chk-no">—</td><td class="center chk-no">—</td><td class="center chk-yes">✔</td></tr>
+      <tr><td>Losses &amp; Damage Tracking</td><td class="center chk-no">—</td><td class="center chk-partial">Basic</td><td class="center chk-yes">✔</td></tr>
+      <tr><td>Activity &amp; Audit Logs</td><td class="center chk-no">—</td><td class="center chk-yes">✔</td><td class="center chk-yes">✔</td></tr>
+      <tr><td>Support Period</td><td class="center">3 Months</td><td class="center">6 Months</td><td class="center">1 Year</td></tr>
+      <tr><td>Free Installation &amp; Training</td><td class="center chk-yes">✔</td><td class="center chk-yes">✔</td><td class="center chk-yes">✔</td></tr>
+    </tbody>
+  </table>
+</div>
+</div><!-- /panel -->
+
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     PANEL 4 — BACK / CTA
+═══════════════════════════════════════════════════════════════════════ -->
+<div class="panel">
+<div class="back-panel">
+
+  <div class="back-grid">
+    <!-- Why Choose Us -->
+    <div>
+      <div class="back-col-title">🏆 Why EA POS Pro?</div>
+      <div class="back-list">
+        <div class="back-item"><div class="dot">✔</div>No monthly subscription fees — pay once, own it</div>
+        <div class="back-item"><div class="dot">✔</div>Filipino-made, designed for local businesses</div>
+        <div class="back-item"><div class="dot">✔</div>Works offline — no internet needed for basic POS</div>
+        <div class="back-item"><div class="dot">✔</div>Scalable — grows with your business</div>
+        <div class="back-item"><div class="dot">✔</div>Multi-device — PC, tablet, or Android phone</div>
+        <div class="back-item"><div class="dot">✔</div>Dedicated local support team</div>
+        <div class="back-item"><div class="dot">✔</div>Free training &amp; data setup included</div>
+      </div>
+    </div>
+
+    <!-- Benefits -->
+    <div>
+      <div class="back-col-title">📈 Business Benefits</div>
+      <div class="back-list">
+        <div class="back-item"><div class="dot">✔</div>Faster transactions — reduce queues &amp; waiting time</div>
+        <div class="back-item"><div class="dot">✔</div>Better stock control — zero shrinkage &amp; loss</div>
+        <div class="back-item"><div class="dot">✔</div>Less human error — automated calculations &amp; reports</div>
+        <div class="back-item"><div class="dot">✔</div>Real-time monitoring — know your numbers anytime</div>
+        <div class="back-item"><div class="dot">✔</div>Smarter decisions — AI insights from your own data</div>
+        <div class="back-item"><div class="dot">✔</div>Full accountability — audit logs &amp; staff tracking</div>
+        <div class="back-item"><div class="dot">✔</div>More sales — promo engine &amp; discount tools</div>
+      </div>
+    </div>
+
+    <!-- What's Included -->
+    <div>
+      <div class="back-col-title">📦 What You Get</div>
+      <div class="back-list">
+        <div class="back-item"><div class="dot">✔</div>Full software license — yours forever</div>
+        <div class="back-item"><div class="dot">✔</div>Free installation &amp; system configuration</div>
+        <div class="back-item"><div class="dot">✔</div>Staff training &amp; onboarding session</div>
+        <div class="back-item"><div class="dot">✔</div>Product &amp; inventory data migration</div>
+        <div class="back-item"><div class="dot">✔</div>User accounts setup with proper permissions</div>
+        <div class="back-item"><div class="dot">✔</div>Technical support via phone, chat &amp; email</div>
+        <div class="back-item"><div class="dot">✔</div>System updates during support period</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CTA BAR -->
+  <div class="cta-bar">
+    <div class="cta-left">
+      <div class="headline">Ready to Upgrade Your Business?</div>
+      <div class="sub">Book a FREE demo today. We'll show you exactly how EA POS Pro can work for your business — no obligation.</div>
+    </div>
+    <div class="cta-right">
+      <div class="cta-contact">
+        <div class="ci">📱</div>
+        <div>
+          <div style="font-size:8.5pt;opacity:.6">Call / Viber / WhatsApp</div>
+          <div style="font-weight:700">+63 XXX XXX XXXX</div>
+        </div>
+      </div>
+      <div class="cta-contact">
+        <div class="ci">📧</div>
+        <div>
+          <div style="font-size:8.5pt;opacity:.6">Email us anytime</div>
+          <div style="font-weight:700">info@easoftware.ph</div>
+        </div>
+      </div>
+      <div class="cta-contact">
+        <div class="ci">🌐</div>
+        <div>
+          <div style="font-size:8.5pt;opacity:.6">Website</div>
+          <div style="font-weight:700">www.easoftware.ph</div>
+        </div>
+      </div>
+      <button class="cta-btn" onclick="window.print()">📞 Book Free Demo</button>
+    </div>
+  </div>
+
+  <div class="back-tagline">"Your Partner in Business Growth" — EA Software Solutions</div>
+
+</div>
+</div><!-- /panel -->
+
+</div><!-- /brochure -->
+
+</body>
+</html>

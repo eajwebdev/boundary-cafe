@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="title">
+  <title id="title">Boundary Cafe signature blend illustration</title>
+  <circle cx="160" cy="160" r="136" fill="#FFF8EE"/>
+  <path d="M111 100h98l-12 148c-1 13-12 23-25 23h-24c-13 0-24-10-25-23l-12-148Z" fill="#FFFFFF" stroke="#0836D8" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M120 139c30 17 50-10 80 7l-8 94c-1 9-8 16-17 16h-30c-9 0-16-7-17-16l-8-101Z" fill="#F4511E" opacity=".9"/>
+  <path d="M109 100h102M132 84h56" fill="none" stroke="#05258F" stroke-width="8" stroke-linecap="round"/>
+  <path d="M146 190c18-24 35-9 28 8-7 17-29 20-30 39" fill="none" stroke="#FFF8EE" stroke-width="7" stroke-linecap="round"/>
+  <path d="M201 75c8-20 27-26 39-12-17 2-25 11-27 25" fill="#FF8A00" stroke="#7A3E24" stroke-width="6" stroke-linejoin="round"/>
+</svg>

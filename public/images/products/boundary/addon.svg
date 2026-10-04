@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="title">
+  <title id="title">Menu add-on illustration</title><circle cx="160" cy="160" r="136" fill="#FFF8EE"/>
+  <circle cx="160" cy="160" r="90" fill="#FFFFFF" stroke="#0836D8" stroke-width="8"/>
+  <path d="M160 111v98M111 160h98" stroke="#F4511E" stroke-width="20" stroke-linecap="round"/>
+  <circle cx="160" cy="160" r="112" fill="none" stroke="#FF8A00" stroke-width="7" stroke-dasharray="8 15" stroke-linecap="round"/>
+</svg>

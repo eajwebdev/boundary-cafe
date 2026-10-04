@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="title">
+  <title id="title">Cafe snacks illustration</title><circle cx="160" cy="160" r="136" fill="#FFF8EE"/>
+  <path d="m78 82 55 164c4 12 15 20 28 20h32c13 0 24-9 27-21l37-163H78Z" fill="#FFFFFF" stroke="#0836D8" stroke-width="8" stroke-linejoin="round"/>
+  <path d="m102 99 18 89M139 91l8 98M179 91l-4 98M219 98l-18 92" stroke="#FF8A00" stroke-width="15" stroke-linecap="round"/>
+  <path d="M101 185c34 17 82 21 128 0l-13 58c-3 11-12 18-23 18h-31c-11 0-20-7-24-17l-37-59Z" fill="#F4511E" stroke="#7A3E24" stroke-width="6"/>
+</svg>

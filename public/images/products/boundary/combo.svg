@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="title">
+  <title id="title">Meal combo illustration</title><circle cx="160" cy="160" r="136" fill="#FFF8EE"/>
+  <path d="M54 169h151v52c0 25-20 45-45 45h-61c-25 0-45-20-45-45v-52Z" fill="#FFFFFF" stroke="#0836D8" stroke-width="8"/>
+  <path d="M64 151c5-38 31-61 66-61s61 23 66 61H64Z" fill="#FF8A00" stroke="#0836D8" stroke-width="8"/>
+  <path d="M68 190h124" stroke="#7A3E24" stroke-width="20" stroke-linecap="round"/>
+  <path d="M217 92h54l-9 156c-1 10-9 18-19 18h-1c-10 0-18-8-19-18L217 92Z" fill="#FFFFFF" stroke="#F4511E" stroke-width="8"/>
+  <path d="m253 52-12 142" stroke="#0836D8" stroke-width="7" stroke-linecap="round"/>
+</svg>
