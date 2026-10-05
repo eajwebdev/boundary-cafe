@@ -184,10 +184,33 @@ class SystemSetting extends Model
                 : (string) $value;
         }
 
-        return static::updateOrCreate(
-            ['key' => $key, 'branch_id' => $branchId],
-            ['value' => $stringValue]
-        );
+        // New rows inherit type/group/label from the defaults registry so that
+        // e.g. a boolean saved as 'false' is read back as false, not a truthy string.
+        $existing = static::where('key', $key)->where('branch_id', $branchId)->first();
+        if ($existing) {
+            $existing->update(['value' => $stringValue]);
+            static::flushCache($branchId);
+
+            return $existing;
+        }
+
+        $def = collect(static::defaults())->firstWhere('key', $key) ?? [];
+        $global = $branchId ? static::whereNull('branch_id')->where('key', $key)->first() : null;
+        $type = $def['type'] ?? $global?->type ?? (is_bool($value) ? 'boolean' : (is_array($value) ? 'json' : 'string'));
+
+        $row = static::create([
+            'key' => $key,
+            'branch_id' => $branchId,
+            'value' => $stringValue,
+            'type' => $type,
+            'group' => $def['group'] ?? $global?->group ?? strtok($key, '.'),
+            'label' => $def['label'] ?? $global?->label,
+            'description' => $def['description'] ?? $global?->description,
+            'options' => $def['options'] ?? $global?->options,
+        ]);
+        static::flushCache($branchId);
+
+        return $row;
     }
 
     // ── Type Casting ───────────────────────────────────────────────
@@ -236,16 +259,14 @@ class SystemSetting extends Model
             // ── POS behavior ──────────────────────────────────────
             ['key' => 'pos.require_cash_session','value' => 'false',                 'type' => 'boolean', 'group' => 'pos',     'label' => 'Require open cash session to sell'],
             ['key' => 'pos.allow_negative_stock','value' => 'true',                  'type' => 'boolean', 'group' => 'pos',     'label' => 'Allow sales when stock is 0'],
-            ['key' => 'pos.default_payment',     'value' => 'cash',                  'type' => 'select',  'group' => 'pos',     'label' => 'Default payment method',         'options' => '["cash","gcash","card","others","credit","mixed","installment"]'],
+            ['key' => 'pos.default_payment',     'value' => 'cash',                  'type' => 'select',  'group' => 'pos',     'label' => 'Default payment method',         'options' => '["cash","gcash","card","others"]'],
             ['key' => 'pos.item_mode',           'value' => 'products_only',          'type' => 'select',  'group' => 'pos',     'label' => 'Cashier item mode', 'description' => 'Boundary Cafe sells menu products', 'options' => '["products_only"]'],
-            ['key' => 'pos.laundry_mode',        'value' => 'auto',                  'type' => 'select',  'group' => 'pos',     'label' => 'Laundry POS mode', 'description' => 'Auto enables laundry behavior for Laundry branches', 'options' => '["auto","enabled","disabled"]'],
             ['key' => 'pos.require_customer_name','value' => 'false',                'type' => 'boolean', 'group' => 'pos',     'label' => 'Require customer name at checkout'],
             ['key' => 'pos.default_due_days',    'value' => '0',                     'type' => 'integer', 'group' => 'pos',     'label' => 'Default due days for credit/laundry'],
             ['key' => 'pos.show_product_images', 'value' => 'true',                  'type' => 'boolean', 'group' => 'pos',     'label' => 'Show product images on POS'],
             ['key' => 'pos.allow_discount',      'value' => 'true',                  'type' => 'boolean', 'group' => 'pos',     'label' => 'Allow discount on sale'],
             ['key' => 'pos.max_discount_percent','value' => '20',                    'type' => 'decimal', 'group' => 'pos',     'label' => 'Max discount % allowed'],
             ['key' => 'pos.senior_pwd_discount',  'value' => '20',                    'type' => 'decimal', 'group' => 'pos',     'label' => 'Senior/PWD discount (%)'],
-            ['key' => 'pos.enable_installments', 'value' => 'false',                 'type' => 'boolean', 'group' => 'pos',     'label' => 'Enable installment sales', 'description' => 'Allow cashiers to process sales with installment payment plans'],
 
             // ── Receipt ───────────────────────────────────────────
             ['key' => 'receipt.show_logo',       'value' => 'true',                  'type' => 'boolean', 'group' => 'receipt', 'label' => 'Show logo on receipt'],
@@ -255,6 +276,25 @@ class SystemSetting extends Model
             ['key' => 'loyalty.minimum_redeem',   'value' => '10',    'type' => 'integer', 'group' => 'loyalty', 'label' => 'Minimum points to redeem'],
             ['key' => 'loyalty.peso_per_point',   'value' => '1',     'type' => 'decimal', 'group' => 'loyalty', 'label' => 'Peso value per point'],
             ['key' => 'loyalty.maximum_redeem',   'value' => '500',   'type' => 'integer', 'group' => 'loyalty', 'label' => 'Maximum points per sale'],
+            ['key' => 'loyalty.tiers_enabled',    'value' => 'true',  'type' => 'boolean', 'group' => 'loyalty', 'label' => 'Enable membership tiers', 'description' => 'Higher tiers earn points faster'],
+            ['key' => 'loyalty.tiers',            'value' => '[{"name":"Bronze","min":0,"multiplier":1},{"name":"Silver","min":500,"multiplier":1.25},{"name":"Gold","min":1500,"multiplier":1.5}]', 'type' => 'json', 'group' => 'loyalty', 'label' => 'Membership tiers', 'description' => 'Tier name, lifetime points needed and earn multiplier'],
+            ['key' => 'loyalty.birthday_bonus',   'value' => '50',    'type' => 'integer', 'group' => 'loyalty', 'label' => 'Birthday bonus points', 'description' => 'Awarded once a year on the first purchase in the birthday month (0 = off)'],
+
+            // ── Online ordering (customer app, Mabinay only) ───────
+            ['key' => 'online.enabled',           'value' => 'true',  'type' => 'boolean', 'group' => 'online', 'label' => 'Accept online orders'],
+            ['key' => 'online.branch_code',       'value' => 'BC-MAB','type' => 'string',  'group' => 'online', 'label' => 'Branch that fulfils online orders'],
+            ['key' => 'online.delivery_enabled',  'value' => 'true',  'type' => 'boolean', 'group' => 'online', 'label' => 'Offer delivery'],
+            ['key' => 'online.pickup_enabled',    'value' => 'true',  'type' => 'boolean', 'group' => 'online', 'label' => 'Offer pickup'],
+            ['key' => 'online.delivery_fee',      'value' => '49',    'type' => 'decimal', 'group' => 'online', 'label' => 'Delivery fee (₱)'],
+            ['key' => 'online.free_delivery_min', 'value' => '999',   'type' => 'decimal', 'group' => 'online', 'label' => 'Free delivery from (₱, 0 = never)'],
+            ['key' => 'online.min_order',         'value' => '150',   'type' => 'decimal', 'group' => 'online', 'label' => 'Minimum order (₱)'],
+            ['key' => 'online.prep_minutes',      'value' => '25',    'type' => 'integer', 'group' => 'online', 'label' => 'Average preparation time (minutes)'],
+            ['key' => 'online.delivery_minutes',  'value' => '20',    'type' => 'integer', 'group' => 'online', 'label' => 'Average delivery time (minutes)'],
+            ['key' => 'online.store_hours',       'value' => '{"open":"08:00","close":"21:00","days":[0,1,2,3,4,5,6]}', 'type' => 'json', 'group' => 'online', 'label' => 'Store hours for online orders'],
+            ['key' => 'online.zone_center',       'value' => '{"lat":9.7355043,"lng":122.926378}', 'type' => 'json', 'group' => 'online', 'label' => 'Delivery zone centre (Mabinay Poblacion)'],
+            ['key' => 'online.zone_radius_km',    'value' => '15',    'type' => 'decimal', 'group' => 'online', 'label' => 'Fallback delivery radius (km)', 'description' => 'Used only when no boundary polygon is saved'],
+            ['key' => 'online.zone_use_polygon',  'value' => 'false', 'type' => 'boolean', 'group' => 'online', 'label' => 'Use the drawn boundary polygon'],
+            ['key' => 'online.zone_polygon',      'value' => '[]',    'type' => 'json',    'group' => 'online', 'label' => 'Delivery boundary polygon', 'description' => 'List of [lat, lng] points drawn on the Delivery Zone page'],
             ['key' => 'receipt.footer_text',     'value' => 'Please come again.',    'type' => 'string',  'group' => 'receipt', 'label' => 'Receipt footer'],
             ['key' => 'receipt.show_cashier',    'value' => 'true',                  'type' => 'boolean', 'group' => 'receipt', 'label' => 'Show cashier name on receipt'],
             ['key' => 'receipt.show_vat_breakdown','value' => 'false',               'type' => 'boolean', 'group' => 'receipt', 'label' => 'Show VAT breakdown on receipt'],
@@ -383,12 +423,6 @@ class SystemSetting extends Model
         return in_array($mode, ['products_and_services', 'products_only', 'services_only'], true)
             ? $mode
             : 'products_and_services';
-    }
-
-    public static function laundryMode(?int $branchId = null): string
-    {
-        $mode = (string) static::get('pos.laundry_mode', $branchId, 'auto');
-        return in_array($mode, ['auto', 'enabled', 'disabled'], true) ? $mode : 'auto';
     }
 
     public static function requireCustomerName(?int $branchId = null): bool

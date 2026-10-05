@@ -37,7 +37,8 @@ import {
 import { Button } from '@/components/ui/button';
 import type { Product, CartItem, Category, ActivePromo, CustomerOption } from './posTypes';
 import ProductThumbnail, { getDefaultProductIcon } from '@/components/ProductThumbnail';
-import WeightAmountModal from './WeightAmountModal';
+import PendingOrdersPanel, { PendingTicket, usePendingOrders } from './PendingOrdersPanel';
+import { ClipboardList as PendingIcon } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Session {
@@ -63,7 +64,6 @@ interface PageProps {
         vat_inclusive: boolean;
         require_cash_session: boolean;
         item_mode: 'products_and_services' | 'products_only' | 'services_only';
-        laundry_mode: 'auto' | 'enabled' | 'disabled';
         require_customer_name: boolean;
         default_due_days: number;
         service_charge_enabled: boolean;
@@ -80,7 +80,8 @@ interface PageProps {
     [key: string]: unknown;
 }
 type PayMethod = 'cash' | 'gcash' | 'card' | 'others' | 'credit' | 'mixed';
-type LayoutMode = 'grid' | 'tablet' | 'grocery' | 'cafe' | 'salon' | 'kiosk' | 'mobile';
+type LayoutMode = 'grid' | 'tablet' | 'cafe' | 'mobile';
+const LAYOUTS: LayoutMode[] = ['grid', 'tablet', 'cafe', 'mobile'];
 
 const METHODS: { value: PayMethod; label: string; icon: React.ElementType; desc: string }[] = [
     { value: 'cash', label: 'Cash', icon: Banknote, desc: 'Standard cash tender' },
@@ -107,10 +108,7 @@ export const isWeightedKgItem = (unit?: string | null, name?: string | null): bo
 // ─── Lazy-loaded layout chunks ────────────────────────────────────────────────
 const GridLayout = lazy(() => import('./layouts/GridLayout'));
 const TabletLayout = lazy(() => import('./layouts/TabletLayout'));
-const GroceryLayout = lazy(() => import('./layouts/GroceryLayout'));
 const CafeLayout = lazy(() => import('./layouts/CafeLayout'));
-const SalonLayout = lazy(() => import('./layouts/SalonLayout'));
-const KioskLayout = lazy(() => import('./layouts/KioskLayout'));
 const MobileLayout = lazy(() => import('./layouts/MobileLayout'));
 
 function CashSessionGate({ currency, branchName }: { currency: string; branchName: string }) {
@@ -252,12 +250,15 @@ function CategoryDropdown({
     if (!categories.length) return null;
     return (
         <div className="relative shrink-0">
+            <LayoutGrid className={cn('pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2', activeCat !== null ? 'text-primary' : 'text-muted-foreground')} />
+            {/* py-0 + bg-none override the global select padding/chevron, which clipped the label at h-9 */}
             <select
                 value={activeCat ?? ''}
                 onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
+                aria-label="Filter by category"
                 className={cn(
-                    'h-9 max-w-[160px] min-w-[120px] cursor-pointer appearance-none truncate rounded-xl border bg-background pr-7 pl-3 text-xs transition-colors focus:ring-1 focus:ring-primary focus:outline-none sm:text-sm',
-                    activeCat !== null ? 'border-primary/60 font-semibold text-foreground' : 'border-border text-muted-foreground',
+                    'h-9 max-w-[200px] min-w-[150px] cursor-pointer appearance-none truncate rounded-xl border bg-background bg-none py-0 pr-12 pl-9 text-xs font-medium text-foreground shadow-xs transition-colors hover:border-primary/40 focus:ring-2 focus:ring-primary focus:outline-none sm:text-sm',
+                    activeCat !== null ? 'border-primary/60 bg-primary/5 font-semibold' : 'border-border',
                 )}
             >
                 <option value="">All Categories</option>
@@ -492,7 +493,7 @@ function PaymentModal({
                         <Zap className="h-5 w-5 text-primary" />
                         <div>
                             <p className="text-base font-black tracking-tight text-foreground">Boundary Cafe Tender</p>
-                            <p className="text-[11px] text-muted-foreground">Select payment method or charge to credit</p>
+                            <p className="text-[11px] text-muted-foreground">Choose a payment method and, optionally, a Boundary Rewards member</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted">
@@ -555,15 +556,8 @@ function PaymentModal({
                                 {needsRegisteredCustomer ? <span className="font-black text-destructive">* Required for Credit</span> : '(Optional)'}
                             </label>
                             {selectedCustomer && (
-                                <span
-                                    className={cn(
-                                        'rounded-full px-2 py-0.5 text-[10px] font-bold',
-                                        selectedCustomer.credit_balance > 0
-                                            ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400'
-                                            : 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400',
-                                    )}
-                                >
-                                    Existing Balance: {fmtMoney(selectedCustomer.credit_balance, currency)}
+                                <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">
+                                    {(selectedCustomer.loyalty_points ?? 0).toLocaleString()} pts
                                 </span>
                             )}
                         </div>
@@ -581,8 +575,7 @@ function PaymentModal({
                                 <option value="">-- Choose Registered Customer --</option>
                                 {customers.map((c) => (
                                     <option key={c.id} value={c.id}>
-                                        {c.name} {c.contact_number ? `(${c.contact_number})` : ''}{' '}
-                                        {c.credit_balance > 0 ? `· Bal: ${fmtMoney(c.credit_balance, currency)}` : '· Clean Bal'}
+                                        {c.name} {c.contact_number ? `(${c.contact_number})` : ''} · {(c.loyalty_points ?? 0).toLocaleString()} pts
                                     </option>
                                 ))}
                             </select>
@@ -1109,7 +1102,8 @@ function SimSoftCashierTable({
     onRemove,
     onClear,
     onCharge,
-    onCustomerCredit,
+    onPendingOrders,
+    pendingCount = 0,
     lastScanned,
 }: {
     cart: CartItem[];
@@ -1120,7 +1114,8 @@ function SimSoftCashierTable({
     onRemove: (key: string) => void;
     onClear: () => void;
     onCharge: () => void;
-    onCustomerCredit: () => void;
+    onPendingOrders: () => void;
+    pendingCount?: number;
     lastScanned: { name: string; qty: number; unit: string; price: number; total: number; targetAmount?: number } | null;
 }) {
     const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
@@ -1187,15 +1182,13 @@ function SimSoftCashierTable({
                         <div>
                             <p className="text-base font-bold text-foreground">Transaction Register Ready</p>
                             <p className="mt-1 max-w-sm text-xs text-muted-foreground">
-                                Scan barcodes or enter multiplier{' '}
-                                <code className="rounded bg-muted px-1.5 py-0.5 font-mono font-bold text-primary">1.4*BARCODE</code> or amount{' '}
-                                <code className="rounded bg-muted px-1.5 py-0.5 font-mono font-bold text-amber-600">50p*BARCODE</code> for weighted
-                                Rice & Feeds.
+                                Search the menu or tap Quick Pick below. Press <b>F3</b> to charge a table ticket sent by a server, or to hand over an
+                                online pickup.
                             </p>
                         </div>
                         <div className="mt-2 flex items-center gap-2">
-                            <span className="rounded-md bg-muted/60 px-2 py-1 font-mono text-[11px]">F1 Scan</span>
-                            <span className="rounded-md bg-muted/60 px-2 py-1 font-mono text-[11px]">F3 Credit</span>
+                            <span className="rounded-md bg-muted/60 px-2 py-1 font-mono text-[11px]">F1 Search</span>
+                            <span className="rounded-md bg-muted/60 px-2 py-1 font-mono text-[11px]">F3 Pending</span>
                             <span className="rounded-md bg-muted/60 px-2 py-1 font-mono text-[11px]">F4 Visual</span>
                             <span className="rounded-md bg-muted/60 px-2 py-1 font-mono text-[11px]">F9 Pay</span>
                         </div>
@@ -1330,11 +1323,15 @@ function SimSoftCashierTable({
                         </button>
                     )}
                     <button
-                        onClick={onCustomerCredit}
-                        disabled={cart.length === 0}
-                        className="flex h-9 items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 text-xs font-bold text-amber-700 transition-colors hover:bg-amber-500/20 disabled:opacity-30 dark:text-amber-300"
+                        onClick={onPendingOrders}
+                        className="relative flex h-9 items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 text-xs font-bold text-amber-700 transition-colors hover:bg-amber-500/20 dark:text-amber-300"
                     >
-                        <Wallet className="h-3.5 w-3.5" /> Credit / Utang [F3]
+                        <PendingIcon className="h-3.5 w-3.5" /> Pending Orders [F3]
+                        {pendingCount > 0 && (
+                            <span className="absolute -top-2 -right-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-black text-white">
+                                {pendingCount}
+                            </span>
+                        )}
                     </button>
                 </div>
 
@@ -1553,10 +1550,14 @@ export default function PosIndex() {
         total: number;
         targetAmount?: number;
     } | null>(null);
-    const [calcItem, setCalcItem] = useState<CartItem | null>(null);
     const [showVoidConfirm, setShowVoidConfirm] = useState(false);
 
-    const visualLayout = layout === 'grocery' ? 'grid' : layout;
+    // ── Pending dine-in tickets (sent by servers) + online pickups ──
+    const pending = usePendingOrders(true);
+    const [pendingOpen, setPendingOpen] = useState(false);
+    const [activeTicket, setActiveTicket] = useState<PendingTicket | null>(null);
+
+    const visualLayout: LayoutMode = LAYOUTS.includes(layout) ? layout : 'grid';
     const searchRef = useRef<HTMLInputElement>(null);
 
     // Auto-focus barcode scanner on mount
@@ -1591,9 +1592,42 @@ export default function PosIndex() {
     const subtotal = useMemo(() => cart.reduce((s, i) => s + i.price * i.qty, 0), [cart]);
     const itemCount = useMemo(() => cart.reduce((s, i) => s + i.qty, 0), [cart]);
 
-    const laundryMode = settings?.laundry_mode ?? 'auto';
-    const isLaundryMode = laundryMode === 'enabled' || (laundryMode === 'auto' && branch?.business_type === 'laundry');
-    const requireCustomerName = !!settings?.require_customer_name || branch?.business_type === 'salon' || isLaundryMode;
+    const requireCustomerName = !!settings?.require_customer_name;
+
+    /** Load a waiter's table ticket into the cart so the cashier can charge it. */
+    const loadTicket = (ticket: PendingTicket) => {
+        if (cart.length > 0 && activeTicket?.id !== ticket.id && !confirm('Replace the current cart with this table ticket?')) return;
+        const merged: CartItem[] = [];
+        for (const i of ticket.items) {
+            const key = `${i.product_id}-${i.variant_id ?? 'base'}`;
+            const existing = merged.find((m) => m.key === key);
+            if (existing) {
+                existing.qty += i.quantity;
+                continue;
+            }
+            const product = products.find((p) => p.id === i.product_id);
+            merged.push({
+                key,
+                product_id: i.product_id,
+                variant_id: i.variant_id,
+                name: i.name,
+                unit: i.unit,
+                barcode: product?.barcode ?? null,
+                product_img: i.product_img ?? product?.product_img ?? null,
+                variant_name: i.variant_name,
+                price: i.price,
+                qty: i.quantity,
+                stock: 999999,
+                product_type: product?.product_type ?? 'standard',
+                bundle_items: product?.bundle_items ?? null,
+                recipe_items: product?.recipe_items ?? null,
+            });
+        }
+        setCart(merged);
+        setActiveTicket(ticket);
+        setLastScanned(null);
+        setError(null);
+    };
 
     // Helper to parse multiplier or peso amount:
     // "1.4*4806511010012" -> qty: 1.4, term: "4806511010012"
@@ -1830,6 +1864,7 @@ export default function PosIndex() {
 
     const confirmVoidCart = () => {
         setCart([]);
+        setActiveTicket(null);
         setLastScanned(null);
         setShowVoidConfirm(false);
         refocus();
@@ -1864,6 +1899,7 @@ export default function PosIndex() {
                 promo_id: payData.promo_id ?? null,
                 loyalty_points: payData.loyalty_points,
                 cash_session_id: session?.id ?? null,
+                table_order_id: activeTicket?.id ?? null,
             },
             {
                 preserveScroll: true,
@@ -1901,7 +1937,7 @@ export default function PosIndex() {
                         created_at: new Date().toISOString(),
                         cashier: user ? `${user.fname} ${user.lname}` : '—',
                         branch_name: branch?.name,
-                        table_label: null,
+                        table_label: r.table_label ?? (activeTicket ? `Table ${activeTicket.table_number}` : null),
                         business_type: branch?.business_type,
                         items: cart.map((i) => ({
                             product_name: i.name,
@@ -1914,8 +1950,10 @@ export default function PosIndex() {
                     });
                     setShowPayment(false);
                     setCart([]);
+                    setActiveTicket(null);
                     setLastScanned(null);
                     setLoading(false);
+                    pending.refresh();
                 },
                 onError: (errors) => {
                     setError((Object.values(errors)[0] as string) ?? 'Transaction failed.');
@@ -2005,21 +2043,15 @@ export default function PosIndex() {
                 return;
             }
 
-            // F3: Customer Credit / Utang
+            // F3: Pending orders (table tickets + online pickups)
             if (isKey('F3')) {
-                if (cart.length > 0) {
-                    setError(null);
-                    setPaymentMethodPreset('credit');
-                    setShowPayment(true);
-                } else {
-                    searchRef.current?.focus();
-                }
+                setPendingOpen((v) => !v);
                 return;
             }
 
             // F4: Toggle Fast Cashiering Mode vs Visual Catalog
             if (isKey('F4')) {
-                if (!showPayment && !calcItem) {
+                if (!showPayment) {
                     setFastMode((v) => !v);
                 }
                 return;
@@ -2060,7 +2092,6 @@ export default function PosIndex() {
                 setShowPayment(false);
                 setShowVoidConfirm(false);
                 setVariantFor(null);
-                setCalcItem(null);
                 setSearch('');
                 refocus();
                 return;
@@ -2095,7 +2126,7 @@ export default function PosIndex() {
             window.removeEventListener('help', handleHelp, { capture: true });
             (window as any).onhelp = null;
         };
-    }, [cart, clearCart, showPayment, calcItem, refocus]);
+    }, [cart, clearCart, showPayment, refocus]);
 
     // Protect active cashier transaction from accidental tab close or page navigation
     useEffect(() => {
@@ -2122,7 +2153,7 @@ export default function PosIndex() {
                     setSearch(e.target.value);
                 }}
                 onKeyDown={handleSearchKeyDown}
-                placeholder="Scan or type 1.4*BARCODE… (F1/F2)"
+                placeholder="Search menu or scan… (F1/F2)"
                 className="h-9 w-full rounded-xl border border-border bg-background pr-8 pl-9 font-mono text-xs placeholder:font-sans placeholder:text-muted-foreground focus:ring-2 focus:ring-primary focus:outline-none sm:text-sm"
                 autoComplete="off"
                 autoCorrect="off"
@@ -2149,102 +2180,6 @@ export default function PosIndex() {
     const cashierNeedsSession = user?.is_cashier === true && !session;
     const noSessionOverlay = cashierNeedsSession ? <CashSessionGate currency={currency} branchName={branch?.name ?? 'Assigned branch'} /> : null;
 
-    // ── Kiosk Layout ─────────────────────────────────────────────────────────
-    if (layout === 'kiosk') {
-        return (
-            <div className="fixed relative inset-0 flex flex-col overflow-hidden bg-background text-foreground">
-                <div className="flex shrink-0 items-center gap-3 bg-primary px-5 py-3.5">
-                    <span className="shrink-0 text-xl font-black tracking-tight text-primary-foreground">{branch?.name ?? 'POS'}</span>
-                    <div className="relative max-w-sm flex-1">
-                        <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <input
-                            ref={searchRef}
-                            value={search}
-                            onChange={(e) => {
-                                setError(null);
-                                setSearch(e.target.value);
-                            }}
-                            onKeyDown={handleSearchKeyDown}
-                            placeholder="Search or scan… (F1)"
-                            className="h-10 w-full rounded-xl border-0 bg-white pr-8 pl-9 text-sm shadow-sm placeholder:text-muted-foreground focus:ring-2 focus:ring-white/50 focus:outline-none dark:bg-background"
-                        />
-                    </div>
-                    <CategoryDropdown categories={categories} activeCat={activeCat} onChange={setActiveCat} />
-                    <button
-                        onClick={() => window.location.reload()}
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15 text-primary-foreground transition-colors hover:bg-white/25"
-                    >
-                        <RefreshCw className="h-4 w-4" />
-                    </button>
-                </div>
-                <div className="min-h-0 flex-1 overflow-hidden">
-                    <Suspense fallback={<LayoutSpinner />}>
-                        <KioskLayout
-                            filtered={filtered}
-                            cart={cart}
-                            currency={currency}
-                            onProductClick={handleProductClick}
-                            onCharge={() => {
-                                setError(null);
-                                setShowPayment(true);
-                            }}
-                            subtotal={subtotal}
-                            itemCount={itemCount}
-                            onClear={clearCart}
-                        />
-                    </Suspense>
-                </div>
-
-                {variantFor && (
-                    <VariantPicker
-                        product={variantFor}
-                        currency={currency}
-                        onSelect={(vid, vname) => {
-                            addItem(variantFor, 1, vid, vname);
-                            setVariantFor(null);
-                            refocus(50);
-                        }}
-                        onClose={() => {
-                            setVariantFor(null);
-                            refocus(50);
-                        }}
-                    />
-                )}
-                {showPayment && (
-                    <PaymentModal
-                        subtotal={subtotal}
-                        settings={settings}
-                        currency={currency}
-                        customers={customers}
-                        customerNameRequired={requireCustomerName}
-                        promos={promos}
-                        cart={cart}
-                        onConfirm={handleConfirm}
-                        onClose={() => {
-                            setShowPayment(false);
-                            setError(null);
-                            refocus(50);
-                        }}
-                        loading={loading}
-                        serverError={error}
-                        initialMethod={paymentMethodPreset}
-                    />
-                )}
-                {receipt && (
-                    <SaleSuccessModal
-                        receipt={receipt}
-                        currency={currency}
-                        onNewSale={() => {
-                            setReceipt(null);
-                            refocus(100);
-                        }}
-                    />
-                )}
-                {noSessionOverlay}
-            </div>
-        );
-    }
-
     // ── Standard & SimSoft Fast Cashier POS Layout ─────────────────────────────
     return (
         <AdminLayout defaultSidebarOpen={false} title="POS / Cashier">
@@ -2263,7 +2198,7 @@ export default function PosIndex() {
                         <span>{session ? 'Register Open' : 'Register Ready'}</span>
                     </div>
 
-                    <span className="block max-w-[150px] shrink-0 truncate text-sm font-black text-foreground">{branch?.name ?? 'Retail POS'}</span>
+                    <span className="block max-w-[150px] shrink-0 truncate text-sm font-black text-foreground">{branch?.name ?? 'Boundary Café POS'}</span>
 
                     {/* Combined Search & Barcode Input */}
                     {searchInput}
@@ -2287,6 +2222,22 @@ export default function PosIndex() {
                         <span className="ml-1 font-mono text-[10px] opacity-70">F4</span>
                     </button>
 
+                    <button
+                        type="button"
+                        onClick={() => setPendingOpen(true)}
+                        className={cn(
+                            'relative flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold whitespace-nowrap transition-colors',
+                            pending.data.count > 0 ? 'border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'border-border text-muted-foreground hover:bg-muted',
+                        )}
+                        title="Pending table tickets & online pickups (F3)"
+                    >
+                        <PendingIcon className="h-3.5 w-3.5" />
+                        <span>Pending</span>
+                        {pending.data.count > 0 && (
+                            <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-black text-white">{pending.data.count}</span>
+                        )}
+                    </button>
+
                     <a
                         href={routes.sales.history()}
                         className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 text-xs font-medium whitespace-nowrap text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -2303,6 +2254,26 @@ export default function PosIndex() {
                     </button>
                 </div>
 
+                {activeTicket && (
+                    <div className="flex shrink-0 items-center gap-3 border-b border-primary/30 bg-primary/10 px-4 py-2 text-sm">
+                        <span className="rounded-md bg-primary px-2 py-0.5 text-xs font-black text-primary-foreground">TABLE {activeTicket.table_number}</span>
+                        <span className="font-semibold">
+                            Charging ticket {activeTicket.order_number}
+                            {activeTicket.customer ? ` · ★ ${activeTicket.customer.name} (${activeTicket.customer.loyalty_points} pts)` : ''}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setActiveTicket(null);
+                                setCart([]);
+                            }}
+                            className="ml-auto rounded-md border border-border bg-background px-2 py-1 text-xs font-semibold hover:bg-muted"
+                        >
+                            Detach & clear
+                        </button>
+                    </div>
+                )}
+
                 {/* ── Main Workspace ───────────────────────────────────────── */}
                 <div className="flex flex-1 overflow-hidden">
                     {fastMode ? (
@@ -2314,7 +2285,6 @@ export default function PosIndex() {
                                     currency={currency}
                                     onUpdateQty={updateQty}
                                     onSetExactQty={setExactQty}
-                                    onOpenCalc={setCalcItem}
                                     onRemove={removeItem}
                                     onClear={clearCart}
                                     onCharge={() => {
@@ -2322,11 +2292,8 @@ export default function PosIndex() {
                                         setPaymentMethodPreset('cash');
                                         setShowPayment(true);
                                     }}
-                                    onCustomerCredit={() => {
-                                        setError(null);
-                                        setPaymentMethodPreset('credit');
-                                        setShowPayment(true);
-                                    }}
+                                    onPendingOrders={() => setPendingOpen(true)}
+                                    pendingCount={pending.data.count}
                                     lastScanned={lastScanned}
                                 />
                             </div>
@@ -2334,8 +2301,8 @@ export default function PosIndex() {
                             {/* Quick Tap Catalog Drawer for fast cashiering without barcode scanner */}
                             <div className="flex h-40 min-h-[140px] shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-card p-2.5 shadow-xs">
                                 <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-1 pb-1.5 text-[11px] font-bold text-muted-foreground">
-                                    <span>Quick Pick Retail Products ({quickPickProducts.length})</span>
-                                    <span>Click to add · Auto ₱ amount & kg for Rice & Feeds</span>
+                                    <span>Quick Pick Menu ({quickPickProducts.length})</span>
+                                    <span>Tap to add · F3 for table tickets</span>
                                 </div>
                                 <div className="flex flex-1 items-stretch gap-2 overflow-x-auto overflow-y-hidden pt-2">
                                     {quickPickProducts.map((p) => {
@@ -2424,9 +2391,6 @@ export default function PosIndex() {
                                                 onProductClick={handleProductClick}
                                             />
                                         )}
-                                        {visualLayout === 'salon' && (
-                                            <SalonLayout filtered={filtered} cart={cart} currency={currency} onProductClick={handleProductClick} />
-                                        )}
                                         {visualLayout === 'mobile' && (
                                             <MobileLayout
                                                 filtered={filtered}
@@ -2460,7 +2424,6 @@ export default function PosIndex() {
                                     error={error}
                                     onUpdateQty={updateQty}
                                     onSetExactQty={setExactQty}
-                                    onOpenCalc={setCalcItem}
                                     onRemove={removeItem}
                                     onClear={clearCart}
                                     onCharge={() => {
@@ -2492,20 +2455,12 @@ export default function PosIndex() {
 
                         <button
                             type="button"
-                            onClick={() => {
-                                if (cart.length > 0) {
-                                    setError(null);
-                                    setPaymentMethodPreset('credit');
-                                    setShowPayment(true);
-                                } else {
-                                    searchRef.current?.focus();
-                                }
-                            }}
+                            onClick={() => setPendingOpen(true)}
                             className="flex cursor-pointer items-center gap-1 rounded-md border border-transparent px-2 py-0.5 transition-colors hover:border-border hover:bg-background hover:text-foreground"
-                            title="Customer Credit / Utang (F3)"
+                            title="Pending table tickets & online pickups (F3)"
                         >
                             <kbd className="py-0.2 rounded border border-border bg-background px-1.5 font-bold text-foreground">F3</kbd>
-                            <span>Credit</span>
+                            <span>Pending</span>
                         </button>
 
                         <button
@@ -2552,8 +2507,7 @@ export default function PosIndex() {
                                 setShowPayment(false);
                                 setShowVoidConfirm(false);
                                 setVariantFor(null);
-                                setCalcItem(null);
-                                setSearch('');
+                                                setSearch('');
                                 refocus();
                             }}
                             className="flex cursor-pointer items-center gap-1 rounded-md border border-transparent px-2 py-0.5 transition-colors hover:border-border hover:bg-background hover:text-foreground"
@@ -2564,8 +2518,7 @@ export default function PosIndex() {
                         </button>
                     </div>
                     <div className="ml-4 block shrink-0 font-mono text-[10px] text-muted-foreground/80">
-                        SimSoft Retail POS · Multiplier: <code className="font-bold text-primary">1.4*BARCODE</code> or Amount:{' '}
-                        <code className="font-bold text-amber-600">50p*BARCODE</code> ·{' '}
+                        Boundary Café POS · <kbd className="rounded border border-border bg-background px-1 py-0.5">F3</kbd> Pending orders ·{' '}
                         <kbd className="rounded border border-border bg-background px-1 py-0.5">Ctrl+B</kbd> Toggle Sidebar
                     </div>
                 </div>
@@ -2582,22 +2535,6 @@ export default function PosIndex() {
                     }}
                     onClose={() => {
                         setVariantFor(null);
-                        refocus(50);
-                    }}
-                />
-            )}
-
-            {calcItem && (
-                <WeightAmountModal
-                    item={calcItem}
-                    currency={currency}
-                    onApply={(newQty) => {
-                        setExactQty(calcItem.key, newQty);
-                        setCalcItem(null);
-                        refocus(50);
-                    }}
-                    onClose={() => {
-                        setCalcItem(null);
                         refocus(50);
                     }}
                 />
@@ -2621,8 +2558,21 @@ export default function PosIndex() {
                     loading={loading}
                     serverError={error}
                     initialMethod={paymentMethodPreset}
+                    preselectedCustomerId={activeTicket?.customer?.id ?? null}
                 />
             )}
+
+            <PendingOrdersPanel
+                open={pendingOpen}
+                onClose={() => {
+                    setPendingOpen(false);
+                    refocus(50);
+                }}
+                currency={currency}
+                pending={pending}
+                activeTicketId={activeTicket?.id ?? null}
+                onLoad={loadTicket}
+            />
 
             {showVoidConfirm && (
                 <VoidCartModal

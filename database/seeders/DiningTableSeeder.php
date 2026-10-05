@@ -80,6 +80,13 @@ class DiningTableSeeder extends Seeder
                 ['table_number' => 'V2',  'section' => 'VIP',     'capacity' => 8],
             ],
 
+            // Boundary Cafe – Mabinay: tables numbered 1–12 (waiters just tap the number)
+            'BC-MAB' => array_map(fn ($n) => [
+                'table_number' => (string) $n,
+                'section' => $n <= 8 ? 'Indoor' : 'Al fresco',
+                'capacity' => in_array($n, [5, 6, 11, 12], true) ? 6 : 4,
+            ], range(1, 12)),
+
             // Default for any other branch with table ordering enabled
             default => [
                 ['table_number' => 'T1', 'section' => null, 'capacity' => 4],

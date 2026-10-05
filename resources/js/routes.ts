@@ -41,19 +41,46 @@ export const routes = {
         history: () => route('sales.history'),
     },
 
-    // ── Table Orders — ID 4 ───────────────────────────────────────────────────
-    tableOrders: {
-        index: () => route('table-orders.index'),
-        store: () => route('table-orders.store'),
+    // ── Online Orders — ID 40 ─────────────────────────────────────────────────
+    onlineOrders: {
+        index: () => route('online-orders.index'),
+        feed: () => route('online-orders.feed'),
+        pendingCount: () => route('online-orders.pending-count'),
+        transition: (id: Id) => route('online-orders.transition', { onlineOrder: id }),
     },
 
-    // ── Shop Orders — ID 5 ────────────────────────────────────────────────────
-    shop: {
-        index: () => route('shop.index'),
-        store: () => route('shop.store'),
-        orders: () => route('shop.orders'),
-        update: (id: Id) => route('shop.orders.update', { order: id }),
-        cancel: (id: Id) => route('shop.orders.cancel', { order: id }),
+    // ── Table Ordering (waiter) — ID 41 ───────────────────────────────────────
+    tableOrders: {
+        index: () => route('table-orders.index'),
+        tables: () => route('table-orders.tables'),
+        store: () => route('table-orders.store'),
+        findCustomer: () => route('table-orders.customers.find'),
+        available: (id: Id) => route('table-orders.available', { diningTable: id }),
+        pending: () => route('pos.pending'),
+        void: (id: Id) => route('pos.table-orders.void', { tableOrder: id }),
+    },
+
+    // ── Delivery Zone — ID 43 ─────────────────────────────────────────────────
+    deliveryZone: {
+        index: () => route('delivery-zone.index'),
+        update: () => route('delivery-zone.update'),
+    },
+
+    // ── Loyalty Program — ID 44 ───────────────────────────────────────────────
+    loyaltyProgram: {
+        index: () => route('loyalty-program.index'),
+        update: () => route('loyalty-program.update'),
+    },
+
+    // ── Customer ordering app (customer guard) ────────────────────────────────
+    customer: {
+        login: () => route('customer.login'),
+        register: () => route('customer.register'),
+        account: () => route('customer.account'),
+        orders: () => route('customer.orders.index'),
+        order: (orderNumber: string) => route('customer.orders.show', { orderNumber }),
+        rewards: () => route('customer.rewards'),
+        checkout: () => route('customer.checkout'),
     },
 
     // ── Products / Inventory — ID 6 ───────────────────────────────────────────
@@ -201,7 +228,7 @@ export const routes = {
         apply: () => route('promos.apply'),
     },
 
-    // ── Dining Tables — ID 26 ─────────────────────────────────────────────────
+    // ── Dining Tables — ID 42 ─────────────────────────────────────────────────
     diningTables: {
         index: () => route('dining-tables.index'),
         store: () => route('dining-tables.store'),
@@ -234,36 +261,12 @@ export const routes = {
         cancel: (id: Id) => route('stock-transfers.cancel', { stockTransfer: id }),
     },
 
-    // ── Warehouses — ID 35 (Advance) ──────────────────────────────────────────
-    warehouses: {
-        index: () => route('warehouses.index'),
-        store: () => route('warehouses.store'),
-        update: (id: Id) => route('warehouses.update', { warehouse: id }),
-        toggle: (id: Id) => route('warehouses.toggle', { warehouse: id }),
-        destroy: (id: Id) => route('warehouses.destroy', { warehouse: id }),
-        adjustStock: (id: Id) => route('warehouses.stock.adjust', { warehouse: id }),
-    },
-
-    // ── Brochure Builder — ID 37 ─────────────────────────────────────────────
-    brochure: {
-        index: () => route('brochure.index'),
-    },
-
-    // ── Services — ID 38 ─────────────────────────────────────────────────────
-    services: {
-        index: () => route('services.index'),
-        store: () => route('services.store'),
-        update: (id: Id) => route('services.update', { service: id }),
-        destroy: (id: Id) => route('services.destroy', { service: id }),
-    },
-
     customers: {
         index: () => route('customers.index'),
         store: () => route('customers.store'),
         show: (id: Id) => route('customers.show', { customer: id }),
         update: (id: Id) => route('customers.update', { customer: id }),
         destroy: (id: Id) => route('customers.destroy', { customer: id }),
-        pay: (id: Id) => route('customers.payments.store', { customer: id }),
     },
 
     // ── Stock Count (Physical Inventory) — ID 36 ─────────────────────────────

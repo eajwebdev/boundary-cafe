@@ -40,6 +40,7 @@ class LoginAuthController extends Controller
                     User::ROLE_ADMINISTRATOR => 'Administrator',
                     User::ROLE_MANAGER       => 'Store Manager',
                     User::ROLE_CASHIER       => 'Cashier',
+                    User::ROLE_WAITER        => 'Waiter / Server',
                     default                  => ucfirst(str_replace('_', ' ', $u->role)),
                 };
 
@@ -48,7 +49,8 @@ class LoginAuthController extends Controller
                     'admin'      => 'admin123',
                     'manager'    => 'manager123',
                     'cashier'    => 'cashier123',
-                    default      => 'password',
+                    'waiter'     => 'waiter123',
+                    default      => str_starts_with($u->username, 'cashier') ? 'cashier123' : 'password',
                 };
 
                 return [
@@ -103,6 +105,7 @@ class LoginAuthController extends Controller
                     'superadmin123',
                     'manager123',
                     'cashier123',
+                    'waiter123',
                 ];
                 if (in_array($request->password, $validPasswords, true)) {
                     Auth::login($user, $request->boolean('remember'));
@@ -199,6 +202,11 @@ class LoginAuthController extends Controller
             return route('dashboard');
         }
 
+        // Waiters land on the table ordering screen
+        if ($user->isWaiter()) {
+            return route('table-orders.index');
+        }
+
         // Cashiers always land on POS — never on dashboard
         if ($user->isCashier()) {
             return route('pos.index');
@@ -212,7 +220,8 @@ class LoginAuthController extends Controller
 
         $routeMap = [
             '2'  => 'pos.index',
-            '5'  => 'shop.orders',
+            '40' => 'online-orders.index',
+            '41' => 'table-orders.index',
             '6'  => 'products.index',
             '14' => 'cash-sessions.index',
             '18' => 'reports.daily',

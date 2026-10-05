@@ -26,25 +26,17 @@ class Branch extends Model
     const TYPE_WAREHOUSE   = 'warehouse';
     const TYPE_MIXED       = 'mixed';
 
+    /**
+     * Business types offered for new/edited branches. This system is a
+     * restaurant/cafe POS, so retail-only types are no longer selectable
+     * (existing rows keep their stored value and still resolve flags below).
+     */
     public static function businessTypes(): array
     {
         return [
-            // ── Food & Beverage ───────────────────────────────────────
             self::TYPE_CAFE        => 'Cafe / Milk Tea / Juice Bar',
             self::TYPE_RESTAURANT  => 'Restaurant / Canteen (Dine-in)',
             self::TYPE_FOOD_STALL  => 'Food Stall / Carinderia / Turo-turo',
-            self::TYPE_BAKERY      => 'Bakery / Pastry / Dessert Shop',
-            self::TYPE_BAR         => 'Bar / Pub / Nightlife',
-            // ── Retail & Services ─────────────────────────────────────
-            self::TYPE_RETAIL      => 'Retail / Grocery / Sari-sari',
-            self::TYPE_PHARMACY    => 'Pharmacy / Drugstore',
-            self::TYPE_HARDWARE    => 'Hardware / Construction Supply',
-            self::TYPE_SALON       => 'Salon / Spa / Personal Care',
-            self::TYPE_LAUNDRY     => 'Laundry / Dry Cleaning',
-            // ── Other ─────────────────────────────────────────────────
-            self::TYPE_SCHOOL      => 'School / Tutorial / Training Center',
-            self::TYPE_WAREHOUSE   => 'Warehouse / Distribution Center',
-            self::TYPE_MIXED       => 'Mixed (All features enabled)',
         ];
     }
 

@@ -1,6 +1,5 @@
 <?php
 
-use Inertia\Inertia;
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\LoginAuthController;
@@ -10,10 +9,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\PromoController;
-use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\SupplierController;
-use App\Http\Controllers\ShopController;
-use App\Http\Controllers\SalesOrderController;
 use App\Http\Controllers\LogsController;
 use App\Http\Controllers\CashSessionController;
 use App\Http\Controllers\CashCountController;
@@ -27,52 +23,134 @@ use App\Http\Controllers\StockAdjustmentController;
 use App\Http\Controllers\AiAssistantController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\StockTransferController;
-use App\Http\Controllers\WarehouseController;
 use App\Http\Controllers\StockCountController;
-use App\Http\Controllers\BrochureController;
-use App\Http\Controllers\ServicesController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\LoyaltyController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DiningTableController;
+use App\Http\Controllers\TableOrderController;
+use App\Http\Controllers\OnlineOrderController;
+use App\Http\Controllers\DeliveryZoneController;
+use App\Http\Controllers\LoyaltyProgramController;
+use App\Http\Controllers\Customer;
 
-// PUBLIC
-Route::get('/', fn () => Inertia::render('Landing/Index'))->name('home');
-Route::get('/login', [LoginAuthController::class, 'getLogin'])->name('login');
-Route::post('/login', [LoginAuthController::class, 'postLogin'])->name('login.post');
+// ─── PUBLIC STOREFRONT (customer ordering app) ───────────────────────────────
+Route::get('/', [Customer\StorefrontController::class, 'index'])->name('home');
 Route::get('/loyalty/card/{token}', [LoyaltyController::class, 'card'])->name('loyalty.card');
 
-// PROTECTED
-Route::middleware('auth')->group(function () {
+// Staff sign-in
+Route::get('/login', [LoginAuthController::class, 'getLogin'])->name('login');
+Route::post('/login', [LoginAuthController::class, 'postLogin'])->middleware('throttle:20,1')->name('login.post');
+
+// ─── CUSTOMER ACCOUNTS (separate "customer" guard) ───────────────────────────
+Route::prefix('account')->name('customer.')->group(function () {
+    Route::get('/login', [Customer\AuthController::class, 'showLogin'])->name('login');
+    Route::post('/login', [Customer\AuthController::class, 'login'])->middleware('throttle:10,1')->name('login.post');
+    Route::get('/register', [Customer\AuthController::class, 'showRegister'])->name('register');
+    Route::post('/register', [Customer\AuthController::class, 'register'])->middleware('throttle:6,1')->name('register.post');
+
+    Route::middleware('auth:customer')->group(function () {
+        Route::post('/logout', [Customer\AuthController::class, 'logout'])->name('logout');
+
+        Route::get('/', [Customer\AccountController::class, 'show'])->name('account');
+        Route::patch('/', [Customer\AccountController::class, 'update'])->name('account.update');
+        Route::put('/password', [Customer\AccountController::class, 'updatePassword'])->middleware('throttle:6,1')->name('password.update');
+        Route::get('/rewards', [Customer\AccountController::class, 'rewards'])->name('rewards');
+
+        Route::post('/addresses', [Customer\AddressController::class, 'store'])->middleware('throttle:30,1')->name('addresses.store');
+        Route::patch('/addresses/{address}', [Customer\AddressController::class, 'update'])->name('addresses.update');
+        Route::post('/addresses/{address}/default', [Customer\AddressController::class, 'makeDefault'])->name('addresses.default');
+        Route::delete('/addresses/{address}', [Customer\AddressController::class, 'destroy'])->name('addresses.destroy');
+
+        Route::get('/orders', [Customer\OrderController::class, 'index'])->name('orders.index');
+        Route::get('/orders/{orderNumber}', [Customer\OrderController::class, 'show'])->name('orders.show');
+        Route::get('/orders/{orderNumber}/status', [Customer\OrderController::class, 'status'])->middleware('throttle:120,1')->name('orders.status');
+        Route::post('/orders/{orderNumber}/cancel', [Customer\OrderController::class, 'cancel'])->middleware('throttle:10,1')->name('orders.cancel');
+    });
+});
+
+Route::middleware('auth:customer')->group(function () {
+    Route::get('/checkout', [Customer\CheckoutController::class, 'show'])->name('customer.checkout');
+    Route::post('/checkout/quote', [Customer\CheckoutController::class, 'quote'])->middleware('throttle:90,1')->name('customer.checkout.quote');
+    Route::post('/checkout', [Customer\CheckoutController::class, 'store'])->middleware('throttle:10,1')->name('customer.checkout.store');
+    Route::get('/geocode/reverse', [Customer\GeocodeController::class, 'reverse'])->middleware('throttle:40,1')->name('customer.geocode.reverse');
+});
+
+// ─── STAFF (web guard) ───────────────────────────────────────────────────────
+Route::middleware('auth:web')->group(function () {
 
     Route::post('/logout', [LoginAuthController::class, 'postLogout'])->name('logout.post');
 
     // AI Assistant (manager & cashier only — enforced in frontend; backend just requires auth)
     Route::post('/ai/chat', [AiAssistantController::class, 'chat'])->name('ai.chat');
 
-    // Dashboard
+    // Dashboard — ID 1 (tabbed; each tab loads lazily)
     Route::middleware('access:1')->group(function () {
-        Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])->name('dashboard');
-        Route::get('/dashboard/data', [\App\Http\Controllers\DashboardController::class, 'data'])->name('dashboard.data');
+        Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+        Route::get('/dashboard/data', [DashboardController::class, 'data'])->name('dashboard.data');
     });
 
-    // POS
+    // POS — ID 2
     Route::middleware('access:2')->prefix('pos')->name('pos.')->controller(PosController::class)->group(function () {
         Route::get('/', 'index')->name('index');
         Route::post('/', 'store')->name('store');
         Route::post('/session/open', [CashSessionController::class, 'open'])->name('session.open');
-        Route::get('/{sale}/edit', 'edit')->name('edit');
-        Route::put('/{sale}', 'update')->name('update');
-        Route::post('/{sale}/void', 'void')->name('void');
-        Route::get('/{sale}', 'show')->name('show');
         Route::get('/barcode/lookup', 'lookupBarcode')->name('barcode.lookup');
+
+        // Pending dine-in tickets sent by waiters + online pickups ready to collect
+        Route::get('/pending-orders', [TableOrderController::class, 'pending'])->name('pending');
+        Route::post('/table-orders/{tableOrder}/void', [TableOrderController::class, 'void'])->name('table-orders.void');
+
+        Route::get('/{sale}/edit', 'edit')->whereNumber('sale')->name('edit');
+        Route::put('/{sale}', 'update')->whereNumber('sale')->name('update');
+        Route::post('/{sale}/void', 'void')->whereNumber('sale')->name('void');
+        Route::get('/{sale}', 'show')->whereNumber('sale')->name('show');
     });
 
-    // Sales History
+    // Sales History — ID 3
     Route::middleware('access:3')->prefix('sales')->name('sales.')->controller(PosController::class)->group(function () {
         Route::get('/history', 'history')->name('history');
     });
 
-    // Shop Orders
-    // Products / Inventory
+    // Online Orders board — ID 40
+    Route::middleware('access:40')->prefix('online-orders')->name('online-orders.')->controller(OnlineOrderController::class)->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::get('/feed', 'feed')->name('feed');
+        Route::get('/pending-count', 'pendingCount')->name('pending-count');
+        Route::post('/{onlineOrder}/transition', 'transition')->name('transition');
+    });
+
+    // Table Ordering (waiter screen) — ID 41
+    Route::middleware('access:41')->prefix('tables')->name('table-orders.')->controller(TableOrderController::class)->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::get('/status', 'tables')->name('tables');
+        Route::post('/orders', 'store')->name('store');
+        Route::get('/customers/find', 'findCustomer')->name('customers.find');
+        Route::post('/{diningTable}/available', 'markAvailable')->name('available');
+    });
+
+    // Dining Tables setup — ID 42
+    Route::middleware('access:42')->prefix('dining-tables')->name('dining-tables.')->controller(DiningTableController::class)->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::post('/', 'store')->name('store');
+        Route::patch('/{diningTable}', 'update')->name('update');
+        Route::delete('/{diningTable}', 'destroy')->name('destroy');
+    });
+
+    // Delivery Zone & online ordering settings — ID 43
+    Route::middleware('access:43')->prefix('delivery-zone')->name('delivery-zone.')->controller(DeliveryZoneController::class)->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::put('/', 'update')->name('update');
+        Route::patch('/barangays/{barangay}', 'toggleBarangay')->name('barangays.toggle');
+    });
+
+    // Loyalty Program settings — ID 44
+    Route::middleware('access:44')->prefix('loyalty-program')->name('loyalty-program.')->controller(LoyaltyProgramController::class)->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::put('/', 'update')->name('update');
+    });
+
+    // Products / Inventory — ID 6
     Route::middleware('access:6')->prefix('products')->name('products.')->group(function () {
         Route::controller(ProductController::class)->group(function () {
             Route::get('/', 'index')->name('index');
@@ -83,7 +161,7 @@ Route::middleware('auth')->group(function () {
         });
     });
 
-    // Cash Sessions
+    // Cash Sessions — ID 14
     Route::middleware('access:14')->prefix('cash-sessions')->name('cash-sessions.')->group(function () {
         Route::get('/', [CashSessionController::class, 'index'])->name('index');
         Route::post('/open', [CashSessionController::class, 'open'])->name('open');
@@ -91,14 +169,14 @@ Route::middleware('auth')->group(function () {
         Route::get('/{session}', [CashSessionController::class, 'show'])->name('show');
     });
 
-    // Cash Counts
+    // Cash Counts — ID 15
     Route::middleware('access:15')->prefix('cash-counts')->name('cash-counts.')->controller(CashCountController::class)->group(function () {
         Route::get('/', 'index')->name('index');
         Route::post('/', 'store')->name('store');
         Route::get('/{cashCount}', 'show')->name('show');
     });
 
-    // Petty Cash
+    // Petty Cash — ID 16
     Route::middleware('access:16')->prefix('petty-cash')->name('petty-cash.')->group(function () {
         Route::get('/', [PettyCashController::class, 'index'])->name('index');
         Route::post('/', [PettyCashController::class, 'store'])->name('store');
@@ -108,7 +186,7 @@ Route::middleware('auth')->group(function () {
         Route::patch('/funds/{fund}/close', [PettyCashFundController::class, 'close'])->name('funds.close');
     });
 
-    // Expenses
+    // Expenses — ID 17
     Route::middleware('access:17')->prefix('expenses')->name('expenses.')->controller(ExpenseController::class)->group(function () {
         Route::get('/', 'index')->name('index');
         Route::post('/', 'store')->name('store');
@@ -117,7 +195,7 @@ Route::middleware('auth')->group(function () {
         Route::delete('/{expense}', 'destroy')->name('destroy');
     });
 
-    // Expense Categories
+    // Expense Categories — ID 27
     Route::middleware('access:27')->prefix('expense-categories')->name('expense-categories.')->controller(ExpenseCategoryController::class)->group(function () {
         Route::get('/', 'index')->name('index');
         Route::post('/', 'store')->name('store');
@@ -145,12 +223,12 @@ Route::middleware('auth')->group(function () {
         Route::get('/ingredient-usage/pdf', 'ingredientUsageReportPdf')->name('ingredient-usage.pdf');
     });
 
-    // Activity Logs
+    // Activity Logs — ID 22
     Route::middleware('access:22')->prefix('logs')->name('logs.')->group(function () {
         Route::get('/', [LogsController::class, 'index'])->name('index');
     });
 
-    // Users
+    // Users — ID 23
     Route::middleware('access:23')->prefix('users')->name('users.')->controller(UserController::class)->group(function () {
         Route::get('/', 'index')->name('index');
         Route::post('/', 'store')->name('store');
@@ -158,25 +236,15 @@ Route::middleware('auth')->group(function () {
         Route::delete('/{user}', 'destroy')->name('destroy');
     });
 
-    // Suppliers
+    // Suppliers — ID 24 (ingredient suppliers; supplier CRUD only)
     Route::middleware('access:24')->prefix('suppliers')->name('suppliers.')->controller(SupplierController::class)->group(function () {
         Route::get('/', 'index')->name('index');
         Route::post('/', 'store')->name('store');
         Route::patch('/{supplier}', 'update')->name('update');
         Route::delete('/{supplier}', 'destroy')->name('destroy');
-
-        // Supplier order management
-        Route::get('/{supplier}/orders', 'orders')->name('orders');
-        Route::prefix('orders')->name('orders.')->group(function () {
-            Route::post('/{order}/confirm',  'confirmOrder')->name('confirm');
-            Route::post('/{order}/reject',   'rejectOrder')->name('reject');
-            Route::post('/{order}/shipped',  'markShipped')->name('shipped');
-            Route::post('/{order}/complete', 'completeOrder')->name('complete');
-            Route::get('/{order}/receipt',   'orderReceipt')->name('receipt');
-        });
     });
 
-    // Purchase Orders
+    // Purchase Orders — ID 12
     Route::middleware('access:12')->prefix('purchase-orders')->name('purchase-orders.')->controller(PurchaseController::class)->group(function () {
         Route::get('/', 'index')->name('index');
         Route::get('/create', 'create')->name('create');
@@ -185,7 +253,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/{purchase}/mark-paid', 'markPaid')->name('mark-paid');
     });
 
-    // Branches
+    // Branches — ID 25
     Route::middleware('access:25')->prefix('branches')->name('branches.')->controller(BranchController::class)->group(function () {
         Route::get('/', 'index')->name('index');
         Route::post('/', 'store')->name('store');
@@ -194,7 +262,7 @@ Route::middleware('auth')->group(function () {
         Route::delete('/{branch}', 'destroy')->name('destroy');
     });
 
-    // System Settings
+    // System Settings — ID 28
     Route::middleware('access:28')->prefix('settings')->name('settings.')->controller(SystemSettingsController::class)->group(function () {
         Route::get('/', 'index')->name('index');
         Route::post('/save', 'save')->name('save');
@@ -203,7 +271,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/logo', 'uploadLogo')->name('logo');
     });
 
-    // Stock Adjustments (Losses / Damages / Expired)
+    // Stock Adjustments (Losses / Damages / Expired) — ID 31
     Route::middleware('access:31')->prefix('stock-adjustments')->name('stock-adjustments.')->controller(StockAdjustmentController::class)->group(function () {
         Route::get('/', 'index')->name('index');
         Route::post('/', 'store')->name('store');
@@ -233,23 +301,20 @@ Route::middleware('auth')->group(function () {
         Route::delete('/{session}',          'cancel')->name('cancel');
     });
 
-    // Warehouses — ID 35 (Premium)
-    // Brochure Builder — ID 37
-    // Services — ID 38
+    // Customers — ID 39
     Route::middleware('access:39')->prefix('customers')->name('customers.')->controller(CustomerController::class)->group(function () {
         Route::get('/', 'index')->name('index');
         Route::post('/', 'store')->name('store');
         Route::get('/{customer}', 'show')->name('show');
         Route::patch('/{customer}', 'update')->name('update');
         Route::delete('/{customer}', 'destroy')->name('destroy');
-        Route::post('/{customer}/payments', 'pay')->name('payments.store');
         Route::post('/{customer}/loyalty/rotate', [LoyaltyController::class, 'rotate'])->name('loyalty.rotate');
         Route::post('/{customer}/loyalty/adjust', [LoyaltyController::class, 'adjust'])->name('loyalty.adjust');
     });
 
     Route::post('/loyalty/lookup', [LoyaltyController::class, 'lookup'])->name('loyalty.lookup');
 
-    // Promos
+    // Promos — ID 29
     Route::middleware('access:29')->prefix('promos')->name('promos.')->controller(PromoController::class)->group(function () {
         Route::get('/', 'index')->name('index');
         Route::post('/', 'store')->name('store');

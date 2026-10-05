@@ -43,7 +43,21 @@ class MenuHelper
             '34' => 'Stock Transfers',
             '36' => 'Stock Count',
             '39' => 'Customers',
+            '40' => 'Online Orders',
+            '41' => 'Table Ordering',
+            '42' => 'Dining Tables',
+            '43' => 'Delivery Zone',
+            '44' => 'Loyalty Program',
         ];
+    }
+
+    /**
+     * Menu IDs that were retired when the system was narrowed to a restaurant/cafe.
+     * Kept here so stale `access` arrays and module toggles can be ignored safely.
+     */
+    public static function retired(): array
+    {
+        return ['4', '5', '26', '32', '35', '37', '38'];
     }
 
     /**
@@ -74,8 +88,11 @@ class MenuHelper
             'Sales' => [
                 '2'  => 'POS / Cashier',
                 '3'  => 'Sales History',
+                '40' => 'Online Orders',
+                '41' => 'Table Ordering',
                 '29' => 'Promos & Discounts',
                 '39' => 'Customers',
+                '44' => 'Loyalty Program',
             ],
             'Inventory' => [
                 '6'  => 'All Products',
@@ -110,6 +127,8 @@ class MenuHelper
                 '24' => 'Suppliers',
                 '25' => 'Branches',
                 '27' => 'Expense Categories',
+                '42' => 'Dining Tables',
+                '43' => 'Delivery Zone',
                 '28' => 'System Settings',
             ],
         ];

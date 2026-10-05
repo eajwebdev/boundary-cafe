@@ -16,6 +16,7 @@ class Sale extends Model
         'receipt_number',
         'user_id',
         'branch_id',
+        'channel',          // counter | dine_in | online
         'cash_session_id',
         'table_order_id',   // null for walk-up / takeout, set for dine-in
         'customer_id',
@@ -28,6 +29,8 @@ class Sale extends Model
         'due_date',
         'change_amount',
         'discount_amount',
+        'delivery_fee',
+        'vat_amount',
         'loyalty_points_earned',
         'loyalty_points_redeemed',
         'loyalty_discount',
@@ -46,6 +49,8 @@ class Sale extends Model
         'balance_due' => 'decimal:2',
         'change_amount' => 'decimal:2',
         'discount_amount' => 'decimal:2',
+        'delivery_fee' => 'decimal:2',
+        'vat_amount' => 'decimal:2',
         'loyalty_points_earned' => 'integer',
         'loyalty_points_redeemed' => 'integer',
         'loyalty_discount' => 'decimal:2',
@@ -80,6 +85,11 @@ class Sale extends Model
     public function tableOrder(): BelongsTo
     {
         return $this->belongsTo(TableOrder::class);
+    }
+
+    public function onlineOrder(): HasOne
+    {
+        return $this->hasOne(OnlineOrder::class);
     }
 
     public function customer(): BelongsTo

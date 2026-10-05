@@ -7,6 +7,7 @@ use App\Models\Promo;
 use App\Models\SystemSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -30,7 +31,7 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
-        $user = Auth::user();
+        $user = Auth::guard('web')->user(); // staff only — customer routes switch the default guard
 
         if ($user && ! $user->relationLoaded('branch')) {
             $user->load(['branch.supplier']);
@@ -46,7 +47,7 @@ class HandleInertiaRequests extends Middleware
         $activePromos = [];
         if ($user && Promo::tableExists()) {
             $activePromos = Promo::with(['products:id', 'categories:id'])
-                ->active()
+                ->active()->forChannel('pos')
                 ->get()
                 ->map(fn (Promo $p) => [
                     'id'               => $p->id,
@@ -83,7 +84,7 @@ class HandleInertiaRequests extends Middleware
 
             // ── Auth ──────────────────────────────────────────────
             'auth' => [
-                'authenticated' => Auth::check(),
+                'authenticated' => Auth::guard('web')->check(),
 
                 'user' => $user ? [
 
@@ -106,6 +107,7 @@ class HandleInertiaRequests extends Middleware
                     'is_administrator' => $user->isAdministrator(),
                     'is_manager'       => $user->isManager(),
                     'is_cashier'       => $user->isCashier(),
+                    'is_waiter'        => $user->isWaiter(),
                     'is_admin'         => $user->isAdmin(),
                     'can_approve'      => $user->canApprove(),
                     'pos_layout'       => $user->pos_layout ?? 'grid',
@@ -144,12 +146,10 @@ class HandleInertiaRequests extends Middleware
                 'max_discount_percent' => SystemSetting::maxDiscountPercent($branchId),
                 'default_payment'      =>          SystemSetting::get('pos.default_payment',       $branchId, 'cash'),
                 'item_mode'            =>          SystemSetting::posItemMode($branchId),
-                'laundry_mode'         =>          SystemSetting::laundryMode($branchId),
                 'require_customer_name'=>          SystemSetting::requireCustomerName($branchId),
                 'default_due_days'     =>          SystemSetting::defaultDueDays($branchId),
                 'show_product_images'  => (bool)  SystemSetting::get('pos.show_product_images',   $branchId, true),
                 'senior_pwd_discount'  => (float) SystemSetting::get('pos.senior_pwd_discount',   $branchId, 20),
-                'enable_installments'  => (bool)  SystemSetting::get('pos.enable_installments',   $branchId, false),
 
                 // Tax
                 'vat_enabled'          => SystemSetting::vatEnabled($branchId),
@@ -176,7 +176,20 @@ class HandleInertiaRequests extends Middleware
 
             ] : null,
 
-            // ── Active promos ──────────────────────────────────────
+            // ── Signed-in online customer (separate "customer" guard) ──
+            // Only the fields the customer app needs — never staff data.
+            'customer' => fn () => ($c = Auth::guard('customer')->user()) ? [
+                'id'              => $c->id,
+                'name'            => $c->name,
+                'first_name'      => Str::before(trim($c->name), ' '),
+                'contact_number'  => $c->contact_number,
+                'email'           => $c->email,
+                'barangay'        => $c->barangay,
+                'customer_number' => $c->customer_number,
+                'loyalty_points'  => (int) $c->loyalty_points,
+            ] : null,
+
+            // ── Active promos (staff POS only) ─────────────────────
             // Available on every page via usePage().props.promos
             'promos' => $activePromos,
 
@@ -188,6 +201,7 @@ class HandleInertiaRequests extends Middleware
                 'info'       => session('info'),
                 'message'    => session('message'),
                 'pos_result' => session('pos_result'),
+                'saved_address_id' => session('saved_address_id'),
             ],
 
             // ── Ziggy route helper ────────────────────────────────

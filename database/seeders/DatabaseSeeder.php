@@ -24,7 +24,8 @@ class DatabaseSeeder extends Seeder
             // ── 4. System settings — global defaults ──────────────
             SystemSettingSeeder::class,
 
-            // ── 5. Customers — depends on branches ────────────────
+            // ── 5. Mabinay barangays (delivery area) + customers ───
+            BarangaySeeder::class,
             CustomerSeeder::class,
 
             // ── 6. Cafe products — COOP Main Campus (CMC) ─────────
@@ -33,7 +34,9 @@ class DatabaseSeeder extends Seeder
             BoundaryCafeProductSeeder::class,
             DiningTableSeeder::class,
 
-            // ── 7. Retail products — ABC Main Store (ABC1) ────────
+            // ── 7. Customer ordering app demo data ────────────────
+            //    Registered customers, storefront promos, online orders
+            OnlineOrderingDemoSeeder::class,
         ]);
     }
 }

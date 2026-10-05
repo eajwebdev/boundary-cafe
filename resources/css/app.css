@@ -1332,6 +1332,33 @@ html {
 /* ── Typography ─────────────────────────────────────────────────────────────── */
 @theme {
     --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    /* Customer ordering app (.bc-shop) — see shop.css */
+    --font-display: 'Bricolage Grotesque', 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
+    --font-shop: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Customer-app colour tokens → utilities like bg-shop-bg, text-shop-ink, border-shop-line */
+@theme inline {
+    --color-shop-bg: var(--shop-bg);
+    --color-shop-surface: var(--shop-surface);
+    --color-shop-raised: var(--shop-raised);
+    --color-shop-sunken: var(--shop-sunken);
+    --color-shop-ink: var(--shop-ink);
+    --color-shop-muted: var(--shop-muted);
+    --color-shop-line: var(--shop-line);
+    --color-shop-accent: var(--shop-accent);
+    --color-shop-accent-ink: var(--shop-accent-ink);
+    --color-shop-on-accent: var(--shop-on-accent);
+    --color-shop-accent-soft: var(--shop-accent-soft);
+    --color-shop-navy: var(--shop-navy);
+    --color-shop-navy-ink: var(--shop-navy-ink);
+    --color-shop-success: var(--shop-success);
+    --color-shop-success-soft: var(--shop-success-soft);
+    --color-shop-warning: var(--shop-warning);
+    --color-shop-warning-soft: var(--shop-warning-soft);
+    --color-shop-danger: var(--shop-danger);
+    --color-shop-danger-soft: var(--shop-danger-soft);
+    --ease-shop: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ── Design tokens ──────────────────────────────────────────────────────────── */
@@ -3489,3 +3516,6 @@ html {
         transform: none;
     }
 }
+
+/* Customer ordering app styles */
+@import './shop.css';

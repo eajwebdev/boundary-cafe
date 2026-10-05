@@ -42,8 +42,38 @@ class BoundaryCafeProductSeeder extends Seeder
         $this->command->info('Boundary Cafe menu seeded ('.count($this->menu).' items across 3 branches).');
     }
 
+    /** Product photos in public/uploads/optimized (webp), keyed by "Category|Name". */
+    private const PHOTOS = [
+        'Sulit Meals|Chicken Meal' => '1_chicken_meal',
+        'Frappes|Avocado' => 'avocado',
+        'Sulit Meals|Bacon Meal' => 'bacon_meal',
+        'Shareable Plates|Barkada Burgers' => 'barkada_burgers',
+        'Non-Coffee|Blueberry Sparkle' => 'blueberry_sparkle',
+        'Burgers|Boundary Burger' => 'boundary_burger',
+        'Combos|Burger & Fries Combo' => 'burger_and_fries_combo',
+        'Burgers|Chicken Burger' => 'chicken_burger',
+        "Frappes|Cookies n' Cream" => 'cookies_n_cream',
+        'Non-Coffee|Dark Chocolate' => 'dark_chocolate',
+        'Sulit Meals|Fiesta Meal A' => 'fiesta_meal_a',
+        'Sulit Meals|Fiesta Meal B' => 'fiesta_meal_b',
+        'Non-Coffee|Fresh Calamansi' => 'fresh_calamansi',
+        'Sulit Meals|Hungarian Sausage Meal' => 'hungarian_sausage_meal',
+        'Non-Coffee|Matcha Latte' => 'matcha_latte',
+        'Frappes|Strawberry' => 'strawberry_frappe',
+        'Non-Coffee|Strawberry Latte' => 'strawberry_latte',
+        'Non-Coffee|Strawberry Sparkle' => 'strawberry_sparkle',
+        'Frappes|Taro' => 'taro',
+        'Sulit Meals|Tocino Meal' => 'tocino_meal',
+        'Burgers|Ultimate Burger' => 'ultimate_burger',
+    ];
+
     private function productImage(string $category, string $name): string
     {
+        $photo = self::PHOTOS["{$category}|{$name}"] ?? null;
+        if ($photo && file_exists(public_path("uploads/optimized/{$photo}.webp"))) {
+            return "/uploads/optimized/{$photo}.webp";
+        }
+
         if ($category === 'Coffee') {
             return str_contains($name, 'Americano')
                 ? '/images/products/boundary/coffee-hot.svg'

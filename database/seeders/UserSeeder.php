@@ -63,7 +63,7 @@ class UserSeeder extends Seeder
                 'password' => Hash::make('cashier123'),
                 'role' => User::ROLE_CASHIER,
                 'branch_id' => $branch?->id,
-                'access' => ['2', '3', '14', '15', '16', '39'],
+                'access' => User::defaultAccessFor(User::ROLE_CASHIER),
             ],
         ];
 
@@ -79,7 +79,21 @@ class UserSeeder extends Seeder
                 'password' => Hash::make('cashier123'),
                 'role' => User::ROLE_CASHIER,
                 'branch_id' => $branchOffice->id,
-                'access' => ['2', '3', '14', '15', '16', '39'],
+                'access' => User::defaultAccessFor(User::ROLE_CASHIER),
+            ]);
+        }
+
+        // ── Waiter / server — takes dine-in orders by table # (Mabinay) ──
+        $mabinay = Branch::where('code', 'BC-MAB')->first();
+        if ($mabinay) {
+            User::updateOrCreate(['username' => 'waiter'], [
+                'fname' => 'Mabinay',
+                'lname' => 'Server',
+                'password' => Hash::make('waiter123'),
+                'role' => User::ROLE_WAITER,
+                'branch_id' => $mabinay->id,
+                'access' => User::defaultAccessFor(User::ROLE_WAITER),
+                'pos_layout' => 'mobile',
             ]);
         }
 

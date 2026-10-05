@@ -53,6 +53,10 @@ interface Promo {
     starts_at: string | null;
     expires_at: string | null;
     is_active: boolean;
+    show_on_storefront: boolean;
+    channels: 'pos' | 'online' | 'both';
+    banner_image: string | null;
+    banner_url: string | null;
     status: string;
     status_label: string;
     product_ids: number[];
@@ -77,9 +81,15 @@ interface PromoForm {
     starts_at: string;
     expires_at: string;
     is_active: boolean;
+    show_on_storefront: boolean;
+    channels: 'pos' | 'online' | 'both';
+    banner_image: string;
+    banner_upload: File | null;
+    remove_banner: boolean;
 }
 
 interface PageProps {
+    bannerChoices?: string[];
     promos: Promo[];
     products: Product[];
     categories: Category[];
@@ -101,6 +111,11 @@ const EMPTY_FORM: PromoForm = {
     starts_at: '',
     expires_at: '',
     is_active: true,
+    show_on_storefront: false,
+    channels: 'both',
+    banner_image: '',
+    banner_upload: null,
+    remove_banner: false,
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -143,12 +158,14 @@ function PromoDrawer({
     products,
     categories,
     onClose,
+    bannerChoices = [],
 }: {
     mode: 'create' | 'edit';
     promo: Promo | null;
     products: Product[];
     categories: Category[];
     onClose: () => void;
+    bannerChoices?: string[];
 }) {
     const [form, setForm] = useState<PromoForm>(EMPTY_FORM);
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -172,6 +189,11 @@ function PromoDrawer({
                 starts_at: promo.starts_at ? promo.starts_at.slice(0, 16) : '',
                 expires_at: promo.expires_at ? promo.expires_at.slice(0, 16) : '',
                 is_active: promo.is_active,
+                show_on_storefront: promo.show_on_storefront ?? false,
+                channels: promo.channels ?? 'both',
+                banner_image: promo.banner_image ?? '',
+                banner_upload: null,
+                remove_banner: false,
             });
         } else {
             setForm(EMPTY_FORM);
@@ -204,6 +226,8 @@ function PromoDrawer({
             max_uses: form.max_uses || null,
             starts_at: form.starts_at || null,
             expires_at: form.expires_at || null,
+            banner_image: form.banner_image || null,
+            banner_upload: form.banner_upload ?? undefined,
         };
         const opts = {
             preserveScroll: true,
@@ -217,8 +241,12 @@ function PromoDrawer({
                 setTab('details');
             },
         };
+        // File uploads need multipart; PATCH is spoofed through POST for that case.
+        const withFile = { ...opts, forceFormData: !!form.banner_upload };
         if (mode === 'create') {
-            router.post(routes.promos.store(), payload, opts);
+            router.post(routes.promos.store(), payload, withFile);
+        } else if (form.banner_upload) {
+            router.post(routes.promos.update(promo!.id), { ...payload, _method: 'patch' }, withFile);
         } else {
             router.patch(routes.promos.update(promo!.id), payload, opts);
         }
@@ -374,6 +402,99 @@ function PromoDrawer({
                                     <p className="text-xs text-muted-foreground">Inactive promos cannot be applied at checkout</p>
                                 </div>
                             </label>
+
+                            {/* Channel & customer storefront */}
+                            <div className="space-y-3 rounded-xl border border-border p-3">
+                                <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">Where it works</p>
+                                <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted p-1">
+                                    {(
+                                        [
+                                            ['both', 'POS + Online'],
+                                            ['pos', 'POS only'],
+                                            ['online', 'Online only'],
+                                        ] as const
+                                    ).map(([v, l]) => (
+                                        <button
+                                            key={v}
+                                            type="button"
+                                            onClick={() => set('channels', v)}
+                                            className={cn('h-8 rounded-md text-xs font-semibold', form.channels === v ? 'bg-background shadow-sm' : 'text-muted-foreground')}
+                                        >
+                                            {l}
+                                        </button>
+                                    ))}
+                                </div>
+                                <label className="flex cursor-pointer items-start gap-3">
+                                    <input
+                                        type="checkbox"
+                                        className="mt-0.5 h-4 w-4 accent-primary"
+                                        checked={form.show_on_storefront}
+                                        disabled={form.channels === 'pos'}
+                                        onChange={(e) => set('show_on_storefront', e.target.checked)}
+                                    />
+                                    <span>
+                                        <span className="block text-sm font-medium">Show on the customer ordering site</span>
+                                        <span className="block text-xs text-muted-foreground">
+                                            Appears in the “Deals for you” banners immediately. Without a code it is applied automatically at online checkout.
+                                        </span>
+                                    </span>
+                                </label>
+                                {form.show_on_storefront && form.channels !== 'pos' && (
+                                    <div className="space-y-2">
+                                        <p className="text-xs font-semibold text-muted-foreground">Banner image</p>
+                                        {(form.banner_upload || form.banner_image) && !form.remove_banner && (
+                                            <div className="relative overflow-hidden rounded-lg border border-border">
+                                                <img
+                                                    src={form.banner_upload ? URL.createObjectURL(form.banner_upload) : form.banner_image}
+                                                    alt="Banner preview"
+                                                    className="h-28 w-full object-cover"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        set('banner_upload', null);
+                                                        set('banner_image', '');
+                                                        set('remove_banner', true);
+                                                    }}
+                                                    className="absolute top-2 right-2 rounded-md bg-black/60 px-2 py-1 text-xs font-semibold text-white"
+                                                >
+                                                    Remove
+                                                </button>
+                                            </div>
+                                        )}
+                                        <input
+                                            type="file"
+                                            accept="image/jpeg,image/png,image/webp"
+                                            onChange={(e) => {
+                                                const f = e.target.files?.[0] ?? null;
+                                                set('banner_upload', f);
+                                                if (f) set('remove_banner', false);
+                                            }}
+                                            className="block w-full text-xs file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-primary-foreground"
+                                        />
+                                        {errors.banner_upload && <p className="text-xs text-destructive">{errors.banner_upload}</p>}
+                                        {bannerChoices.length > 0 && (
+                                            <div className="flex gap-1.5 overflow-x-auto pb-1">
+                                                {bannerChoices.map((src) => (
+                                                    <button
+                                                        key={src}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            set('banner_image', src);
+                                                            set('banner_upload', null);
+                                                            set('remove_banner', false);
+                                                        }}
+                                                        className={cn('h-12 w-20 shrink-0 overflow-hidden rounded-md border-2', form.banner_image === src && !form.banner_upload ? 'border-primary' : 'border-transparent')}
+                                                        title={src}
+                                                    >
+                                                        <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" />
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
 
@@ -671,7 +792,7 @@ function DeleteDialog({ promo, onClose }: { promo: Promo; onClose: () => void })
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function PromosIndex() {
-    const { promos, products, categories, flash } = usePage<PageProps>().props;
+    const { promos, products, categories, flash, bannerChoices = [] } = usePage<PageProps>().props;
 
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
@@ -984,7 +1105,7 @@ export default function PromosIndex() {
             </div>
 
             {drawer && (
-                <PromoDrawer mode={drawer.mode} promo={drawer.promo} products={products} categories={categories} onClose={() => setDrawer(null)} />
+                <PromoDrawer mode={drawer.mode} promo={drawer.promo} products={products} categories={categories} bannerChoices={bannerChoices} onClose={() => setDrawer(null)} />
             )}
             {deleteTarget && <DeleteDialog promo={deleteTarget} onClose={() => setDeleteTarget(null)} />}
         </AdminLayout>

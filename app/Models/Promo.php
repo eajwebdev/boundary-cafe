@@ -25,6 +25,9 @@ class Promo extends Model
         'starts_at',
         'expires_at',
         'is_active',
+        'show_on_storefront',
+        'banner_image',
+        'channels',         // pos | online | both
         'created_by',
     ];
 
@@ -34,6 +37,7 @@ class Promo extends Model
         'max_uses'         => 'integer',
         'uses_count'       => 'integer',
         'is_active'        => 'boolean',
+        'show_on_storefront' => 'boolean',
         'starts_at'        => 'datetime',
         'expires_at'       => 'datetime',
     ];
@@ -43,6 +47,8 @@ class Promo extends Model
         'applies_to'    => 'all',
         'uses_count'    => 0,
         'is_active'     => true,
+        'channels'      => 'both',
+        'show_on_storefront' => false,
     ];
 
     // ── Table guard ────────────────────────────────────────────────
@@ -166,6 +172,36 @@ class Promo extends Model
             ->where(fn ($q) => $q->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
             ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>=', now()))
             ->where(fn ($q) => $q->whereNull('max_uses')->orWhereColumn('uses_count', '<', 'max_uses'));
+    }
+
+    /** Promos usable on a given channel ('pos' or 'online'). */
+    public function scopeForChannel($query, string $channel)
+    {
+        return $query->whereIn('channels', [$channel, 'both']);
+    }
+
+    /** Active promos the customer storefront should advertise. */
+    public function scopeOnStorefront($query)
+    {
+        return $query->active()->forChannel('online')->where('show_on_storefront', true);
+    }
+
+    public function availableOn(string $channel): bool
+    {
+        return in_array($this->channels ?? 'both', [$channel, 'both'], true);
+    }
+
+    public function getBannerUrlAttribute(): ?string
+    {
+        $img = $this->banner_image;
+        if (! $img) {
+            return null;
+        }
+        if (str_starts_with($img, '/') || str_starts_with($img, 'http')) {
+            return $img;
+        }
+
+        return asset('storage/'.$img);
     }
 
     /**

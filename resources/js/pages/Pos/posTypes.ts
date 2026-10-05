@@ -79,7 +79,8 @@ export interface CustomerOption {
     name: string;
     contact_number: string | null;
     email: string | null;
-    credit_balance: number;
+    /** Removed with the credit/utang module — may be absent. */
+    credit_balance?: number;
     customer_number: string;
     loyalty_points: number;
 }

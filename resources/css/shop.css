@@ -1,0 +1,242 @@
+/* ══════════════════════════════════════════════════════════════════════════════
+   CUSTOMER ORDERING APP — .bc-shop
+   Scoped so none of this touches the staff/admin theme.
+
+   Contrast: white on #ff5a0a is only ~2.9:1, so primary buttons use dark ink
+   on orange (~6.6:1) and orange *text* uses --shop-accent-ink (≥4.5:1).
+   ══════════════════════════════════════════════════════════════════════════════ */
+.bc-shop {
+    --ease-shop: cubic-bezier(0.16, 1, 0.3, 1);
+    --shop-bg: #fff9f2;
+    --shop-surface: #ffffff;
+    --shop-raised: #fffdf9;
+    --shop-sunken: #f6ede1;
+    --shop-ink: #16130f;
+    --shop-muted: #6b6153;
+    --shop-line: #ece1d1;
+    --shop-accent: #ff5a0a;
+    --shop-accent-ink: #b93d06;
+    --shop-on-accent: #1a0d04;
+    --shop-accent-soft: #ffe8d9;
+    --shop-navy: #062581;
+    --shop-navy-ink: #ffffff;
+    --shop-success: #15803d;
+    --shop-success-soft: #e7f6ec;
+    --shop-warning: #8a5300;
+    --shop-warning-soft: #fdf3dc;
+    --shop-danger: #c0262d;
+    --shop-danger-soft: #fdecec;
+    --shop-shadow-sm: 0 1px 2px rgb(60 35 10 / 0.06), 0 1px 1px rgb(60 35 10 / 0.04);
+    --shop-shadow-md: 0 10px 28px -14px rgb(60 35 10 / 0.28), 0 2px 6px rgb(60 35 10 / 0.05);
+    --shop-shadow-lg: 0 28px 56px -28px rgb(40 20 5 / 0.38);
+
+    /* Keep shadcn primitives (Sheet / Dialog) on-brand inside the shop */
+    --background: var(--shop-surface);
+    --foreground: var(--shop-ink);
+    --card: var(--shop-surface);
+    --card-foreground: var(--shop-ink);
+    --popover: var(--shop-surface);
+    --popover-foreground: var(--shop-ink);
+    --primary: var(--shop-accent);
+    --primary-foreground: var(--shop-on-accent);
+    --muted: var(--shop-sunken);
+    --muted-foreground: var(--shop-muted);
+    --border: var(--shop-line);
+    --input: var(--shop-line);
+    --ring: var(--shop-accent);
+
+    font-family: var(--font-shop);
+    color: var(--shop-ink);
+    -webkit-tap-highlight-color: transparent;
+}
+
+.dark .bc-shop,
+.dark.bc-shop {
+    --shop-bg: #0a1230;
+    --shop-surface: #111b40;
+    --shop-raised: #16224d;
+    --shop-sunken: #0d1638;
+    --shop-ink: #f6f0e6;
+    --shop-muted: #aeb5cc;
+    --shop-line: #263468;
+    --shop-accent: #ff6a1f;
+    --shop-accent-ink: #ff9a63;
+    --shop-on-accent: #1a0d04;
+    --shop-accent-soft: #3a1f17;
+    --shop-navy: #1b3aa6;
+    --shop-navy-ink: #ffffff;
+    --shop-success: #4ade80;
+    --shop-success-soft: #10301f;
+    --shop-warning: #fbbf24;
+    --shop-warning-soft: #33280d;
+    --shop-danger: #f87171;
+    --shop-danger-soft: #3a1518;
+    --shop-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
+    --shop-shadow-md: 0 12px 30px -14px rgb(0 0 0 / 0.6);
+    --shop-shadow-lg: 0 28px 56px -24px rgb(0 0 0 / 0.65);
+}
+
+.bc-shop .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+}
+
+.bc-shop .shadow-shop-sm {
+    box-shadow: var(--shop-shadow-sm);
+}
+.bc-shop .shadow-shop-md {
+    box-shadow: var(--shop-shadow-md);
+}
+.bc-shop .shadow-shop-lg {
+    box-shadow: var(--shop-shadow-lg);
+}
+
+/* Horizontal rails: scrollable, no visible track */
+.bc-shop .bc-rail {
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+}
+.bc-shop .bc-rail::-webkit-scrollbar {
+    display: none;
+}
+
+/* Pressable: quick tactile feedback without layout shift */
+.bc-shop .bc-press {
+    transition:
+        transform 160ms var(--ease-shop),
+        background-color 160ms ease,
+        box-shadow 220ms ease,
+        color 160ms ease,
+        border-color 160ms ease;
+}
+.bc-shop .bc-press:active:not(:disabled) {
+    transform: scale(0.97);
+}
+
+.bc-shop :focus-visible {
+    outline: 2px solid var(--shop-accent);
+    outline-offset: 2px;
+}
+
+/* ── Ticket / receipt (perforated notches + tear line) ──────────────────────── */
+.bc-shop .bc-ticket {
+    position: relative;
+    --notch: 10px;
+    -webkit-mask:
+        radial-gradient(circle var(--notch) at 0 var(--ticket-cut, 70%), #0000 97%, #000) left / 51% 100% no-repeat,
+        radial-gradient(circle var(--notch) at 100% var(--ticket-cut, 70%), #0000 97%, #000) right / 51% 100% no-repeat;
+    mask:
+        radial-gradient(circle var(--notch) at 0 var(--ticket-cut, 70%), #0000 97%, #000) left / 51% 100% no-repeat,
+        radial-gradient(circle var(--notch) at 100% var(--ticket-cut, 70%), #0000 97%, #000) right / 51% 100% no-repeat;
+}
+.bc-shop .bc-tear {
+    height: 0;
+    border-top: 2px dashed var(--shop-line);
+}
+
+/* ── Route line motif (Tagukon → Mabinay) ───────────────────────────────────── */
+.bc-shop .bc-route-track {
+    stroke: var(--shop-line);
+}
+.bc-shop .bc-route-dash {
+    stroke: var(--shop-accent);
+    stroke-dasharray: 1.5 6;
+    stroke-linecap: round;
+}
+.bc-shop .bc-route-fill {
+    stroke: var(--shop-accent);
+    stroke-linecap: round;
+    transition: stroke-dashoffset 900ms var(--ease-shop);
+}
+
+/* ── Motion ─────────────────────────────────────────────────────────────────── */
+@keyframes bc-rise {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+@keyframes bc-bump {
+    0% {
+        transform: scale(1);
+    }
+    40% {
+        transform: scale(1.2);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+@keyframes bc-slide-up {
+    from {
+        transform: translateY(130%);
+    }
+    to {
+        transform: none;
+    }
+}
+@keyframes bc-pin-drop {
+    0% {
+        transform: translateY(-16px);
+    }
+    65% {
+        transform: translateY(2px);
+    }
+    100% {
+        transform: none;
+    }
+}
+@keyframes bc-pulse-ring {
+    0% {
+        transform: scale(0.8);
+        opacity: 0.7;
+    }
+    100% {
+        transform: scale(2.2);
+        opacity: 0;
+    }
+}
+.bc-shop .bc-rise {
+    animation: bc-rise 460ms var(--ease-shop) both;
+}
+.bc-shop .bc-bump {
+    animation: bc-bump 320ms var(--ease-shop);
+}
+.bc-shop .bc-slide-up {
+    animation: bc-slide-up 460ms var(--ease-shop) both;
+}
+.bc-shop .bc-pin-drop {
+    animation: bc-pin-drop 380ms var(--ease-shop);
+}
+.bc-shop .bc-pulse::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background: currentColor;
+    animation: bc-pulse-ring 1.6s var(--ease-shop) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .bc-shop *,
+    .bc-shop *::before,
+    .bc-shop *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* Page canvas behind iOS overscroll while the shop is mounted */
+body.bc-shop-body {
+    background-color: #fff9f2;
+}
+.dark body.bc-shop-body,
+html.dark body.bc-shop-body {
+    background-color: #0a1230;
+}

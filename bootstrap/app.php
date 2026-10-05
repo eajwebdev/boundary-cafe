@@ -28,9 +28,31 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->redirectTo(
-            guests: '/',
+            guests: function (Request $request) {
+                $isCustomerArea = $request->is('account', 'account/*', 'checkout', 'checkout/*', 'geocode/*');
+
+                if ($isCustomerArea) {
+                    // Staff signed in on this browser go back to their own workspace.
+                    $staff = \Illuminate\Support\Facades\Auth::guard('web')->user();
+                    if ($staff) {
+                        return $staff->isWaiter() ? '/tables' : ($staff->isCashier() ? '/pos' : '/dashboard');
+                    }
+
+                    return route('customer.login');
+                }
+
+                // A signed-in customer who wanders into staff pages is sent back to the storefront.
+                if (\Illuminate\Support\Facades\Auth::guard('customer')->check()) {
+                    return '/';
+                }
+
+                return route('login');
+            },
             users: function () {
                 $user = \Illuminate\Support\Facades\Auth::user();
+                if ($user && method_exists($user, 'isWaiter') && $user->isWaiter()) {
+                    return '/tables';
+                }
                 if ($user && method_exists($user, 'isCashier') && $user->isCashier()) {
                     return '/pos';
                 }

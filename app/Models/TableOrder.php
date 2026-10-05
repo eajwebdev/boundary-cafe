@@ -19,6 +19,7 @@ class TableOrder extends Model
         'branch_id',
         'table_id',
         'user_id',
+        'customer_id',
         'sale_id',
         'covers',
         'customer_name',
@@ -28,7 +29,9 @@ class TableOrder extends Model
         'status',
         'notes',
         'opened_at',
+        'sent_to_cashier_at',
         'closed_at',
+        'void_reason',
     ];
 
     protected $casts = [
@@ -37,6 +40,7 @@ class TableOrder extends Model
         'discount_amount' => 'decimal:2',
         'total'           => 'decimal:2',
         'opened_at'       => 'datetime',
+        'sent_to_cashier_at' => 'datetime',
         'closed_at'       => 'datetime',
     ];
 
@@ -64,7 +68,8 @@ class TableOrder extends Model
         // When a table_order is closed, mark the physical table as cleaning
         static::updated(function (TableOrder $order) {
             if ($order->wasChanged('status') && in_array($order->status, ['closed', 'cancelled'])) {
-                $order->table->markCleaning();
+                // Note: $order->table here would be Eloquent's protected $table property, not the relation.
+                DiningTable::find($order->table_id)?->markCleaning();
             }
         });
     }
@@ -84,6 +89,7 @@ class TableOrder extends Model
     public function branch(): BelongsTo  { return $this->belongsTo(Branch::class); }
     public function table(): BelongsTo   { return $this->belongsTo(DiningTable::class, 'table_id'); }
     public function user(): BelongsTo    { return $this->belongsTo(User::class); }
+    public function customer(): BelongsTo { return $this->belongsTo(Customer::class); }
     public function sale(): BelongsTo    { return $this->belongsTo(Sale::class); }
     public function items(): HasMany     { return $this->hasMany(TableOrderItem::class); }
 
@@ -118,37 +124,6 @@ class TableOrder extends Model
             'subtotal' => $subtotal,
             'total'    => round($subtotal - (float) $this->discount_amount, 2),
         ]);
-    }
-
-    /**
-     * Convert to a Sale record on payment collection.
-     * Closes the table_order and links it to the sale.
-     */
-    public function settle(array $saleData): Sale
-    {
-        $sale = Sale::create(array_merge($saleData, [
-            'branch_id' => $this->branch_id,
-            'total'     => $this->total,
-        ]));
-
-        // Create sale_items from served table_order_items
-        $this->items()->where('status', 'served')->each(function ($item) use ($sale) {
-            $sale->items()->create([
-                'product_id'         => $item->product_id,
-                'product_variant_id' => $item->product_variant_id,
-                'quantity'           => $item->quantity,
-                'price'              => $item->price,
-                'total'              => $item->total,
-            ]);
-        });
-
-        $this->update([
-            'sale_id'   => $sale->id,
-            'status'    => 'closed',
-            'closed_at' => now(),
-        ]);
-
-        return $sale;
     }
 
     // ── Accessors ──────────────────────────────────────────────────

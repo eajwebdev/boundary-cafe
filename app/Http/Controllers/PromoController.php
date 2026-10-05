@@ -29,6 +29,14 @@ class PromoController extends Controller
             'promos'     => $promos,
             'products'   => Product::orderBy('name')->get(['id', 'name', 'product_type']),
             'categories' => Category::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            // Images admins can pick as a storefront banner (seeded photos + earlier uploads)
+            'bannerChoices' => collect(array_merge(
+                glob(public_path('uploads/promos/*.{jpg,jpeg,png,webp}'), GLOB_BRACE) ?: [],
+                glob(public_path('uploads/optimized/*.webp')) ?: [],
+            ))
+                ->reject(fn ($f) => str_contains($f, 'logo'))
+                ->map(fn ($f) => '/'.ltrim(str_replace(DIRECTORY_SEPARATOR, '/', substr($f, strlen(public_path()))), '/'))
+                ->values(),
         ]);
     }
 
@@ -52,6 +60,11 @@ class PromoController extends Controller
             'starts_at'        => ['nullable', 'date'],
             'expires_at'       => ['nullable', 'date', 'after_or_equal:starts_at'],
             'is_active'        => ['nullable', 'boolean'],
+            'show_on_storefront' => ['nullable', 'boolean'],
+            'channels'         => ['nullable', 'in:pos,online,both'],
+            'banner_image'     => ['nullable', 'string', 'max:255', 'regex:/^\/uploads\/[A-Za-z0-9_\-\/.]+$/', 'not_regex:/\.\./'],
+            'banner_upload'    => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:3072'],
+            'remove_banner'    => ['nullable', 'boolean'],
         ], [
             'code.unique'              => 'This promo code is already taken.',
             'discount_value.min'       => 'Discount must be greater than zero.',
@@ -75,6 +88,9 @@ class PromoController extends Controller
             'starts_at'        => $validated['starts_at'] ?? null,
             'expires_at'       => $validated['expires_at'] ?? null,
             'is_active'        => $validated['is_active'] ?? true,
+            'show_on_storefront' => (bool) ($validated['show_on_storefront'] ?? false),
+            'channels'         => $validated['channels'] ?? 'both',
+            'banner_image'     => $this->resolveBanner($request, $validated, null),
             'created_by'       => auth()->id(),
         ]);
 
@@ -117,6 +133,11 @@ class PromoController extends Controller
             'starts_at'        => ['nullable', 'date'],
             'expires_at'       => ['nullable', 'date', 'after_or_equal:starts_at'],
             'is_active'        => ['nullable', 'boolean'],
+            'show_on_storefront' => ['nullable', 'boolean'],
+            'channels'         => ['nullable', 'in:pos,online,both'],
+            'banner_image'     => ['nullable', 'string', 'max:255', 'regex:/^\/uploads\/[A-Za-z0-9_\-\/.]+$/', 'not_regex:/\.\./'],
+            'banner_upload'    => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:3072'],
+            'remove_banner'    => ['nullable', 'boolean'],
         ], [
             'code.unique'              => 'This promo code is already taken.',
             'expires_at.after_or_equal'=> 'Expiry must be on or after the start date.',
@@ -138,6 +159,9 @@ class PromoController extends Controller
             'starts_at'        => $validated['starts_at'] ?? null,
             'expires_at'       => $validated['expires_at'] ?? null,
             'is_active'        => $validated['is_active'] ?? $promo->is_active,
+            'show_on_storefront' => (bool) ($validated['show_on_storefront'] ?? $promo->show_on_storefront),
+            'channels'         => $validated['channels'] ?? $promo->channels ?? 'both',
+            'banner_image'     => $this->resolveBanner($request, $validated, $promo),
         ]);
 
         // Re-sync pivot tables
@@ -203,6 +227,7 @@ class PromoController extends Controller
 
         $promo = Promo::with(['products:id', 'categories:id'])
             ->active()
+            ->forChannel('pos')
             ->byCode($request->input('code'))
             ->first();
 
@@ -228,6 +253,35 @@ class PromoController extends Controller
 
     // ── Helper ─────────────────────────────────────────────────────────────────
 
+    /**
+     * Storefront banner: a new upload wins, then a picked image from /uploads,
+     * otherwise keep the current one (unless removal was requested).
+     */
+    private function resolveBanner(Request $request, array $validated, ?Promo $promo): ?string
+    {
+        if ($request->hasFile('banner_upload')) {
+            $file = $request->file('banner_upload');
+            $dir = public_path('uploads/promos');
+            if (! is_dir($dir)) {
+                mkdir($dir, 0755, true);
+            }
+            $name = 'promo-'.now()->format('YmdHis').'-'.\Illuminate\Support\Str::random(6).'.'.$file->extension();
+            $file->move($dir, $name);
+
+            return '/uploads/promos/'.$name;
+        }
+
+        if (! empty($validated['remove_banner'])) {
+            return null;
+        }
+
+        if (! empty($validated['banner_image']) && file_exists(public_path(ltrim($validated['banner_image'], '/')))) {
+            return $validated['banner_image'];
+        }
+
+        return $promo?->banner_image;
+    }
+
     private function mapPromo(Promo $p): array
     {
         return [
@@ -244,6 +298,10 @@ class PromoController extends Controller
             'starts_at'        => $p->starts_at?->toDateTimeString(),
             'expires_at'       => $p->expires_at?->toDateTimeString(),
             'is_active'        => $p->is_active,
+            'show_on_storefront' => (bool) $p->show_on_storefront,
+            'channels'         => $p->channels ?? 'both',
+            'banner_image'     => $p->banner_image,
+            'banner_url'       => $p->banner_url,
             'status'           => $p->status,
             'status_label'     => $p->status_label,
             'product_ids'      => $p->products->pluck('id')->values(),

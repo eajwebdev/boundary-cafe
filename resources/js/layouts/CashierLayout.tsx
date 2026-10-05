@@ -5,7 +5,7 @@ import { Link, Head, router, usePage } from '@inertiajs/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useTheme } from 'next-themes';
-import { ShoppingCart, History, Wallet, Calculator, PiggyBank, LogOut, Sun, Moon, Users } from 'lucide-react';
+import { ShoppingCart, History, Wallet, Calculator, PiggyBank, LogOut, Sun, Moon, Users, Bike, Utensils } from 'lucide-react';
 
 // ─── Menu IDs (must match MenuHelper.php) ─────────────────────────────────────
 const M = {
@@ -15,16 +15,20 @@ const M = {
     CASH_COUNTS: '15',
     PETTY_CASH: '16',
     CUSTOMERS: '39',
+    ONLINE_ORDERS: '40',
+    TABLES: '41',
 } as const;
 
-// Alt+1…6 — reliably interceptable, don't clash with browser or POS F-key bindings
+// Alt+1…8 — reliably interceptable, don't clash with browser or POS F-key bindings
 const NAV = [
     { id: M.POS, href: '/pos', icon: ShoppingCart, label: 'Cashier', key: 'Alt+1' },
-    { id: M.SALES_HISTORY, href: '/sales/history', icon: History, label: 'History', key: 'Alt+2' },
-    { id: M.CASH_SESSIONS, href: '/cash-sessions', icon: Wallet, label: 'Cash Session', key: 'Alt+3' },
-    { id: M.CASH_COUNTS, href: '/cash-counts', icon: Calculator, label: 'Cash Count', key: 'Alt+4' },
-    { id: M.PETTY_CASH, href: '/petty-cash', icon: PiggyBank, label: 'Petty Cash', key: 'Alt+5' },
-    { id: M.CUSTOMERS, href: '/customers', icon: Users, label: 'Customers', key: 'Alt+6' },
+    { id: M.ONLINE_ORDERS, href: '/online-orders', icon: Bike, label: 'Online Orders', key: 'Alt+2' },
+    { id: M.TABLES, href: '/tables', icon: Utensils, label: 'Tables', key: 'Alt+3' },
+    { id: M.SALES_HISTORY, href: '/sales/history', icon: History, label: 'History', key: 'Alt+4' },
+    { id: M.CASH_SESSIONS, href: '/cash-sessions', icon: Wallet, label: 'Cash Session', key: 'Alt+5' },
+    { id: M.CASH_COUNTS, href: '/cash-counts', icon: Calculator, label: 'Cash Count', key: 'Alt+6' },
+    { id: M.PETTY_CASH, href: '/petty-cash', icon: PiggyBank, label: 'Petty Cash', key: 'Alt+7' },
+    { id: M.CUSTOMERS, href: '/customers', icon: Users, label: 'Customers', key: 'Alt+8' },
 ] as const;
 
 export default function CashierLayout({ children }: { children: ReactNode }) {
@@ -75,7 +79,7 @@ export default function CashierLayout({ children }: { children: ReactNode }) {
             {/* ── Top bar (h-12) ───────────────────────────────────── */}
             <header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4">
                 <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md border border-white/15 bg-[#062581] p-0.5 text-primary-foreground shadow-xs">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md bg-white p-0.5 shadow-xs ring-1 ring-black/10">
                         <img src={appIcon} alt={appName} className="h-full w-full object-contain" />
                     </div>
                     <span className="truncate text-sm font-semibold">{branch?.name ?? appName}</span>

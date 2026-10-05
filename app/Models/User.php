@@ -45,6 +45,7 @@ class User extends Authenticatable
     const ROLE_ADMINISTRATOR = 'administrator';
     const ROLE_MANAGER       = 'manager';
     const ROLE_CASHIER       = 'cashier';
+    const ROLE_WAITER        = 'waiter';
 
     public static function roles(): array
     {
@@ -53,7 +54,19 @@ class User extends Authenticatable
             self::ROLE_ADMINISTRATOR => 'Administrator',
             self::ROLE_MANAGER       => 'Manager',
             self::ROLE_CASHIER       => 'Cashier',
+            self::ROLE_WAITER        => 'Waiter / Server',
         ];
+    }
+
+    /** Default menu access per role when a user has no explicit `access` list. */
+    public static function defaultAccessFor(string $role): array
+    {
+        return match ($role) {
+            self::ROLE_CASHIER => ['2', '3', '14', '15', '16', '39', '40', '41'],
+            self::ROLE_WAITER  => ['41'],
+            self::ROLE_MANAGER => array_values(array_diff(MenuHelper::ids(), ['23', '25', '28'])),
+            default            => [],
+        };
     }
 
     // ── POS Layout constants ───────────────────────────────────────
@@ -66,11 +79,7 @@ class User extends Authenticatable
     const POS_LAYOUTS = [
         'grid',
         'tablet',
-        'grocery',
         'cafe',
-        'restaurant',
-        'salon',
-        'kiosk',
         'mobile',     // Android phone cashier — compact vertical layout
     ];
 
@@ -79,11 +88,7 @@ class User extends Authenticatable
         return [
             'grid'       => 'PC / Standard',
             'tablet'     => 'Tablet / Touch',
-            'grocery'    => 'Grocery / Fast',
             'cafe'       => 'Cafe / Quick',
-            'restaurant' => 'Restaurant / Table',
-            'salon'      => 'Salon / Service',
-            'kiosk'      => 'Kiosk / Self-serve',
             'mobile'     => 'Mobile / Android Phone',
         ];
     }
@@ -94,6 +99,7 @@ class User extends Authenticatable
     public function isAdministrator(): bool{ return $this->role === self::ROLE_ADMINISTRATOR; }
     public function isManager(): bool      { return $this->role === self::ROLE_MANAGER; }
     public function isCashier(): bool      { return $this->role === self::ROLE_CASHIER; }
+    public function isWaiter(): bool       { return $this->role === self::ROLE_WAITER; }
 
     /** Super Admin OR Administrator */
     public function isAdmin(): bool
@@ -142,20 +148,11 @@ class User extends Authenticatable
             return $enabledModuleIds;
         }
 
-        if ($this->isCashier()) {
-            $baseAccess = !empty($this->access) ? array_map('strval', $this->access) : ['2', '3', '14', '15', '16', '39'];
+        if ($this->isCashier() || $this->isManager() || $this->isWaiter()) {
+            $baseAccess = !empty($this->access)
+                ? array_map('strval', $this->access)
+                : self::defaultAccessFor($this->role);
             return array_values(array_intersect($baseAccess, $enabledModuleIds));
-        }
-
-        if ($this->isManager()) {
-            if (!empty($this->access)) {
-                $baseAccess = array_map('strval', $this->access);
-            } else {
-                // Manager default: all menus except user management, branches, system settings
-                $excluded = ['23', '25', '28'];
-                $baseAccess = array_diff(array_keys(MenuHelper::all()), $excluded);
-            }
-            return array_values(array_intersect(array_map('strval', $baseAccess), $enabledModuleIds));
         }
 
         $baseAccess = array_map('strval', $this->access ?? []);
@@ -203,6 +200,12 @@ class User extends Authenticatable
      * Human-readable label for the user's POS layout.
      * e.g.  $user->pos_layout_label → "Cafe / Quick"
      */
+    /** Layouts retired with the restaurant/cafe cleanup fall back to the standard grid. */
+    public function getPosLayoutAttribute(?string $value): string
+    {
+        return in_array($value, self::POS_LAYOUTS, true) ? $value : 'grid';
+    }
+
     public function getPosLayoutLabelAttribute(): string
     {
         return self::posLayoutLabels()[$this->pos_layout ?? 'grid'] ?? 'PC / Standard';
@@ -325,5 +328,6 @@ class User extends Authenticatable
     public function scopeAdministrators($query) { return $query->where('role', self::ROLE_ADMINISTRATOR); }
     public function scopeManagers($query)       { return $query->where('role', self::ROLE_MANAGER); }
     public function scopeCashiers($query)       { return $query->where('role', self::ROLE_CASHIER); }
+    public function scopeWaiters($query)        { return $query->where('role', self::ROLE_WAITER); }
     public function scopeForBranch($query, int $branchId) { return $query->where('branch_id', $branchId); }
 }

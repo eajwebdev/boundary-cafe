@@ -17,6 +17,24 @@ abstract class Controller
     }
 
     /**
+     * The branch a staff member works in. Branchless super admins operate
+     * on the online-ordering branch (Mabinay) so restaurant screens still work.
+     */
+    protected function workingBranchId(): int
+    {
+        $user = auth()->user();
+        $branchId = $user->branch_id
+            ?? app(\App\Services\OnlineOrderService::class)->branch()?->id
+            ?? \App\Models\Branch::where('is_active', true)->value('id');
+
+        if (! $branchId) {
+            abort(403, 'No branch assigned.');
+        }
+
+        return (int) $branchId;
+    }
+
+    /**
      * Aborts with 403 if a non-admin user tries to access a resource
      * that belongs to a different branch.
      */

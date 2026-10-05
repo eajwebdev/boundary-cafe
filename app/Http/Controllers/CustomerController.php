@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
-use App\Models\CustomerPayment;
 use App\Models\Sale;
 use App\Models\SystemSetting;
 use Illuminate\Http\RedirectResponse;
@@ -117,50 +116,6 @@ class CustomerController extends Controller
                 ])->values(),
             ]);
 
-        $payments = $customer->payments()
-            ->with(['sale:id,receipt_number', 'receivedBy:id,fname,lname'])
-            ->latest('payment_date')
-            ->latest()
-            ->get()
-            ->map(fn (CustomerPayment $payment) => [
-                'id'             => $payment->id,
-                'sale_id'        => $payment->sale_id,
-                'receipt_number' => $payment->sale?->receipt_number,
-                'payment_date'   => $payment->payment_date?->toDateString(),
-                'amount'         => (float) $payment->amount,
-                'payment_method' => $payment->payment_method,
-                'notes'          => $payment->notes,
-                'received_by'    => $payment->receivedBy ? trim("{$payment->receivedBy->fname} {$payment->receivedBy->lname}") : null,
-            ]);
-
-        $openCredits = $customer->sales()
-            ->where('status', 'completed')
-            ->where('balance_due', '>', 0)
-            ->orderByRaw('due_date IS NULL, due_date ASC')
-            ->get(['id', 'receipt_number', 'total', 'amount_paid', 'balance_due', 'payment_status', 'due_date']);
-
-        $ledger = collect()
-            ->merge($customer->sales()->where('status', 'completed')->get()->map(fn ($sale) => [
-                'date' => $sale->created_at?->toDateString(),
-                'type' => 'credit',
-                'reference' => $sale->receipt_number,
-                'debit' => (float) $sale->total,
-                'credit' => 0,
-                'balance' => (float) $sale->balance_due,
-                'notes' => $sale->credit_notes ?: $sale->notes,
-            ]))
-            ->merge($customer->payments()->get()->map(fn ($payment) => [
-                'date' => $payment->payment_date?->toDateString(),
-                'type' => 'payment',
-                'reference' => $payment->sale?->receipt_number,
-                'debit' => 0,
-                'credit' => (float) $payment->amount,
-                'balance' => null,
-                'notes' => $payment->notes,
-            ]))
-            ->sortByDesc('date')
-            ->values();
-
         return Inertia::render('Customers/Show', [
             'customer' => [
                 'id' => $customer->id,
@@ -171,86 +126,33 @@ class CustomerController extends Controller
                 'notes' => $customer->notes,
                 'is_active' => $customer->is_active,
                 'total_purchases' => $customer->total_purchases,
-                'credit_balance' => $customer->credit_balance,
-                'payments_total' => (float) $customer->payments()->sum('amount'),
                 'customer_number' => $customer->customer_number,
                 'loyalty_token' => $customer->loyalty_token,
                 'loyalty_points' => $customer->loyalty_points,
                 'lifetime_points_earned' => $customer->lifetime_points_earned,
                 'lifetime_points_redeemed' => $customer->lifetime_points_redeemed,
+                'has_online_account' => $customer->hasOnlineAccount(),
+                'barangay' => $customer->barangay,
+                'last_login_at' => $customer->last_login_at?->toIso8601String(),
+                'online_orders_count' => $customer->onlineOrders()->count(),
             ],
             'sales'       => $sales,
-            'payments'    => $payments,
-            'openCredits' => $openCredits,
-            'ledger'      => $ledger,
             'currency'    => SystemSetting::currencySymbol(),
             'loyaltyTransactions' => $loyaltyTransactions,
         ]);
     }
 
-    public function pay(Request $request, Customer $customer): RedirectResponse
-    {
-        $this->authorizeCustomer($customer);
-
-        $validated = $request->validate([
-            'sale_id'        => ['nullable', 'exists:sales,id'],
-            'amount'         => ['required', 'numeric', 'min:0.01'],
-            'payment_method' => ['required', Rule::in(['cash', 'gcash', 'card', 'bank', 'others'])],
-            'payment_date'   => ['nullable', 'date'],
-            'notes'          => ['nullable', 'string', 'max:500'],
-        ]);
-
-        try {
-            DB::transaction(function () use ($customer, $validated) {
-                $remaining = round((float) $validated['amount'], 2);
-                $date = $validated['payment_date'] ?? today()->toDateString();
-
-                $sales = $customer->sales()
-                    ->where('status', 'completed')
-                    ->where('balance_due', '>', 0)
-                    ->when(! empty($validated['sale_id']), fn ($q) => $q->where('id', $validated['sale_id']))
-                    ->orderByRaw('due_date IS NULL, due_date ASC')
-                    ->orderBy('created_at')
-                    ->lockForUpdate()
-                    ->get();
-
-                if ($sales->isEmpty()) {
-                    throw new \RuntimeException('No open customer balance found.');
-                }
-
-                foreach ($sales as $sale) {
-                    if ($remaining <= 0) break;
-
-                    $applied = min($remaining, (float) $sale->balance_due);
-                    CustomerPayment::create([
-                        'customer_id'    => $customer->id,
-                        'sale_id'        => $sale->id,
-                        'branch_id'      => $sale->branch_id,
-                        'received_by'    => Auth::id(),
-                        'amount'         => $applied,
-                        'payment_method' => $validated['payment_method'],
-                        'payment_date'   => $date,
-                        'notes'          => $validated['notes'] ?? null,
-                    ]);
-
-                    $sale->amount_paid = round((float) $sale->amount_paid + $applied, 2);
-                    $sale->refreshPaymentStatus();
-                    $remaining = round($remaining - $applied, 2);
-                }
-            });
-        } catch (\RuntimeException $e) {
-            return back()->withErrors(['error' => $e->getMessage()]);
-        }
-
-        return back()->with('success', 'Customer payment recorded.');
-    }
-
     private function validateCustomer(Request $request, ?Customer $customer = null): array
     {
+        $request->merge([
+            'contact_number' => Customer::normalisePhone($request->input('contact_number')),
+            'email' => $request->filled('email') ? strtolower(trim((string) $request->input('email'))) : null,
+        ]);
+
         return $request->validate([
             'name'           => ['required', 'string', 'max:255'],
-            'contact_number' => ['nullable', 'string', 'max:40'],
-            'email'          => ['nullable', 'email', 'max:255'],
+            'contact_number' => ['nullable', 'string', 'max:40', Rule::unique('customers', 'contact_number')->ignore($customer?->id)],
+            'email'          => ['nullable', 'email', 'max:255', Rule::unique('customers', 'email')->ignore($customer?->id)],
             'address'        => ['nullable', 'string', 'max:1000'],
             'notes'          => ['nullable', 'string', 'max:1000'],
             'is_active'      => ['sometimes', 'boolean'],

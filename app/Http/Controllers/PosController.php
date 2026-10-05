@@ -6,18 +6,19 @@ use App\Models\Branch;
 use App\Models\CashSession;
 use App\Models\Category;
 use App\Models\Customer;
-use App\Models\CustomerPayment;
 use App\Models\Product;
 use App\Models\Promo;
 use App\Models\Sale;
 use App\Models\SystemSetting;
 use App\Services\LoyaltyService;
+use App\Services\SaleService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -148,13 +149,12 @@ class PosController extends Controller
                 'name' => $customer->name,
                 'contact_number' => $customer->contact_number,
                 'email' => $customer->email,
-                'credit_balance' => $customer->credit_balance,
                 'customer_number' => $customer->customer_number,
                 'loyalty_points' => $customer->loyalty_points,
             ]);
 
         $promos = Promo::tableExists()
-            ? Promo::with(['products:id', 'categories:id'])->active()->get()
+            ? Promo::with(['products:id', 'categories:id'])->active()->forChannel('pos')->get()
                 ->map(fn (Promo $p) => [
                     'id' => $p->id,
                     'name' => $p->name,
@@ -186,134 +186,6 @@ class PosController extends Controller
             ] : null,
             'preferred_layout' => $user->pos_layout ?? 'grid',
         ]);
-    }
-
-    // ─── Stock helpers ────────────────────────────────────────────────────────
-
-    /**
-     * Deduct stock for one product (standard, bundle, or MTO).
-     * All relations must already be eager-loaded with lockForUpdate().
-     */
-    private function deductProductStock(Product $product, float $qty, int $branchId, bool $allowNeg, ?int $variantId = null): void
-    {
-        // Services have no physical inventory — nothing to deduct
-        if ($product->product_type === 'service') {
-            return;
-        }
-
-        if ($variantId) {
-            $variant = $product->variants->firstWhere('id', $variantId);
-            if (! $variant || (int) $variant->product_id !== (int) $product->id) {
-                throw new \RuntimeException("The selected variant does not belong to {$product->name}.");
-            }
-
-            $variantStock = $variant->stocks->firstWhere('branch_id', $branchId);
-            if (! $variantStock) {
-                throw new \RuntimeException("Variant \"{$variant->name}\" has no stock in this branch.");
-            }
-            if (! $allowNeg && $variantStock->stock < $qty) {
-                throw new \RuntimeException("Insufficient stock for \"{$product->name} - {$variant->name}\". Only {$variantStock->stock} left.");
-            }
-            $variantStock->decrement('stock', $qty);
-        } elseif ($product->variants->isNotEmpty()) {
-            throw new \RuntimeException("Please select a variant for \"{$product->name}\".");
-        } elseif ($product->product_type === 'bundle' && $product->bundle) {
-            foreach ($product->bundle->items->where('is_required', true) as $bi) {
-                $comp = $bi->componentProduct;
-                $cs = $comp?->stocks->firstWhere('branch_id', $branchId);
-                $needed = $bi->quantity * $qty;
-                if (! $cs) {
-                    throw new \RuntimeException("Bundle component \"{$comp?->name}\" has no stock in this branch.");
-                }
-                if (! $allowNeg && $cs->stock < $needed) {
-                    throw new \RuntimeException("Insufficient stock for bundle component \"{$comp?->name}\". Need {$needed}, have {$cs->stock}.");
-                }
-                $cs->decrement('stock', $needed);
-            }
-        } elseif ($product->product_type === 'made_to_order') {
-            $recipes = $product->recipeIngredients;
-            if ($recipes->isNotEmpty()) {
-                foreach ($recipes as $recipe) {
-                    $ing = $recipe->ingredient;
-                    $ingStock = $ing?->stocks->firstWhere('branch_id', $branchId);
-                    $needed = $recipe->quantityNeededFor($qty);
-                    if (! $ingStock) {
-                        throw new \RuntimeException("Ingredient \"{$ing?->name}\" has no stock in this branch.");
-                    }
-                    if (! $allowNeg && $ingStock->stock < $needed) {
-                        throw new \RuntimeException("Insufficient stock for ingredient \"{$ing?->name}\". Need {$needed}, have {$ingStock->stock}.");
-                    }
-                    $ingStock->decrement('stock', $needed);
-                }
-            } else {
-                $stock = $product->stocks->firstWhere('branch_id', $branchId) ?? $product->stocks->first();
-                if (! $stock) {
-                    throw new \RuntimeException("Product \"{$product->name}\" has no stock in this branch.");
-                }
-                if (! $allowNeg && $stock->stock < $qty) {
-                    throw new \RuntimeException("Insufficient stock for \"{$product->name}\". Only {$stock->stock} left.");
-                }
-                $stock->decrement('stock', $qty);
-            }
-        } else {
-            $stock = $product->stocks->firstWhere('branch_id', $branchId) ?? $product->stocks->first();
-            if (! $stock) {
-                throw new \RuntimeException("Product \"{$product->name}\" has no stock in this branch.");
-            }
-            if (! $allowNeg && $stock->stock < $qty) {
-                throw new \RuntimeException("Insufficient stock for \"{$product->name}\". Only {$stock->stock} left.");
-            }
-            $stock->decrement('stock', $qty);
-        }
-    }
-
-    /**
-     * Restore stock for a set of sale items — mirrors deductProductStock.
-     * Items must be loaded with: product.stocks, product.bundle.items.componentProduct.stocks,
-     * product.recipeIngredients.ingredient.stocks
-     */
-    private function restoreStockForItems(Collection $items, int $branchId): void
-    {
-        foreach ($items as $item) {
-            $product = $item->product;
-            if (! $product) {
-                continue;
-            }
-
-            if ($item->variant) {
-                $variantStock = $item->variant->stocks->firstWhere('branch_id', $branchId);
-                if ($variantStock) {
-                    $variantStock->increment('stock', $item->quantity);
-                }
-            } elseif ($product->product_type === 'bundle' && $product->bundle) {
-                foreach ($product->bundle->items->where('is_required', true) as $bi) {
-                    $cs = $bi->componentProduct?->stocks->firstWhere('branch_id', $branchId);
-                    if ($cs) {
-                        $cs->increment('stock', $bi->quantity * $item->quantity);
-                    }
-                }
-            } elseif ($product->product_type === 'made_to_order') {
-                $recipes = $product->recipeIngredients;
-                if ($recipes->isNotEmpty()) {
-                    foreach ($recipes as $recipe) {
-                        $ingStock = $recipe->ingredient?->stocks->firstWhere('branch_id', $branchId);
-                        if ($ingStock) {
-                            $ingStock->increment('stock', $recipe->quantityNeededFor($item->quantity));
-                        }
-                    }
-                } else {
-                    $stock = $product->stocks->firstWhere('branch_id', $branchId);
-                    if ($stock) {
-                        $stock->increment('stock', $item->quantity);
-                    }
-                }
-            } else {
-                $stock = $product->stocks->firstWhere('branch_id', $branchId);
-                if ($stock) {
-                    $stock->increment('stock', $item->quantity);
-                }
-            }
-        }
     }
 
     // ─── Store (checkout) ─────────────────────────────────────────────────────
@@ -361,219 +233,23 @@ class PosController extends Controller
             'items.*.id' => ['required', 'exists:products,id'],
             'items.*.qty' => ['required', 'numeric', 'min:0.001'],
             'items.*.variant_id' => ['nullable', 'exists:product_variants,id'],
-            'payment_method' => ['required', 'in:cash,gcash,card,others,credit,mixed'],
+            'payment_method' => ['required', 'in:'.implode(',', SaleService::PAYMENT_METHODS)],
             'payment_amount' => ['nullable', 'numeric', 'min:0'],
             'customer_id' => ['nullable', 'exists:customers,id'],
             'customer_name' => ['nullable', 'string', 'max:80'],
-            'due_date' => ['nullable', 'date'],
-            'credit_notes' => ['nullable', 'string', 'max:500'],
             'discount_percent' => ['nullable', 'numeric', 'between:0,100'],
             'promo_id' => ['nullable', 'exists:promos,id'],
             'cash_session_id' => ['nullable', 'exists:cash_sessions,id'],
             'loyalty_points' => ['nullable', 'integer', 'min:0'],
+            'table_order_id' => ['nullable', 'integer', 'exists:table_orders,id'],
         ]);
 
-        if (in_array($validated['payment_method'], ['credit', 'mixed'], true) && empty($validated['customer_id'])) {
-            return back()->withErrors(['error' => 'Please select a registered customer for credit transactions.']);
-        }
-
         try {
-            $result = DB::transaction(function () use ($validated, $user, $branchId, $openSession) {
-                $allowNeg = SystemSetting::allowNegativeStock($branchId);
-                $subtotal = 0;
-                $taxableSubtotal = 0;
-                $saleItems = [];
-                $itemMode = SystemSetting::posItemMode($branchId);
-
-                foreach ($validated['items'] as $item) {
-                    $product = Product::with([
-                        'variants.stocks' => fn ($q) => $q->where('branch_id', $branchId)->lockForUpdate(),
-                        'stocks' => fn ($q) => $q->where('branch_id', $branchId)->lockForUpdate(),
-                        'bundle.items.componentProduct.stocks' => fn ($q) => $q->where('branch_id', $branchId)->lockForUpdate(),
-                        'recipeIngredients.ingredient.stocks' => fn ($q) => $q->where('branch_id', $branchId)->lockForUpdate(),
-                    ])->findOrFail($item['id']);
-
-                    if ($itemMode === 'services_only' && $product->product_type !== 'service') {
-                        throw new \RuntimeException('This POS is set to Services only. Product items are not allowed.');
-                    }
-
-                    if ($itemMode === 'products_only' && $product->product_type === 'service') {
-                        throw new \RuntimeException('This POS is set to Products only. Service items are not allowed.');
-                    }
-
-                    $stock = $product->stocks->first();
-                    $unitPrice = (float) ($stock?->price ?? 0);
-                    $saleQty = (float) $item['qty'];
-
-                    // ── Resolve variant price add-on ───────────────────────
-                    if (! empty($item['variant_id'])) {
-                        $v = $product->variants->firstWhere('id', $item['variant_id']);
-                        if ($v) {
-                            $unitPrice += (float) $v->extra_price;
-                        }
-                    }
-
-                    // ── Deduct stock based on product type ─────────────────
-                    $this->deductProductStock($product, $saleQty, $branchId, $allowNeg, $item['variant_id'] ?? null);
-
-                    $line = round($unitPrice * $saleQty, 2);
-                    $subtotal += $line;
-                    if ($product->is_taxable) {
-                        $taxableSubtotal += $line;
-                    }
-                    $saleItems[] = [
-                        'product_id' => $item['id'],
-                        'product_variant_id' => $item['variant_id'] ?? null,
-                        'quantity' => $saleQty,
-                        'price' => $unitPrice,
-                        'total' => $line,
-                    ];
-                }
-
-                // Percentage discount
-                $maxDisc = (float) SystemSetting::get('pos.max_discount_percent', $branchId, 100);
-                $discPct = min((float) ($validated['discount_percent'] ?? 0), $maxDisc);
-                $discAmt = round($subtotal * ($discPct / 100), 2);
-
-                // Promo discount
-                $promoAmt = 0;
-                $promoLabel = null;
-                if (! empty($validated['promo_id'])) {
-                    $promo = Promo::find($validated['promo_id']);
-                    if ($promo && $promo->isValid()) {
-                        $promoAmt = $promo->computeDiscount($subtotal - $discAmt);
-                        $promoLabel = "{$promo->name}".($promo->code ? " [{$promo->code}]" : '');
-                        $promo->increment('uses_count');
-                    }
-                }
-
-                $afterDisc = round($subtotal - $discAmt - $promoAmt, 2);
-
-                // VAT — only applied to taxable items' portion of the total
-                $vatEnabled = SystemSetting::vatEnabled($branchId);
-                $vatRate = (float) SystemSetting::get('tax.vat_rate', $branchId, 0);
-                $vatInclusive = (bool) SystemSetting::get('tax.vat_inclusive', $branchId, true);
-                // Compute how much of the post-discount total is taxable (proportional)
-                $taxableFraction = $subtotal > 0 ? ($taxableSubtotal / $subtotal) : 0;
-                $taxableAfterDisc = round($afterDisc * $taxableFraction, 2);
-                $vatAmt = ($vatEnabled && $vatRate > 0 && ! $vatInclusive)
-                    ? round($taxableAfterDisc * ($vatRate / 100), 2) : 0;
-                $serviceChargeEnabled = (bool) SystemSetting::get('tax.enable_service_charge', $branchId, false);
-                $serviceChargeRate = (float) SystemSetting::get('tax.service_charge_rate', $branchId, 0);
-                $serviceChargeAmt = $serviceChargeEnabled && $serviceChargeRate > 0
-                    ? round($afterDisc * ($serviceChargeRate / 100), 2)
-                    : 0;
-
-                $customer = ! empty($validated['customer_id'])
-                    ? Customer::where('id', $validated['customer_id'])
-                        ->where(fn ($q) => $q->where('branch_id', $branchId)->orWhereNull('branch_id'))
-                        ->lockForUpdate()
-                        ->firstOrFail()
-                    : null;
-
-                $loyalty = $customer
-                    ? app(LoyaltyService::class)->quote($customer, $afterDisc + $vatAmt + $serviceChargeAmt, (int) ($validated['loyalty_points'] ?? 0), $branchId)
-                    : ['points_to_redeem' => 0, 'discount' => 0.0, 'points_to_earn' => 0];
-
-                $totalDue = max(0, round($afterDisc + $vatAmt + $serviceChargeAmt - $loyalty['discount'], 2));
-                $method = $validated['payment_method'];
-                $isCredit = in_array($method, ['credit', 'mixed'], true);
-                $tendered = (float) ($validated['payment_amount'] ?? $totalDue);
-
-                if ($method === 'cash' && $tendered < $totalDue) {
-                    throw new \RuntimeException('Cash tendered is less than the total due.');
-                }
-                if ($method === 'mixed' && ($tendered <= 0 || $tendered >= $totalDue)) {
-                    throw new \RuntimeException('Partial payment must be greater than zero and less than the total due.');
-                }
-
-                $amountPaid = $isCredit
-                    ? min(max(0, $tendered), $totalDue)
-                    : $totalDue;
-                $balanceDue = max(0, round($totalDue - $amountPaid, 2));
-                $paymentStatus = $balanceDue <= 0 ? 'paid' : ($amountPaid > 0 ? 'partial' : 'unpaid');
-                $change = $isCredit ? 0 : max(0, round($tendered - $totalDue, 2));
-
-                $notes = implode(' | ', array_filter([
-                    $discPct > 0 ? "Discount {$discPct}% (−₱".number_format($discAmt, 2).')' : null,
-                    $promoAmt > 0 ? "Promo {$promoLabel}: −₱".number_format($promoAmt, 2) : null,
-                    $vatAmt > 0 ? "VAT {$vatRate}%: ₱".number_format($vatAmt, 2) : null,
-                ]));
-
-                $sale = Sale::create([
-                    'receipt_number' => $this->generateReceiptNumber($branchId),
-                    'user_id' => $user->id,
-                    'branch_id' => $branchId,
-                    'cash_session_id' => $openSession?->id,
-                    'table_order_id' => null,
-                    'customer_id' => $customer?->id,
-                    'payment_method' => $method,
-                    'payment_amount' => $tendered,
-                    'amount_paid' => $amountPaid,
-                    'balance_due' => $balanceDue,
-                    'payment_status' => $paymentStatus,
-                    'due_date' => $validated['due_date'] ?? null,
-                    'change_amount' => $change,
-                    'discount_amount' => $discAmt + $promoAmt,
-                    'loyalty_points_earned' => $loyalty['points_to_earn'],
-                    'loyalty_points_redeemed' => $loyalty['points_to_redeem'],
-                    'loyalty_discount' => $loyalty['discount'],
-                    'customer_name' => $customer?->name ?? ($validated['customer_name'] ?? null),
-                    'status' => 'completed',
-                    'total' => $totalDue,
-                    'credit_notes' => $validated['credit_notes'] ?? null,
-                    'notes' => $notes ?: null,
-                ]);
-
-                foreach ($saleItems as $data) {
-                    $sale->items()->create($data);
-                }
-
-                if ($customer) {
-                    app(LoyaltyService::class)->applyToSale(
-                        $sale, $customer, $user, $loyalty['points_to_redeem'], $loyalty['points_to_earn']
-                    );
-                    $customer->refresh();
-                }
-
-                if ($customer && $amountPaid > 0 && $isCredit) {
-                    CustomerPayment::create([
-                        'customer_id' => $customer->id,
-                        'sale_id' => $sale->id,
-                        'branch_id' => $branchId,
-                        'received_by' => $user->id,
-                        'amount' => $amountPaid,
-                        'payment_method' => $method === 'mixed' ? 'cash' : ($validated['payment_method'] ?? 'cash'),
-                        'payment_date' => today()->toDateString(),
-                        'notes' => 'Initial payment at POS',
-                    ]);
-                }
-
-                // ── Create financing record if payment method is installment ──
-                return [
-                    'sale_id' => $sale->id,
-                    'receipt_number' => $sale->receipt_number,
-                    'total' => $totalDue,
-                    'change' => $change,
-                    'amount_paid' => $amountPaid,
-                    'balance_due' => $balanceDue,
-                    'payment_status' => $paymentStatus,
-                    'due_date' => $sale->due_date?->toDateString(),
-                    'customer_name' => $sale->customer?->name ?? $sale->customer_name,
-                    'discount_amount' => $discAmt,
-                    'promo_discount' => $promoAmt,
-                    'promo_name' => $promoLabel,
-                    'vat_amount' => $vatAmt,
-                    'service_charge_amount' => $serviceChargeAmt,
-                    'loyalty_points_earned' => $loyalty['points_to_earn'],
-                    'loyalty_points_redeemed' => $loyalty['points_to_redeem'],
-                    'loyalty_discount' => $loyalty['discount'],
-                    'loyalty_balance' => $customer?->loyalty_points,
-                ];
-            });
+            $result = app(SaleService::class)->checkout($user, $branchId, $openSession, $validated)['result'];
 
             return back()->with('pos_result', $result);
-
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             return back()->withErrors(['error' => $e->getMessage() ?: 'Checkout failed.']);
         }
@@ -633,16 +309,13 @@ class PosController extends Controller
         return Inertia::render('Pos/History', [
             'sales' => $sales->through(fn ($s) => $this->mapSale($s, brief: true)),
             'summary' => [
-                'total_sales' => (float) (clone $base)
-                    ->selectRaw('SUM(CASE WHEN payment_method IN ("credit","mixed") THEN amount_paid ELSE total END) as collected')
-                    ->value('collected')
-                    + (float) CustomerPayment::where('branch_id', $branchId)->whereBetween('payment_date', [$from, $to])->sum('amount'),
+                'total_sales' => (float) (clone $base)->sum('total'),
                 'total_count' => $base->count(),
                 'cash_total' => (float) (clone $base)->where('payment_method', 'cash')->sum('total'),
                 'gcash_total' => (float) (clone $base)->where('payment_method', 'gcash')->sum('total'),
                 'card_total' => (float) (clone $base)->where('payment_method', 'card')->sum('total'),
-                'credit_paid' => (float) CustomerPayment::where('branch_id', $branchId)->whereBetween('payment_date', [$from, $to])->sum('amount'),
-                'credit_balance' => (float) (clone $base)->where('balance_due', '>', 0)->sum('balance_due'),
+                'online_total' => (float) (clone $base)->where('channel', 'online')->sum('total'),
+                'dine_in_total' => (float) (clone $base)->where('channel', 'dine_in')->sum('total'),
                 'discount_total' => (float) (clone $base)->sum('discount_amount'),
             ],
             'filters' => [
@@ -699,7 +372,7 @@ class PosController extends Controller
             'items.*.id' => ['required', 'exists:products,id'],
             'items.*.qty' => ['required', 'numeric', 'min:0.001'],
             'items.*.variant_id' => ['nullable', 'exists:product_variants,id'],
-            'payment_method' => ['required', 'in:cash,gcash,card,others'],
+            'payment_method' => ['required', 'in:'.implode(',', SaleService::PAYMENT_METHODS)],
             'payment_amount' => ['nullable', 'numeric', 'min:0'],
             'customer_name' => ['nullable', 'string', 'max:80'],
             'discount_percent' => ['nullable', 'numeric', 'between:0,100'],
@@ -707,6 +380,7 @@ class PosController extends Controller
 
         try {
             DB::transaction(function () use ($sale, $validated, $branchId) {
+                $sales = app(SaleService::class);
                 $allowNeg = SystemSetting::allowNegativeStock($branchId);
 
                 // Restore old stock (type-aware for bundles and MTO)
@@ -716,37 +390,10 @@ class PosController extends Controller
                     'items.product.bundle.items.componentProduct.stocks',
                     'items.product.recipeIngredients.ingredient.stocks',
                 ]);
-                $this->restoreStockForItems($sale->items, $branchId);
+                $sales->restoreStockForItems($sale->items, $branchId);
                 $sale->items()->delete();
 
-                $subtotal = 0;
-                $saleItems = [];
-
-                foreach ($validated['items'] as $item) {
-                    $product = Product::with([
-                        'variants.stocks' => fn ($q) => $q->where('branch_id', $branchId)->lockForUpdate(),
-                        'stocks' => fn ($q) => $q->where('branch_id', $branchId)->lockForUpdate(),
-                        'bundle.items.componentProduct.stocks' => fn ($q) => $q->where('branch_id', $branchId)->lockForUpdate(),
-                        'recipeIngredients.ingredient.stocks' => fn ($q) => $q->where('branch_id', $branchId)->lockForUpdate(),
-                    ])->findOrFail($item['id']);
-
-                    $stock = $product->stocks->firstWhere('branch_id', $branchId) ?? $product->stocks->first();
-                    $unitPrice = (float) ($stock?->price ?? 0);
-                    $saleQty = (float) $item['qty'];
-
-                    if (! empty($item['variant_id'])) {
-                        $v = $product->variants->firstWhere('id', $item['variant_id']);
-                        if ($v) {
-                            $unitPrice += (float) $v->extra_price;
-                        }
-                    }
-
-                    $this->deductProductStock($product, $saleQty, $branchId, $allowNeg, $item['variant_id'] ?? null);
-
-                    $lt = round($unitPrice * $saleQty, 2);
-                    $subtotal += $lt;
-                    $saleItems[] = ['product_id' => $item['id'], 'product_variant_id' => $item['variant_id'] ?? null, 'quantity' => $saleQty, 'price' => $unitPrice, 'total' => $lt];
-                }
+                [$saleItems, $subtotal] = $sales->buildLines($validated['items'], $branchId, $allowNeg);
 
                 $discPct = (float) ($validated['discount_percent'] ?? 0);
                 $discAmt = round($subtotal * ($discPct / 100), 2);
@@ -797,9 +444,12 @@ class PosController extends Controller
                 'items.product.recipeIngredients.ingredient.stocks',
             ]);
 
-            $this->restoreStockForItems($sale->items, $branchId);
+            app(SaleService::class)->restoreStockForItems($sale->items, $branchId);
 
             app(LoyaltyService::class)->reverseSale($sale, $user);
+
+            // A voided online order's sale is unlinked so the order history stays truthful.
+            $sale->onlineOrder?->update(['payment_status' => 'refunded']);
 
             $sale->update(['status' => 'voided', 'notes' => trim(($sale->notes ?? '').' | Voided: '.($request->input('reason', 'No reason provided')))]);
         });
@@ -916,6 +566,7 @@ class PosController extends Controller
             'credit_notes' => $sale->credit_notes,
             'created_at' => $sale->created_at?->toIso8601String(),
             'cashier' => $sale->user ? trim("{$sale->user->fname} {$sale->user->lname}") : 'Unknown',
+            'channel' => $sale->channel ?? 'counter',
             'table_order_id' => $sale->table_order_id,
             'table_label' => $sale->tableOrder?->table?->label,
         ];
@@ -929,14 +580,5 @@ class PosController extends Controller
         }
 
         return $base;
-    }
-
-    private function generateReceiptNumber(int $branchId): string
-    {
-        $code = Auth::user()->branch?->code ?? 'POS';
-        $date = now()->format('ymd');
-        $count = Sale::where('branch_id', $branchId)->whereDate('created_at', today())->count() + 1;
-
-        return strtoupper("{$code}-{$date}-".str_pad($count, 4, '0', STR_PAD_LEFT));
     }
 }

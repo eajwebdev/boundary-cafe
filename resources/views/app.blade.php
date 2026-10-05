@@ -18,7 +18,7 @@
 
         <!-- Preconnect to Bunny Fonts (faster loading) -->
         <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-        <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet">
+        <link href="https://fonts.bunny.net/css?family=bricolage-grotesque:600,700,800|instrument-sans:400,500,600,700" rel="stylesheet">
 
         <!-- Ziggy routes (important for route() in JS) -->
         @routes

@@ -79,13 +79,12 @@ const PRESETS: Record<
         label: 'Standard',
         icon: Zap,
         color: 'text-blue-500 bg-blue-500/10 border-blue-500/30 hover:bg-blue-500/20',
-        description: 'POS, Sales History, Products, Categories, Cash Management, Basic Reports, Users, System Settings',
-        // 1=Dashboard, 2=POS, 3=Sales History, 6=Products, 7=Categories,
-        // 14=Cash Sessions, 15=Cash Counts, 16=Petty Cash, 17=Expenses,
-        // 18=Daily Summary, 19=Sales Report, 20=Inventory Report,
-        // 22=Activity Logs, 23=Users, 27=Expense Categories, 28=System Settings
-        // 33=Inventory, 36=Stock Count, 38=Services, 39=Customers
-        ids: ['1', '2', '3', '6', '7', '14', '15', '16', '17', '18', '19', '20', '22', '23', '27', '28', '33', '36', '38', '39'],
+        description: 'Dashboard, POS, online orders, table ordering, customers & loyalty, products, cash management, basic reports, users, settings',
+        // 1 Dashboard · 2 POS · 3 Sales History · 6 Products · 7 Categories · 14–17 Cash
+        // 18–20 Reports · 22 Logs · 23 Users · 27 Expense Categories · 28 Settings · 33 Inventory
+        // 36 Stock Count · 39 Customers · 40 Online Orders · 41 Table Ordering · 42 Dining Tables
+        // 43 Delivery Zone · 44 Loyalty Program
+        ids: ['1', '2', '3', '6', '7', '14', '15', '16', '17', '18', '19', '20', '22', '23', '27', '28', '33', '36', '39', '40', '41', '42', '43', '44'],
         aiChat: false,
     },
     Advance: {
@@ -93,50 +92,8 @@ const PRESETS: Record<
         icon: Sparkles,
         color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20',
         description:
-            'All features — Standard + Shop Orders, Warehouses, Variants, Bundles, Recipes, Purchase Orders, Stock Transfers, Losses/Damages, All Reports, Suppliers, Promos, Brochure Builder, AI Assistant',
-        // All active system modules:
-        // Standard + 5=Shop Orders, 8=Variants, 9=Bundles, 10=Recipes, 11=Stock Mgmt,
-        // 12=Purchase Orders, 13=GRN, 21=Expense Report, 24=Suppliers,
-        // 25=Branches, 29=Promos, 30=Ingredient Usage, 31=Losses/Damages,
-        // 34=Stock Transfers, 35=Warehouses, 37=Brochure Builder
-        ids: [
-            '1',
-            '2',
-            '3',
-            '5',
-            '6',
-            '7',
-            '8',
-            '9',
-            '10',
-            '11',
-            '12',
-            '13',
-            '14',
-            '15',
-            '16',
-            '17',
-            '18',
-            '19',
-            '20',
-            '21',
-            '22',
-            '23',
-            '24',
-            '25',
-            '27',
-            '28',
-            '29',
-            '30',
-            '31',
-            '33',
-            '34',
-            '35',
-            '36',
-            '37',
-            '38',
-            '39',
-        ],
+            'Everything in Standard + variants, bundles, recipes, purchase orders, suppliers, stock transfers, losses/damages, promos, all reports, branches and the AI assistant',
+        ids: ['1', '2', '3', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '27', '28', '29', '30', '31', '33', '34', '36', '39', '40', '41', '42', '43', '44'],
         aiChat: true,
     },
 };

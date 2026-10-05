@@ -1,516 +1,554 @@
-import { Head } from '@inertiajs/react';
-import { ArrowRight, ChevronRight, Clock3, Instagram, MapPin, Menu, Navigation, Quote, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { Link, router, usePage } from '@inertiajs/react';
+import { ChevronDown, ChevronRight, Clock3, Gift, MapPin, Phone, Search, ShoppingBag, Store, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
-type MenuItem = { name: string; image: string; note: string };
-type MenuGroup = { label: string; intro: string; items: MenuItem[] };
+import { CartPanel, CartSheet } from '@/components/storefront/CartPanel';
+import { CategoryChips, CategoryRail } from '@/components/storefront/CategoryNav';
+import ProductCard from '@/components/storefront/ProductCard';
+import ProductDetail from '@/components/storefront/ProductDetail';
+import PromoRail from '@/components/storefront/PromoRail';
+import { Pill, Price, RouteLine, useIsDesktop } from '@/components/storefront/ui';
+import CustomerLayout, { useCustomerAuth } from '@/layouts/CustomerLayout';
+import { CustomerSession, MenuProduct, StoreStatus, StorefrontPromo, useCart } from '@/lib/customer';
+import { cn } from '@/lib/utils';
 
-const navigation = [
-    ['Menu', '#menu'],
-    ['Our story', '#story'],
-    ['Gallery', '#gallery'],
-    ['Branches', '#branches'],
-] as const;
+interface PageProps {
+    store: {
+        name: string;
+        logo: string | null;
+        branch: { name: string; address: string | null; phone: string | null } | null;
+        status: StoreStatus;
+        settings: {
+            delivery_fee: number;
+            free_delivery_min: number;
+            min_order: number;
+            prep_minutes: number;
+            delivery_minutes: number;
+            delivery_enabled: boolean;
+            pickup_enabled: boolean;
+        };
+    };
+    categories: { id: number; name: string }[];
+    products: MenuProduct[];
+    storefrontPromos: StorefrontPromo[];
+    loyaltyRules: { enabled: boolean; spend_per_point: number; birthday_bonus: number };
+    activeOrder: { order_number: string; status: string; status_label: string; total: number } | null;
+    customer: CustomerSession | null;
+    barangays: string[];
+    [key: string]: unknown;
+}
 
-const scrollNavigation = [['Home', '#home'], ...navigation] as const;
-type ScrollSectionHref = (typeof scrollNavigation)[number][1];
+const PENDING_ADD_KEY = 'bc-pending-add';
+const FULFILLMENT_KEY = 'bc-fulfillment';
 
-const menuGroups: MenuGroup[] = [
-    {
-        label: 'Sulit meals',
-        intro: 'Generous all-day plates made for proper comfort.',
-        items: [
-            { name: 'Fiesta Meal A', image: '/uploads/optimized/fiesta_meal_a.webp', note: 'A Boundary favorite' },
-            { name: 'Fiesta Meal B', image: '/uploads/optimized/fiesta_meal_b.webp', note: 'Full plate, full flavor' },
-            { name: 'Tocino Meal', image: '/uploads/optimized/tocino_meal.webp', note: 'Sweet, savory, satisfying' },
-            { name: 'Chicken Meal', image: '/uploads/optimized/1_chicken_meal.webp', note: 'Crisp and comforting' },
-            { name: 'Hungarian Sausage Meal', image: '/uploads/optimized/hungarian_sausage_meal.webp', note: 'Smoky and filling' },
-            { name: 'Bacon Meal', image: '/uploads/optimized/bacon_meal.webp', note: 'A familiar favorite' },
-        ],
-    },
-    {
-        label: 'Burgers',
-        intro: 'Fresh off the grill, from solo cravings to barkada sharing.',
-        items: [
-            { name: 'Boundary Burger', image: '/uploads/optimized/boundary_burger.webp', note: 'Our signature original' },
-            { name: 'Chicken Burger', image: '/uploads/optimized/chicken_burger.webp', note: 'Tender and savory' },
-            { name: 'Ultimate Burger', image: '/uploads/optimized/ultimate_burger.webp', note: 'Built for big cravings' },
-            { name: 'Barkada Burgers', image: '/uploads/optimized/barkada_burgers.webp', note: 'Better shared' },
-            { name: 'Burger & Fries Combo', image: '/uploads/optimized/burger_and_fries_combo.webp', note: 'The complete classic' },
-        ],
-    },
-    {
-        label: 'Drinks',
-        intro: 'Bright coolers and creamy café favorites for warm Negros days.',
-        items: [
-            { name: 'Strawberry Sparkle', image: '/uploads/optimized/strawberry_sparkle.webp', note: 'Bright and refreshing' },
-            { name: 'Blueberry Sparkle', image: '/uploads/optimized/blueberry_sparkle.webp', note: 'Fruity and crisp' },
-            { name: 'Fresh Calamansi', image: '/uploads/optimized/fresh_calamansi.webp', note: 'Local citrus refreshment' },
-            { name: 'Dark Chocolate', image: '/uploads/optimized/dark_chocolate.webp', note: 'Rich and creamy' },
-            { name: 'Strawberry Latte', image: '/uploads/optimized/strawberry_latte.webp', note: 'Soft and sweet' },
-            { name: 'Matcha Latte', image: '/uploads/optimized/matcha_latte.webp', note: 'Clean, creamy finish' },
-        ],
-    },
-    {
-        label: 'Frappes',
-        intro: 'Blended, playful, and made for slowing down.',
-        items: [
-            { name: "Cookies n' Cream", image: '/uploads/optimized/cookies_n_cream.webp', note: 'A crowd favorite' },
-            { name: 'Taro', image: '/uploads/optimized/taro.webp', note: 'Smooth and mellow' },
-            { name: 'Strawberry Frappe', image: '/uploads/optimized/strawberry_frappe.webp', note: 'Fresh berry sweetness' },
-            { name: 'Avocado', image: '/uploads/optimized/avocado.webp', note: 'Creamy and distinctive' },
-        ],
-    },
-];
-
-const branches = [
-    {
-        number: '01',
-        name: 'Tagukon',
-        region: 'Negros Occidental',
-        note: 'Your stop between good food and the road ahead.',
-        mapUrl: 'https://www.google.com/maps/search/?api=1&query=Boundary%20Cafe%20Tagukon%20Negros%20Occidental',
-    },
-    {
-        number: '02',
-        name: 'Mabinay',
-        region: 'Negros Oriental',
-        note: 'A relaxed café break in the heart of Negros.',
-        mapUrl: 'https://www.google.com/maps/search/?api=1&query=Boundary%20Cafe%20Mabinay%20Negros%20Oriental',
-    },
-] as const;
-
-const gallery = [
-    { src: '/uploads/optimized/boundary_burger.webp', alt: 'Boundary Burger', className: 'bc-gallery-tall' },
-    { src: '/uploads/optimized/fiesta_meal_a.webp', alt: 'Fiesta Meal A', className: '' },
-    { src: '/uploads/optimized/strawberry_sparkle.webp', alt: 'Strawberry Sparkle', className: '' },
-    { src: '/uploads/optimized/matcha_latte.webp', alt: 'Matcha Latte', className: '' },
-    { src: '/uploads/optimized/ultimate_burger.webp', alt: 'Ultimate Burger', className: '' },
-] as const;
-
-function Brand({ compact = false }: { compact?: boolean }) {
+export default function Storefront() {
+    const { props } = usePage<PageProps>();
     return (
-        <span className="bc-brand">
-            <span className="bc-brand-mark">
-                <img src="/uploads/optimized/logo.webp" alt="" width="512" height="512" />
-            </span>
-            {!compact && (
-                <span className="bc-brand-name">
-                    <strong>Boundary Café</strong>
-                    <span>Taste of Negros</span>
-                </span>
-            )}
-        </span>
+        <CustomerLayout title="Order online" headerSlot={<AddressChip />} barangays={props.barangays} wide>
+            <StorefrontBody />
+        </CustomerLayout>
     );
 }
 
-function SectionIntro({ eyebrow, title, copy, light = false }: { eyebrow: string; title: string; copy?: string; light?: boolean }) {
+function AddressChip() {
+    const { props } = usePage<PageProps>();
+    const { requireAuth } = useCustomerAuth();
+    const place = props.customer?.barangay ? `${props.customer.barangay}, Mabinay` : 'Mabinay, Negros Oriental';
+    const inner = (
+        <>
+            <MapPin className="h-4.5 w-4.5 shrink-0 text-shop-accent-ink" />
+            <span className="min-w-0 text-left">
+                <span className="block text-[11px] leading-none font-medium text-shop-muted">Deliver to</span>
+                <span className="mt-0.5 flex items-center gap-0.5 text-sm leading-tight font-semibold">
+                    <span className="truncate">{place}</span>
+                    <ChevronDown className="h-4 w-4 shrink-0 text-shop-muted" />
+                </span>
+            </span>
+        </>
+    );
+    const cls = 'bc-press flex max-w-full cursor-pointer items-center gap-2 rounded-2xl px-2 py-1 hover:bg-shop-sunken';
+    return props.customer ? (
+        <Link href="/account" className={cls} aria-label={`Delivering to ${place}. Change address`}>
+            {inner}
+        </Link>
+    ) : (
+        <button type="button" className={cls} onClick={() => requireAuth('login')}>
+            {inner}
+        </button>
+    );
+}
+
+function StorefrontBody() {
+    const { props } = usePage<PageProps>();
+    const { store, categories, products, storefrontPromos, loyaltyRules, activeOrder, customer } = props;
+    const { requireAuth } = useCustomerAuth();
+    const cart = useCart(customer?.id);
+    const isDesktop = useIsDesktop();
+
+    const [query, setQuery] = useState('');
+    const [activeCat, setActiveCat] = useState<number | null>(categories[0]?.id ?? null);
+    const [selected, setSelected] = useState<MenuProduct | null>(null);
+    const [detailOpen, setDetailOpen] = useState(false);
+    const [cartOpen, setCartOpen] = useState(false);
+    const [fulfillment, setFulfillment] = useState<'delivery' | 'pickup'>(() => {
+        try {
+            const saved = window.sessionStorage.getItem(FULFILLMENT_KEY);
+            if (saved === 'pickup' && store.settings.pickup_enabled) return 'pickup';
+        } catch {
+            /* ignore */
+        }
+        return store.settings.delivery_enabled ? 'delivery' : 'pickup';
+    });
+    const sectionRefs = useRef<Record<number, HTMLElement | null>>({});
+    const toolbarRef = useRef<HTMLDivElement>(null);
+    const clickScroll = useRef(false);
+
+    const isOpen = store.status.is_open;
+
+    useEffect(() => {
+        try {
+            window.sessionStorage.setItem(FULFILLMENT_KEY, fulfillment);
+        } catch {
+            /* ignore */
+        }
+    }, [fulfillment]);
+
+    const filtered = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        return q ? products.filter((p) => p.name.toLowerCase().includes(q) || (p.category ?? '').toLowerCase().includes(q) || (p.description ?? '').toLowerCase().includes(q)) : products;
+    }, [products, query]);
+
+    const sections = useMemo(
+        () => categories.map((c) => ({ ...c, items: filtered.filter((p) => p.category_id === c.id) })).filter((s) => s.items.length > 0),
+        [categories, filtered],
+    );
+    const navSections = useMemo(() => sections.map((s) => ({ id: s.id, name: s.name, count: s.items.length })), [sections]);
+
+    const qtyByProduct = useMemo(() => {
+        const total: Record<number, number> = {};
+        const base: Record<number, number> = {};
+        cart.lines.forEach((l) => {
+            total[l.product_id] = (total[l.product_id] ?? 0) + l.quantity;
+            if (!l.variant_id && !l.note) base[l.product_id] = (base[l.product_id] ?? 0) + l.quantity;
+        });
+        return { total, base };
+    }, [cart.lines]);
+
+    // ── Guests must log in before ordering; the add resumes after login ──
+    const guard = useCallback(
+        (p: MenuProduct) => {
+            if (customer) return true;
+            try {
+                window.sessionStorage.setItem(PENDING_ADD_KEY, String(p.id));
+            } catch {
+                /* ignore */
+            }
+            requireAuth('login');
+            return false;
+        },
+        [customer, requireAuth],
+    );
+
+    const openProduct = useCallback(
+        (p: MenuProduct) => {
+            if (p.sold_out || !guard(p)) return;
+            setSelected(p);
+            setDetailOpen(true);
+        },
+        [guard],
+    );
+
+    const quickAdd = useCallback(
+        (p: MenuProduct) => {
+            if (p.sold_out || !guard(p)) return;
+            if (!isOpen) {
+                toast(store.status.message ?? 'We are closed for online orders right now.');
+                return;
+            }
+            cart.add({ product_id: p.id, variant_id: null, name: p.name, variant_name: null, image: p.image, unit_price: p.price, quantity: 1, note: '' });
+        },
+        [guard, isOpen, cart, store.status.message],
+    );
+
+    const quickRemove = useCallback((p: MenuProduct) => cart.setQuantity(`${p.id}-base-`, (qtyByProduct.base[p.id] ?? 0) - 1), [cart, qtyByProduct.base]);
+
+    useEffect(() => {
+        if (!customer) return;
+        let pending: string | null = null;
+        try {
+            pending = window.sessionStorage.getItem(PENDING_ADD_KEY);
+            window.sessionStorage.removeItem(PENDING_ADD_KEY);
+        } catch {
+            /* ignore */
+        }
+        const p = pending ? products.find((x) => x.id === Number(pending)) : null;
+        if (p && !p.sold_out) {
+            setSelected(p);
+            setDetailOpen(true);
+        }
+    }, [customer, products]);
+
+    // ── Scroll-spy ──
+    const stickyOffset = () => (isDesktop ? 64 : 56) + (toolbarRef.current?.offsetHeight ?? 0) + 12;
+    // The active category is the last section whose heading has scrolled past the sticky toolbar.
+    useEffect(() => {
+        let frame = 0;
+        const update = () => {
+            frame = 0;
+            if (clickScroll.current) return;
+            const line = stickyOffset() + 8;
+            let current: number | null = sections[0]?.id ?? null;
+            for (const s of sections) {
+                const el = sectionRefs.current[s.id];
+                if (el && el.getBoundingClientRect().top - line <= 0) current = s.id;
+            }
+            setActiveCat(current);
+        };
+        const onScroll = () => {
+            if (!frame) frame = window.requestAnimationFrame(update);
+        };
+        update();
+        window.addEventListener('scroll', onScroll, { passive: true });
+        window.addEventListener('resize', onScroll);
+        return () => {
+            window.removeEventListener('scroll', onScroll);
+            window.removeEventListener('resize', onScroll);
+            if (frame) window.cancelAnimationFrame(frame);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sections, isDesktop]);
+
+    const jumpTo = (id: number) => {
+        const el = sectionRefs.current[id];
+        if (!el) return;
+        setActiveCat(id);
+        clickScroll.current = true;
+        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - stickyOffset(), behavior: reduce ? 'auto' : 'smooth' });
+        window.setTimeout(() => (clickScroll.current = false), 800);
+    };
+
+    const goCheckout = () => {
+        if (!customer) {
+            requireAuth('login');
+            return;
+        }
+        setCartOpen(false);
+        router.visit(`/checkout?fulfillment=${fulfillment}`);
+    };
+
+    const panelProps = {
+        lines: cart.lines,
+        subtotal: cart.subtotal,
+        count: cart.count,
+        onQuantity: cart.setQuantity,
+        onClear: cart.clear,
+        settings: store.settings,
+        fulfillment,
+        onFulfillment: setFulfillment,
+        isOpen,
+        closedReason: store.status.message,
+        onCheckout: goCheckout,
+    };
+
     return (
-        <div className={`bc-section-intro bc-reveal ${light ? 'is-light' : ''}`}>
-            <p className="bc-eyebrow">{eyebrow}</p>
-            <h2>{title}</h2>
-            {copy && <p className="bc-section-copy">{copy}</p>}
+        <>
+            <div className="lg:grid lg:grid-cols-[220px_minmax(0,1fr)_minmax(320px,360px)] lg:gap-8 lg:px-6 lg:pt-6">
+                {/* ── Left rail (desktop) ─────────────────────────── */}
+                <aside className="hidden lg:block">
+                    <div className="sticky top-22 space-y-6">
+                        <CategoryRail sections={navSections} active={activeCat} onSelect={jumpTo} />
+                        <StoreCard store={store} />
+                    </div>
+                </aside>
+
+                {/* ── Centre ───────────────────────────────────────── */}
+                <div className="min-w-0">
+                    <StatusStrip isOpen={isOpen} status={store.status} activeOrder={activeOrder} />
+                    <Hero customer={customer} store={store} />
+                    <PromoRail promos={storefrontPromos} className="mt-7" />
+
+                    {/* Sticky search + chips */}
+                    <div ref={toolbarRef} className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-30 mt-6 bg-shop-bg/95 backdrop-blur-md lg:top-16 lg:pt-2">
+                        <div className="px-4 pt-2 lg:px-0 lg:pt-0">
+                            <label className="relative block">
+                                <span className="sr-only">Search the menu</span>
+                                <Search className="pointer-events-none absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-shop-muted" />
+                                <input
+                                    type="search"
+                                    value={query}
+                                    onChange={(e) => setQuery(e.target.value)}
+                                    placeholder="Search burgers, frappes, sulit meals…"
+                                    className="h-12 w-full rounded-2xl border border-shop-line bg-shop-surface pr-12 pl-12 text-base text-shop-ink shadow-shop-sm outline-none placeholder:text-shop-muted/80 focus:border-shop-accent focus:ring-4 focus:ring-shop-accent/15"
+                                />
+                                {query && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setQuery('')}
+                                        className="absolute top-1/2 right-2 flex h-9 w-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full hover:bg-shop-sunken"
+                                        aria-label="Clear search"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                )}
+                            </label>
+                        </div>
+                        <div className="lg:hidden">
+                            <CategoryChips sections={navSections} active={activeCat} onSelect={jumpTo} />
+                        </div>
+                        <div className="h-px bg-shop-line lg:mt-3" />
+                    </div>
+
+                    {/* Menu */}
+                    <div className="px-4 lg:px-0">
+                        {sections.length === 0 && (
+                            <div className="flex flex-col items-center py-20 text-center">
+                                <Search className="h-8 w-8 text-shop-muted" />
+                                <p className="font-display mt-3 text-xl font-semibold">{products.length === 0 ? 'The menu is being updated' : `Nothing matches “${query}”`}</p>
+                                <p className="mt-1 text-sm text-shop-muted">{products.length === 0 ? 'Please check back in a little while.' : 'Try “burger”, “frappe” or “meal”.'}</p>
+                                {query && (
+                                    <button type="button" onClick={() => setQuery('')} className="mt-4 cursor-pointer text-sm font-semibold text-shop-accent-ink underline underline-offset-4">
+                                        Clear search
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                        {sections.map((s) => (
+                            <section
+                                key={s.id}
+                                data-cat={s.id}
+                                aria-labelledby={`cat-${s.id}`}
+                                ref={(el) => {
+                                    sectionRefs.current[s.id] = el;
+                                }}
+                                className="pt-8"
+                            >
+                                <div className="mb-3 flex items-baseline justify-between">
+                                    <h2 id={`cat-${s.id}`} className="font-display text-2xl font-bold">
+                                        {s.name}
+                                    </h2>
+                                    <span className="text-sm text-shop-muted tabular-nums">{s.items.length} items</span>
+                                </div>
+                                <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
+                                    {s.items.map((p) => (
+                                        <ProductCard
+                                            key={p.id}
+                                            product={p}
+                                            baseQty={qtyByProduct.base[p.id] ?? 0}
+                                            totalQty={qtyByProduct.total[p.id] ?? 0}
+                                            disabled={!isOpen && !!customer}
+                                            onOpen={() => openProduct(p)}
+                                            onQuickAdd={() => quickAdd(p)}
+                                            onQuickRemove={() => quickRemove(p)}
+                                        />
+                                    ))}
+                                </div>
+                            </section>
+                        ))}
+
+                        <div className="mt-12 lg:hidden">
+                            <StoreCard store={store} />
+                        </div>
+                        {loyaltyRules.enabled && <RewardsTeaser customer={customer} rules={loyaltyRules} onJoin={() => requireAuth('register')} />}
+                        <footer className="mt-10 flex flex-wrap items-center justify-between gap-2 border-t border-shop-line py-6 text-xs text-shop-muted">
+                            <span>© {new Date().getFullYear()} Boundary Café · Taste of Negros</span>
+                            <Link href="/login" className="underline underline-offset-4 hover:text-shop-ink">
+                                Staff login
+                            </Link>
+                        </footer>
+                    </div>
+                </div>
+
+                {/* ── Right rail: persistent cart (desktop) ───────── */}
+                <aside className="hidden lg:block" aria-label="Your order">
+                    <div className="sticky top-22 h-[calc(100dvh-112px)]">
+                        <CartPanel {...panelProps} variant="rail" />
+                    </div>
+                </aside>
+            </div>
+
+            {/* ── Floating cart bar (phones & tablets) ───────────── */}
+            {cart.count > 0 && !isDesktop && (
+                <div className="fixed inset-x-0 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-30 px-4">
+                    <button
+                        type="button"
+                        onClick={() => setCartOpen(true)}
+                        className="bc-press bc-slide-up mx-auto flex h-14 w-full max-w-lg cursor-pointer items-center justify-between gap-3 rounded-2xl bg-shop-ink px-3 pr-4 text-shop-bg shadow-shop-lg"
+                        aria-label={`View order: ${cart.count} items`}
+                    >
+                        <span className="flex items-center gap-3">
+                            <span key={cart.count} className="bc-bump flex h-9 min-w-9 items-center justify-center rounded-xl bg-shop-accent px-2 text-sm font-bold text-shop-on-accent tabular-nums">
+                                {cart.count}
+                            </span>
+                            <span className="text-base font-semibold">View order</span>
+                        </span>
+                        <span className="flex items-center gap-1.5 text-base font-bold">
+                            <Price value={cart.subtotal} />
+                            <ChevronRight className="h-5 w-5 opacity-70" />
+                        </span>
+                    </button>
+                </div>
+            )}
+
+            <ProductDetail
+                product={selected}
+                open={detailOpen}
+                onOpenChange={setDetailOpen}
+                disabled={!isOpen}
+                disabledReason="Closed for online orders"
+                onAdd={(line) => {
+                    cart.add(line);
+                    toast.success(`Added ${line.quantity} × ${line.name}`);
+                }}
+            />
+            {!isDesktop && <CartSheet open={cartOpen} onOpenChange={setCartOpen} {...panelProps} />}
+        </>
+    );
+}
+
+function StatusStrip({ isOpen, status, activeOrder }: { isOpen: boolean; status: StoreStatus; activeOrder: PageProps['activeOrder'] }) {
+    if (activeOrder) {
+        return (
+            <div className="px-4 pt-4 lg:px-0 lg:pt-0 lg:pb-4">
+                <Link
+                    href={`/account/orders/${activeOrder.order_number}`}
+                    className="bc-press flex items-center gap-3 rounded-2xl bg-shop-navy p-3 pr-4 text-shop-navy-ink shadow-shop-md"
+                >
+                    <span className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-white/15">
+                        <span className="bc-pulse absolute inset-2.5 rounded-full text-shop-accent" />
+                        <span className="relative h-2.5 w-2.5 rounded-full bg-shop-accent" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                        <p className="text-xs opacity-80">Order {activeOrder.order_number}</p>
+                        <p className="truncate font-semibold">{activeOrder.status_label} · track it live</p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 opacity-80" />
+                </Link>
+            </div>
+        );
+    }
+    if (!isOpen) {
+        return (
+            <div className="px-4 pt-4 lg:px-0 lg:pt-0 lg:pb-4">
+                <div className="flex items-start gap-3 rounded-2xl bg-shop-warning-soft p-4 text-shop-warning" role="status">
+                    <Store className="mt-0.5 h-5 w-5 shrink-0" />
+                    <div>
+                        <p className="font-semibold">Closed for online orders</p>
+                        <p className="text-sm">
+                            {status.message ?? `We open at ${status.opens_at}.`} Browse now and order when we open.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+    return null;
+}
+
+function Hero({ customer, store }: { customer: CustomerSession | null; store: PageProps['store'] }) {
+    const s = store.settings;
+    const eta = `${s.prep_minutes + s.delivery_minutes}–${s.prep_minutes + s.delivery_minutes + 15} min`;
+    return (
+        <section className="px-4 pt-4 lg:px-0 lg:pt-0" aria-label="Welcome">
+            <div className="relative overflow-hidden rounded-[28px] bg-shop-surface p-5 shadow-shop-sm ring-1 ring-shop-line sm:p-7">
+                <div className="relative z-10 max-w-[64%] sm:max-w-[58%]">
+                    <p className="text-sm font-medium text-shop-accent-ink">{customer ? `Magandang araw, ${customer.first_name}!` : 'Boundary Café · Mabinay'}</p>
+                    <h1 className="font-display mt-1.5 text-[clamp(1.45rem,4.6vw,2.6rem)] leading-[1.06] font-bold text-balance">
+                        {customer ? 'What’s your Boundary order today?' : 'Boundary favourites, delivered in Mabinay.'}
+                    </h1>
+                    <div className="mt-3.5 flex flex-wrap gap-1.5 sm:mt-4 sm:gap-2">
+                        <Pill>
+                            <Clock3 className="h-3.5 w-3.5" /> {eta}
+                        </Pill>
+                        <Pill className="hidden sm:inline-flex">
+                            {s.delivery_fee > 0 ? (
+                                <>
+                                    Delivery ₱{s.delivery_fee}
+                                    {s.free_delivery_min > 0 ? ` · free from ₱${s.free_delivery_min}` : ''}
+                                </>
+                            ) : (
+                                'Free delivery'
+                            )}
+                        </Pill>
+                        {store.status.is_open && (
+                            <Pill tone="success">
+                                <span className="h-1.5 w-1.5 rounded-full bg-current" /> Open until {store.status.closes_at}
+                            </Pill>
+                        )}
+                    </div>
+                </div>
+                {/* Photo: a plate breaking out past the card edge */}
+                <div className="absolute top-1/2 -right-12 h-40 w-40 -translate-y-1/2 sm:-right-6 sm:h-65 sm:w-65 lg:h-70 lg:w-70">
+                    <img
+                        src="/uploads/optimized/boundary_burger.webp"
+                        alt=""
+                        fetchPriority="high"
+                        className="h-full w-full rounded-full object-cover object-[50%_42%] shadow-shop-lg ring-8 ring-shop-bg"
+                    />
+                    <img
+                        src="/uploads/optimized/strawberry_sparkle.webp"
+                        alt=""
+                        className="absolute -bottom-2 left-0 hidden h-24 w-24 rounded-full object-cover shadow-shop-md ring-4 ring-shop-bg sm:block"
+                    />
+                </div>
+                <RouteLine className="relative z-10 mt-4 max-w-[60%] sm:mt-5 sm:max-w-[52%]" />
+                <p className="relative z-10 mt-1 max-w-[60%] text-[10px] font-medium tracking-[0.14em] text-shop-muted uppercase sm:max-w-[52%] sm:text-[11px]">Tagukon → Mabinay</p>
+            </div>
+        </section>
+    );
+}
+
+function StoreCard({ store }: { store: PageProps['store'] }) {
+    return (
+        <div className="rounded-[22px] bg-shop-surface p-4 ring-1 ring-shop-line">
+            <p className="font-display font-semibold">{store.branch?.name ?? 'Boundary Café – Mabinay'}</p>
+            <p className="mt-0.5 text-sm text-shop-muted">{store.branch?.address ?? 'Mabinay, Negros Oriental'}</p>
+            <ul className="mt-3 space-y-1.5 text-sm">
+                <li className="flex items-center gap-2">
+                    <Clock3 className="h-4 w-4 text-shop-muted" /> {store.status.opens_at} – {store.status.closes_at}
+                </li>
+                <li className="flex items-center gap-2">
+                    <ShoppingBag className="h-4 w-4 text-shop-muted" /> Min. order ₱{store.settings.min_order} · COD or pay at pickup
+                </li>
+                {store.branch?.phone && (
+                    <li className="flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-shop-muted" />
+                        <a href={`tel:${store.branch.phone}`} className="font-semibold text-shop-accent-ink">
+                            {store.branch.phone}
+                        </a>
+                    </li>
+                )}
+            </ul>
         </div>
     );
 }
 
-export default function Landing() {
-    const [menuOpen, setMenuOpen] = useState(false);
-    const [activeMenu, setActiveMenu] = useState(0);
-    const [activeSection, setActiveSection] = useState<ScrollSectionHref>('#home');
-    const pageRef = useRef<HTMLDivElement>(null);
-    const headerRef = useRef<HTMLElement>(null);
-    const heroRef = useRef<HTMLElement>(null);
-    const year = new Date().getFullYear();
-    const currentGroup = menuGroups[activeMenu];
-
-    const handleMenuKey = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
-        let nextIndex = index;
-        if (event.key === 'ArrowRight') nextIndex = (index + 1) % menuGroups.length;
-        if (event.key === 'ArrowLeft') nextIndex = (index - 1 + menuGroups.length) % menuGroups.length;
-        if (event.key === 'Home') nextIndex = 0;
-        if (event.key === 'End') nextIndex = menuGroups.length - 1;
-        if (nextIndex === index) return;
-
-        event.preventDefault();
-        setActiveMenu(nextIndex);
-        window.requestAnimationFrame(() => document.getElementById(`menu-tab-${nextIndex}`)?.focus());
-    };
-
-    useEffect(() => {
-        const onEscape = (event: KeyboardEvent) => event.key === 'Escape' && setMenuOpen(false);
-        window.addEventListener('keydown', onEscape);
-        document.body.style.overflow = menuOpen ? 'hidden' : '';
-        return () => {
-            window.removeEventListener('keydown', onEscape);
-            document.body.style.overflow = '';
-        };
-    }, [menuOpen]);
-
-    useEffect(() => {
-        const page = pageRef.current;
-        const header = headerRef.current;
-        const hero = heroRef.current;
-        const parallaxSections = Array.from(document.querySelectorAll<HTMLElement>('[data-parallax]'));
-        const sections = scrollNavigation
-            .map(([, href]) => document.querySelector<HTMLElement>(href))
-            .filter((section): section is HTMLElement => Boolean(section));
-        const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        let frame = 0;
-
-        const updateScrollState = () => {
-            frame = 0;
-            const scrollTop = window.scrollY;
-            const scrollable = Math.max(document.documentElement.scrollHeight - window.innerHeight, 1);
-            const progress = Math.min(Math.max(scrollTop / scrollable, 0), 1);
-            const readingLine = scrollTop + window.innerHeight * 0.36;
-            let nextSection: ScrollSectionHref = '#home';
-
-            sections.forEach((section) => {
-                if (section.offsetTop <= readingLine) nextSection = `#${section.id}` as ScrollSectionHref;
-            });
-
-            if (window.innerHeight + scrollTop >= document.documentElement.scrollHeight - 4) {
-                nextSection = '#branches';
-            }
-
-            setActiveSection((current) => (current === nextSection ? current : nextSection));
-            header?.classList.toggle('is-scrolled', scrollTop > 24);
-            page?.style.setProperty('--bc-scroll-progress', String(progress));
-
-            if (!reducedMotion && hero) {
-                const heroProgress = Math.min(Math.max(scrollTop / Math.max(hero.offsetHeight, 1), 0), 1);
-                hero.style.setProperty('--bc-hero-shift', `${heroProgress * 5.5}rem`);
-                hero.style.setProperty('--bc-hero-copy-shift', `${heroProgress * 2.25}rem`);
-                hero.style.setProperty('--bc-hero-copy-opacity', String(1 - heroProgress * 0.72));
-
-                parallaxSections.forEach((section) => {
-                    const bounds = section.getBoundingClientRect();
-                    const sectionCenter = bounds.top + bounds.height / 2;
-                    const viewportCenter = window.innerHeight / 2;
-                    const distance = Math.max(-1, Math.min(1, (viewportCenter - sectionCenter) / window.innerHeight));
-                    const speed = Number(section.dataset.parallaxSpeed ?? 24);
-                    section.style.setProperty('--bc-parallax-shift', `${distance * speed}px`);
-                });
-            }
-        };
-
-        const requestUpdate = () => {
-            if (!frame) frame = window.requestAnimationFrame(updateScrollState);
-        };
-
-        updateScrollState();
-        window.addEventListener('scroll', requestUpdate, { passive: true });
-        window.addEventListener('resize', requestUpdate);
-        return () => {
-            if (frame) window.cancelAnimationFrame(frame);
-            window.removeEventListener('scroll', requestUpdate);
-            window.removeEventListener('resize', requestUpdate);
-        };
-    }, []);
-
-    useEffect(() => {
-        const nodes = document.querySelectorAll<HTMLElement>('.bc-reveal');
-        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-            nodes.forEach((node) => node.classList.add('is-visible'));
-            return;
-        }
-        const observer = new IntersectionObserver(
-            (entries) => {
-                entries.forEach((entry) => {
-                    if (entry.isIntersecting) {
-                        entry.target.classList.add('is-visible');
-                        observer.unobserve(entry.target);
-                    }
-                });
-            },
-            { rootMargin: '0px 0px -8% 0px', threshold: 0.08 },
-        );
-        nodes.forEach((node) => observer.observe(node));
-        return () => observer.disconnect();
-    }, [activeMenu]);
-
+function RewardsTeaser({ customer, rules, onJoin }: { customer: CustomerSession | null; rules: PageProps['loyaltyRules']; onJoin: () => void }) {
     return (
-        <>
-            <Head title="Boundary Café | Taste of Negros">
-                <meta
-                    name="description"
-                    content="Discover Boundary Café—comforting meals, handcrafted drinks, burgers, frappes, and a genuine Taste of Negros."
-                />
-                <meta property="og:title" content="Boundary Café | Taste of Negros" />
-                <meta property="og:description" content="Good food, great drinks, and better days at Boundary Café." />
-                <meta property="og:image" content="/uploads/banner.png" />
-                <meta name="theme-color" content="#062581" />
-                <link rel="preload" as="image" href="/uploads/optimized/banner.webp" />
-            </Head>
-
-            <div ref={pageRef} className="bc-page">
-                <a href="#main-content" className="bc-skip-link">
-                    Skip to content
-                </a>
-                <header ref={headerRef} className="bc-header">
-                    <div className="bc-shell bc-header-inner">
-                        <a href="#home" aria-label="Boundary Café home" className="bc-focus">
-                            <Brand />
-                        </a>
-                        <nav className="bc-desktop-nav" aria-label="Primary navigation">
-                            {navigation.map(([label, href]) => (
-                                <a key={href} href={href} aria-current={activeSection === href ? 'location' : undefined}>
-                                    {label}
-                                </a>
-                            ))}
-                        </nav>
-                        <a href="#branches" className="bc-button bc-button-primary bc-header-cta">
-                            Find a café <ArrowRight size={16} aria-hidden="true" />
-                        </a>
-                        <button
-                            type="button"
-                            className="bc-menu-button"
-                            aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}
-                            aria-expanded={menuOpen}
-                            aria-controls="mobile-navigation"
-                            onClick={() => setMenuOpen((open) => !open)}
-                        >
-                            {menuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
-                        </button>
-                    </div>
-                    {menuOpen && (
-                        <nav id="mobile-navigation" className="bc-mobile-nav" aria-label="Mobile navigation">
-                            <div className="bc-shell">
-                                {navigation.map(([label, href], index) => (
-                                    <a
-                                        key={href}
-                                        href={href}
-                                        aria-current={activeSection === href ? 'location' : undefined}
-                                        onClick={() => setMenuOpen(false)}
-                                    >
-                                        <span>0{index + 1}</span>
-                                        {label}
-                                        <ChevronRight aria-hidden="true" />
-                                    </a>
-                                ))}
-                            </div>
-                        </nav>
-                    )}
-                </header>
-
-                <main id="main-content">
-                    <section ref={heroRef} id="home" className="bc-hero">
-                        <div className="bc-hero-background" aria-hidden="true">
-                            <img src="/uploads/optimized/banner.webp" alt="" width="2048" height="768" fetchPriority="high" />
-                        </div>
-                        <div className="bc-hero-overlay" aria-hidden="true" />
-                        <div className="bc-shell bc-hero-grid">
-                            <div className="bc-hero-copy bc-reveal">
-                                <p className="bc-eyebrow">A café between destinations</p>
-                                <h1>
-                                    Good food,
-                                    <br />
-                                    <em>better days.</em>
-                                </h1>
-                                <p className="bc-hero-lede">
-                                    Familiar comfort, refreshing drinks, and the warm local spirit of Negros—served at the Boundary.
-                                </p>
-                                <div className="bc-actions">
-                                    <a href="#menu" className="bc-button bc-button-primary">
-                                        Explore the menu <ArrowRight size={17} aria-hidden="true" />
-                                    </a>
-                                    <a href="#branches" className="bc-button bc-button-secondary">
-                                        <MapPin size={17} aria-hidden="true" /> Visit us
-                                    </a>
-                                </div>
-                                <div className="bc-hero-note">
-                                    <span className="bc-note-line" aria-hidden="true" />
-                                    <span>Tagukon · Mabinay</span>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <div className="bc-local-strip" aria-label="Boundary Café highlights">
-                        <div className="bc-shell">
-                            <span>Comfort on a plate</span>
-                            <i aria-hidden="true" />
-                            <span>Drinks worth the stop</span>
-                            <i aria-hidden="true" />
-                            <span>Two sides of Negros</span>
-                        </div>
-                    </div>
-
-                    <section id="menu" className="bc-section bc-menu-section">
-                        <div className="bc-shell">
-                            <div className="bc-menu-heading-row">
-                                <SectionIntro
-                                    eyebrow="From our kitchen"
-                                    title="A menu made for the moment."
-                                    copy="From quick road-trip stops to slow afternoons with friends, there is always something good waiting."
-                                />
-                                <p className="bc-menu-aside">Fresh favorites, generous servings, and flavors that feel close to home.</p>
-                            </div>
-                            <div className="bc-featured-grid bc-reveal">
-                                <article className="bc-featured-card bc-featured-large" data-parallax data-parallax-speed="18">
-                                    <img src="/uploads/optimized/fiesta_meal_a.webp" alt="Fiesta Meal A" width="1254" height="1254" loading="lazy" />
-                                    <div>
-                                        <span>All-day comfort</span>
-                                        <h3>Fiesta Meal A</h3>
-                                    </div>
-                                </article>
-                                <article className="bc-featured-card" data-parallax data-parallax-speed="12">
-                                    <img src="/uploads/optimized/matcha_latte.webp" alt="Matcha Latte" width="1254" height="1254" loading="lazy" />
-                                    <div>
-                                        <span>Cool & creamy</span>
-                                        <h3>Matcha Latte</h3>
-                                    </div>
-                                </article>
-                                <article className="bc-featured-quote">
-                                    <Quote size={24} aria-hidden="true" />
-                                    <p>Big comfort, bright drinks, and no need to rush.</p>
-                                    <span>That is the Boundary way.</span>
-                                </article>
-                            </div>
-
-                            <div className="bc-menu-browser bc-reveal">
-                                <div className="bc-menu-tabs" role="tablist" aria-label="Menu categories">
-                                    {menuGroups.map((group, index) => (
-                                        <button
-                                            key={group.label}
-                                            id={`menu-tab-${index}`}
-                                            type="button"
-                                            role="tab"
-                                            aria-selected={activeMenu === index}
-                                            aria-controls="menu-panel"
-                                            tabIndex={activeMenu === index ? 0 : -1}
-                                            onClick={() => setActiveMenu(index)}
-                                            onKeyDown={(event) => handleMenuKey(event, index)}
-                                        >
-                                            <span>0{index + 1}</span>
-                                            {group.label}
-                                        </button>
-                                    ))}
-                                </div>
-                                <div
-                                    key={activeMenu}
-                                    id="menu-panel"
-                                    className="bc-menu-panel bc-panel-enter"
-                                    role="tabpanel"
-                                    aria-labelledby={`menu-tab-${activeMenu}`}
-                                >
-                                    <div className="bc-menu-panel-heading">
-                                        <p>{currentGroup.intro}</p>
-                                        <span>{currentGroup.items.length} favorites</span>
-                                    </div>
-                                    <div className="bc-menu-items">
-                                        {currentGroup.items.map((item) => (
-                                            <article key={item.name} className="bc-menu-item">
-                                                <img src={item.image} alt="" width="1254" height="1254" loading="lazy" />
-                                                <div>
-                                                    <h3>{item.name}</h3>
-                                                    <p>{item.note}</p>
-                                                </div>
-                                                <ArrowRight size={17} aria-hidden="true" />
-                                            </article>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section id="story" className="bc-story">
-                        <div className="bc-shell bc-story-grid">
-                            <div className="bc-story-image bc-reveal bc-reveal-left" data-parallax data-parallax-speed="20">
-                                <img src="/uploads/optimized/logo.webp" alt="Boundary Café logo" width="512" height="512" loading="lazy" />
-                            </div>
-                            <div className="bc-story-copy bc-reveal bc-reveal-right">
-                                <p className="bc-eyebrow">Our story</p>
-                                <h2>More than a stop. Part of the journey.</h2>
-                                <p>
-                                    Boundary Café brings together the food we crave, the drinks that cool the day, and the places that make Negros
-                                    feel like home.
-                                </p>
-                                <p>
-                                    Rooted between Tagukon and Mabinay, we are a place to pause, gather, and leave a little happier than you arrived.
-                                </p>
-                                <div className="bc-story-signoff">
-                                    <span>Taste of Negros</span>
-                                    <strong>Dine · Eat · Relax</strong>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section id="gallery" className="bc-section bc-gallery-section">
-                        <div className="bc-shell">
-                            <div className="bc-gallery-heading">
-                                <SectionIntro
-                                    eyebrow="From our table"
-                                    title="Made to be savored."
-                                    copy="A closer look at the comfort food and colorful drinks waiting at Boundary Café."
-                                />
-                                <Instagram size={28} aria-hidden="true" />
-                            </div>
-                            <div className="bc-gallery-grid bc-reveal" data-parallax data-parallax-speed="14">
-                                {gallery.map((image) => (
-                                    <figure key={image.src} className={image.className}>
-                                        <img src={image.src} alt={image.alt} width="1254" height="1254" loading="lazy" />
-                                        <figcaption>{image.alt}</figcaption>
-                                    </figure>
-                                ))}
-                            </div>
-                        </div>
-                    </section>
-
-                    <section id="branches" className="bc-branches">
-                        <div className="bc-shell bc-branches-grid">
-                            <div className="bc-branches-copy bc-reveal">
-                                <p className="bc-eyebrow">Meet us at the Boundary</p>
-                                <h2>Two places to pause across Negros.</h2>
-                                <p>Come hungry, bring good company, and stay awhile.</p>
-                                <div className="bc-hours">
-                                    <Clock3 size={19} aria-hidden="true" />
-                                    <span>
-                                        <strong>Open daily</strong>Check Google Maps for today’s hours
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="bc-branch-list bc-reveal">
-                                {branches.map((branch) => (
-                                    <a key={branch.name} href={branch.mapUrl} target="_blank" rel="noreferrer" className="bc-branch-card">
-                                        <span className="bc-branch-number">{branch.number}</span>
-                                        <div>
-                                            <p>Boundary Café</p>
-                                            <h3>{branch.name}</h3>
-                                            <span>{branch.region}</span>
-                                            <small>{branch.note}</small>
-                                        </div>
-                                        <Navigation aria-hidden="true" />
-                                    </a>
-                                ))}
-                            </div>
-                        </div>
-                    </section>
-                </main>
-
-                <footer className="bc-footer">
-                    <div className="bc-shell">
-                        <div className="bc-footer-main">
-                            <Brand />
-                            <p>Good food, great drinks, and better days at the Boundary.</p>
-                            <nav aria-label="Footer navigation">
-                                {navigation.map(([label, href]) => (
-                                    <a key={href} href={href} aria-current={activeSection === href ? 'location' : undefined}>
-                                        {label}
-                                    </a>
-                                ))}
-                            </nav>
-                        </div>
-                        <div className="bc-footer-meta">
-                            <p>© {year} Boundary Café. All rights reserved.</p>
-                            <p>Tagukon · Mabinay · Negros</p>
-                        </div>
-                    </div>
-                </footer>
+        <section className="relative mt-4 overflow-hidden rounded-[26px] bg-shop-navy p-6 text-shop-navy-ink">
+            <div className="relative z-10 max-w-md">
+                <p className="flex items-center gap-2 text-sm font-semibold text-white/80">
+                    <Gift className="h-4 w-4" /> Boundary Rewards
+                </p>
+                <p className="font-display mt-2 text-2xl leading-tight font-bold">1 point for every ₱{rules.spend_per_point}. Delivery, pickup or dine-in.</p>
+                <p className="mt-2 text-sm text-white/75">
+                    Use points as cash at checkout{rules.birthday_bonus > 0 ? `, plus ${rules.birthday_bonus} bonus points in your birthday month` : ''}.
+                </p>
+                {customer ? (
+                    <Link href="/account/rewards" className="bc-press mt-4 inline-flex h-11 items-center rounded-xl bg-white px-4 text-sm font-semibold text-shop-navy">
+                        {customer.loyalty_points.toLocaleString()} points · open my card
+                    </Link>
+                ) : (
+                    <button type="button" onClick={onJoin} className="bc-press mt-4 inline-flex h-11 cursor-pointer items-center rounded-xl bg-shop-accent px-4 text-sm font-semibold text-shop-on-accent">
+                        Join free
+                    </button>
+                )}
             </div>
-        </>
+            <svg viewBox="0 0 320 40" className="pointer-events-none absolute -right-10 bottom-6 w-[70%] opacity-40" aria-hidden>
+                <path d="M4 30 C 34 30, 40 8, 74 10 S 112 34, 146 26 S 196 4, 236 14 S 280 34, 316 18" fill="none" stroke="#ff6a1f" strokeWidth="2.5" strokeDasharray="1.5 6" strokeLinecap="round" />
+            </svg>
+        </section>
     );
 }
+

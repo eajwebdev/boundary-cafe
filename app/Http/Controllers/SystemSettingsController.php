@@ -90,6 +90,9 @@ class SystemSettingsController extends Controller
             // Also guard by key prefix for old rows that were saved with group = null.
             if (in_array($group, self::SUPER_ADMIN_ONLY_GROUPS) || str_starts_with($key, 'modules.')) continue;
 
+            // Online ordering (menu 43) and loyalty (menu 44) have their own dedicated pages.
+            if (in_array($group, ['online', 'loyalty'], true)) continue;
+
             // When an admin is in global scope (no branch selected), only show
             // the groups they are allowed to configure globally
             if (! $isSuper && ! $branchId && ! in_array($group, self::ADMIN_GLOBAL_GROUPS)) continue;

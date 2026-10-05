@@ -47,4 +47,12 @@ export default defineConfig({
     esbuild: {
         jsx: 'automatic',
     },
+    // The map components are lazy-loaded; pre-bundle them up front and force a single
+    // React copy so react-leaflet never ends up with its own React in dev ("Invalid hook call").
+    optimizeDeps: {
+        include: ['leaflet', 'react-leaflet'],
+    },
+    resolve: {
+        dedupe: ['react', 'react-dom'],
+    },
 });

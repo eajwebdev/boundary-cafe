@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { Link, Head, router, usePage } from '@inertiajs/react';
 
 import {
@@ -68,8 +68,12 @@ import {
     ArrowLeftRight,
     Warehouse,
     ClipboardCheck,
-    BookImage,
-    Wrench,
+    Bike,
+    Utensils,
+    MapPinned,
+    Gift,
+    Armchair,
+    Store,
 } from 'lucide-react';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -92,7 +96,6 @@ const MENU = {
     DASHBOARD: '1',
     POS: '2',
     SALES_HISTORY: '3',
-    SHOP_ORDERS: '5',
     PRODUCTS: '6',
     CATEGORIES: '7',
     VARIANTS: '8',
@@ -120,12 +123,37 @@ const MENU = {
     STOCK_ADJUSTMENTS: '31',
     INVENTORY: '33',
     STOCK_TRANSFERS: '34',
-    WAREHOUSES: '35',
     STOCK_COUNT: '36',
-    BROCHURE: '37',
-    SERVICES: '38',
     CUSTOMERS: '39',
+    ONLINE_ORDERS: '40',
+    TABLE_ORDERING: '41',
+    DINING_TABLES: '42',
+    DELIVERY_ZONE: '43',
+    LOYALTY_PROGRAM: '44',
 } as const;
+
+/** Polls the number of new (pending) online orders for the sidebar badge. */
+function usePendingOnlineCount(enabled: boolean) {
+    const [count, setCount] = useState(0);
+    useEffect(() => {
+        if (!enabled) return;
+        let timer: number | undefined;
+        const tick = async () => {
+            if (document.visibilityState === 'visible') {
+                try {
+                    const res = await fetch('/online-orders/pending-count', { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+                    if (res.ok) setCount((await res.json()).pending ?? 0);
+                } catch {
+                    /* offline — keep last value */
+                }
+            }
+            timer = window.setTimeout(tick, 30000);
+        };
+        tick();
+        return () => window.clearTimeout(timer);
+    }, [enabled]);
+    return count;
+}
 
 // ─── Sidebar section header ───────────────────────────────────────────────────
 function SidebarSectionLabel({ label }: { label: string }) {
@@ -143,12 +171,14 @@ function NavItem({
     label,
     active,
     tooltip,
+    badge,
 }: {
     href: string;
     icon: React.ElementType;
     label: string;
     active: boolean;
     tooltip?: string;
+    badge?: number;
 }) {
     return (
         <SidebarMenuItem>
@@ -164,6 +194,11 @@ function NavItem({
                 <Link href={href}>
                     <Icon className="h-4 w-4 shrink-0" />
                     <span>{label}</span>
+                    {!!badge && badge > 0 && (
+                        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-black text-white group-data-[collapsible=icon]:hidden">
+                            {badge}
+                        </span>
+                    )}
                 </Link>
             </SidebarMenuButton>
         </SidebarMenuItem>
@@ -222,12 +257,13 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
     const appIcon = props.app?.icon_url || appLogo || '/uploads/logo.png';
 
     const currentPath = usePage().url.split('?')[0].replace(/\/$/, '');
+    const pendingOnline = usePendingOnlineCount(((props.auth?.user?.access ?? []) as string[]).includes('40'));
     const isPosPage = currentPath === '/pos' || currentPath.startsWith('/pos');
 
     // Touch-oriented layouts use the compact cashier navigation on other pages.
     // On /pos, always maintain the full SimSoft POS register interface!
     const posLayout = props.auth?.user?.pos_layout ?? 'grid';
-    const BOTTOM_NAV_LAYOUTS = ['tablet', 'grocery', 'cafe', 'salon'];
+    const BOTTOM_NAV_LAYOUTS = ['tablet', 'cafe'];
     if (BOTTOM_NAV_LAYOUTS.includes(posLayout) && !isPosPage) {
         return <CashierLayout>{children}</CashierLayout>;
     }
@@ -277,14 +313,13 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
         '/stock-adjustments',
         '/inventory',
         '/stock-transfers',
-        '/warehouses',
     ].some(isActive);
     // Cash group active
     const cashActive = ['/cash-sessions', '/cash-counts', '/petty-cash', '/expenses'].some(isActive);
     // Reports group active
     const reportsActive = ['/reports', '/logs', '/stock-adjustments'].some(isActive);
     // Management group active
-    const managementActive = ['/users', '/suppliers', '/branches', '/settings'].some(isActive);
+    const managementActive = ['/users', '/suppliers', '/branches', '/settings', '/dining-tables', '/delivery-zone'].some(isActive);
 
     return (
         <SidebarProvider key={isPosPage ? 'sidebar-pos' : 'sidebar-main'} defaultOpen={shouldOpen} forceDesktop={isPosPage}>
@@ -302,7 +337,7 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
                             <SidebarMenuItem>
                                 <SidebarMenuButton size="lg" asChild>
                                     <Link href={has(MENU.DASHBOARD) ? routes.dashboard() : routes.pos.index()}>
-                                        <div className="flex aspect-square size-8 items-center justify-center overflow-hidden rounded-lg border border-white/15 bg-sidebar-accent p-1 text-sidebar-accent-foreground shadow-xs">
+                                        <div className="flex aspect-square size-8 items-center justify-center overflow-hidden rounded-lg bg-white p-0.5 shadow-xs ring-1 ring-white/20">
                                             <img src={appIcon} alt={appName} className="h-full w-full object-contain" />
                                         </div>
                                         <div className="grid flex-1 text-left text-sm leading-tight">
@@ -331,12 +366,24 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
                                     )}
 
                                     {/* ── SALES ─────────────────────────── */}
-                                    {(has(MENU.POS) || has(MENU.SALES_HISTORY) || has(MENU.PROMOS) || has(MENU.CUSTOMERS)) && (
+                                    {(has(MENU.POS) ||
+                                        has(MENU.SALES_HISTORY) ||
+                                        has(MENU.PROMOS) ||
+                                        has(MENU.CUSTOMERS) ||
+                                        has(MENU.ONLINE_ORDERS) ||
+                                        has(MENU.TABLE_ORDERING) ||
+                                        has(MENU.LOYALTY_PROGRAM)) && (
                                         <>
                                             <SidebarSectionLabel label="Sales" />
 
                                             {has(MENU.POS) && (
                                                 <NavItem href="/pos" icon={ShoppingCart} label="POS / Cashier" active={isActive('/pos')} />
+                                            )}
+                                            {has(MENU.ONLINE_ORDERS) && (
+                                                <NavItem href="/online-orders" icon={Bike} label="Online Orders" active={isActive('/online-orders')} badge={pendingOnline} />
+                                            )}
+                                            {has(MENU.TABLE_ORDERING) && (
+                                                <NavItem href="/tables" icon={Utensils} label="Table Ordering" active={isActive('/tables')} />
                                             )}
                                             {has(MENU.SALES_HISTORY) && (
                                                 <NavItem
@@ -351,6 +398,9 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
                                             )}
                                             {has(MENU.CUSTOMERS) && (
                                                 <NavItem href="/customers" icon={Users} label="Customers" active={isActive('/customers')} />
+                                            )}
+                                            {has(MENU.LOYALTY_PROGRAM) && (
+                                                <NavItem href="/loyalty-program" icon={Gift} label="Loyalty Program" active={isActive('/loyalty-program')} />
                                             )}
                                         </>
                                     )}
@@ -479,6 +529,8 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
                                         has(MENU.SUPPLIERS) ||
                                         has(MENU.BRANCHES) ||
                                         has(MENU.EXPENSE_CATEGORIES) ||
+                                        has(MENU.DINING_TABLES) ||
+                                        has(MENU.DELIVERY_ZONE) ||
                                         has(MENU.SYSTEM_SETTINGS)) && (
                                         <>
                                             <SidebarSectionLabel label="Management" />
@@ -498,9 +550,16 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
                                                     active={isActive('/expense-categories')}
                                                 />
                                             )}
+                                            {has(MENU.DINING_TABLES) && (
+                                                <NavItem href="/dining-tables" icon={Armchair} label="Dining Tables" active={isActive('/dining-tables')} />
+                                            )}
+                                            {has(MENU.DELIVERY_ZONE) && (
+                                                <NavItem href="/delivery-zone" icon={MapPinned} label="Delivery Zone" active={isActive('/delivery-zone')} />
+                                            )}
                                             {has(MENU.SYSTEM_SETTINGS) && (
                                                 <NavItem href="/settings" icon={Settings} label="System Settings" active={isActive('/settings')} />
                                             )}
+                                            <NavItem href="/" icon={Store} label="View storefront" active={false} tooltip="Open the customer ordering site" />
                                         </>
                                     )}
                                 </SidebarMenu>

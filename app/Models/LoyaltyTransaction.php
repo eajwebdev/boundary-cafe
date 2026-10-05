@@ -15,6 +15,8 @@ class LoyaltyTransaction extends Model
 
     public const TYPE_ADJUSTMENT = 'adjustment';
 
+    public const TYPE_BONUS = 'bonus';
+
     protected $fillable = [
         'customer_id', 'branch_id', 'sale_id', 'user_id', 'type',
         'points', 'balance_after', 'reason',

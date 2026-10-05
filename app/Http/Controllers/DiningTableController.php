@@ -14,9 +14,7 @@ class DiningTableController extends Controller
 {
     private function branchId(): int
     {
-        $user = Auth::user();
-        if (! $user->branch_id) abort(403, 'No branch assigned.');
-        return $user->branch_id;
+        return $this->workingBranchId();
     }
 
     // ── Index ──────────────────────────────────────────────────────────────────
@@ -72,7 +70,7 @@ class DiningTableController extends Controller
 
     public function update(Request $request, DiningTable $diningTable): RedirectResponse
     {
-        abort_if($diningTable->branch_id !== $this->branchId(), 403);
+        abort_if((int) $diningTable->branch_id !== $this->branchId(), 403);
 
         $validated = $request->validate([
             'table_number' => ['required', 'string', 'max:20'],
@@ -97,7 +95,7 @@ class DiningTableController extends Controller
 
     public function destroy(DiningTable $diningTable): RedirectResponse
     {
-        abort_if($diningTable->branch_id !== $this->branchId(), 403);
+        abort_if((int) $diningTable->branch_id !== $this->branchId(), 403);
 
         if ($diningTable->activeOrder()->exists()) {
             return back()->withErrors(['error' => 'Cannot delete a table with an active order.']);
