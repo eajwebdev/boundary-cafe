@@ -2,6 +2,7 @@
 import { Head, router } from '@inertiajs/react';
 import { ArrowLeftRight, Plus, CheckCircle2, XCircle, Clock, Warehouse, Building2, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 import { useState } from 'react';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import AdminLayout from '@/layouts/AdminLayout';
@@ -334,8 +335,14 @@ export default function StockTransfersIndex({ transfers, pagination, branches, w
         );
     };
 
-    const handleCancel = (id: number) => {
-        if (!confirm('Cancel this transfer?')) return;
+    const handleCancel = async (id: number) => {
+        const confirmed = await confirmDialog({
+            title: 'Cancel this transfer?',
+            confirmLabel: 'Cancel transfer',
+            cancelLabel: 'Keep it',
+            tone: 'danger',
+        });
+        if (!confirmed) return;
         setCancelling(id);
         router.post(
             routes.stockTransfers.cancel(id),

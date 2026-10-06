@@ -1,6 +1,7 @@
 import { Bike, CheckCircle2, ClipboardList, Loader2, RefreshCw, ShoppingBag, Utensils, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { jsonRequest } from '@/lib/customer';
 import { useFloorUpdates } from '@/lib/realtime';
 import { cn } from '@/lib/utils';
@@ -135,7 +136,12 @@ export default function PendingOrdersPanel({ open, onClose, currency, pending, a
     };
 
     const completePickup = async (p: PendingPickup) => {
-        if (!confirm(`Hand over ${p.order_number} to ${p.customer_name} and collect ${fmtMoney(p.total, currency)}?`)) return;
+        const confirmed = await confirmDialog({
+            title: `Hand over ${p.order_number}?`,
+            description: `Give the order to ${p.customer_name} and collect ${fmtMoney(p.total, currency)}.`,
+            confirmLabel: 'Hand over',
+        });
+        if (!confirmed) return;
         setBusy(p.id);
         try {
             await jsonRequest(`/online-orders/${p.id}/transition`, { method: 'POST', body: { status: 'completed' } });

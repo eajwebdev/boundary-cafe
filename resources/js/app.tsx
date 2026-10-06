@@ -8,7 +8,8 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import '../css/app.css';
 
-// ── Sonner toast (global toaster) ──────────────────────────────────────────────
+// ── App-wide confirm modal + Sonner toast (global toaster) ─────────────────────
+import { ConfirmDialogHost } from '@/components/ConfirmDialog';
 import { Toaster } from '@/components/ui/sonner';
 
 // ── Optional: StrictMode only in development ───────────────────────────────────
@@ -18,6 +19,7 @@ function Providers({ children }: { children: React.ReactNode }) {
     return (
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange storageKey="psis-theme">
             {children}
+            <ConfirmDialogHost />
             <Toaster
                 position="bottom-right"
                 richColors

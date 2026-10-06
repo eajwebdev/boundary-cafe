@@ -16,6 +16,7 @@ import {
     ChevronsUpDown,
 } from 'lucide-react';
 import { useState, useCallback, useMemo } from 'react';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import AdminLayout from '@/layouts/AdminLayout';
@@ -367,8 +368,14 @@ export default function StockAdjustmentsIndex() {
         router.get(routes.stockAdjustments.index(), {}, { preserveState: false });
     };
 
-    const handleDelete = (id: number) => {
-        if (!confirm('Delete this adjustment and restore stock?')) return;
+    const handleDelete = async (id: number) => {
+        const confirmed = await confirmDialog({
+            title: 'Delete this adjustment?',
+            description: 'The stock it changed will be restored.',
+            confirmLabel: 'Delete',
+            tone: 'danger',
+        });
+        if (!confirmed) return;
         setDeleting(id);
         router.delete(routes.stockAdjustments.destroy(id), {
             onFinish: () => setDeleting(null),

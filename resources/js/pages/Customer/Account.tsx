@@ -2,6 +2,7 @@ import { router, useForm } from '@inertiajs/react';
 import { Loader2, LogOut, MapPin, Pencil, Plus, Star, Trash2 } from 'lucide-react';
 import { lazy, Suspense, useState } from 'react';
 
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import CustomerLayout from '@/layouts/CustomerLayout';
 import type { DeliveryZone, SavedAddress } from '@/lib/customer';
@@ -77,7 +78,10 @@ export default function Account({ profile, addresses, zone, barangays }: Props) 
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => confirm('Remove this address?') && router.delete(`/account/addresses/${a.id}`, { preserveScroll: true })}
+                                        onClick={async () => {
+                                            const confirmed = await confirmDialog({ title: 'Remove this address?', confirmLabel: 'Remove', tone: 'danger' });
+                                            if (confirmed) router.delete(`/account/addresses/${a.id}`, { preserveScroll: true });
+                                        }}
                                         className="flex h-10 w-10 items-center justify-center rounded-full text-shop-danger hover:bg-shop-danger-soft"
                                         aria-label="Remove"
                                     >

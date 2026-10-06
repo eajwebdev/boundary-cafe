@@ -23,6 +23,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { Price, ProductImage, QtyControl, ShopButton, useIsDesktop } from '@/components/storefront/ui';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { jsonRequest } from '@/lib/customer';
@@ -320,8 +321,13 @@ function FloorPlan({
         return Array.from(map.entries());
     }, [tables, filter, query]);
 
-    const markAvailable = (t: Table) => {
-        if (!confirm(`Mark table ${t.table_number} as clean and available?`)) return;
+    const markAvailable = async (t: Table) => {
+        const confirmed = await confirmDialog({
+            title: `Mark table ${t.table_number} clean?`,
+            description: 'It becomes available for new guests.',
+            confirmLabel: 'Mark available',
+        });
+        if (!confirmed) return;
         router.post(`/tables/${t.id}/available`, {}, { preserveScroll: true });
     };
 

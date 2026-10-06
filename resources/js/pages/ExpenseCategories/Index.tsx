@@ -4,6 +4,7 @@ import { Head, router, usePage } from '@inertiajs/react';
 import { Plus, Edit2, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -87,8 +88,8 @@ export default function ExpenseCategoriesIndex() {
         router.patch(routes.expenseCategories.toggle(id));
     };
 
-    const handleDelete = (id: number, name: string) => {
-        if (!confirm(`Delete category "${name}"?`)) return;
+    const handleDelete = async (id: number, name: string) => {
+        if (!(await confirmDialog({ title: `Delete category "${name}"?`, confirmLabel: 'Delete', tone: 'danger' }))) return;
         router.delete(routes.expenseCategories.destroy(id));
     };
 

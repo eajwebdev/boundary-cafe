@@ -1,5 +1,5 @@
 'use client';
-import { usePage, router } from '@inertiajs/react';
+import { Link, usePage, router } from '@inertiajs/react';
 import {
     Search,
     X,
@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { ClipboardList as PendingIcon } from 'lucide-react';
 import { lazy, Suspense, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { confirmDialog, isConfirmDialogOpen } from '@/components/ConfirmDialog';
 import ProductThumbnail, { getDefaultProductIcon } from '@/components/ProductThumbnail';
 import { Button } from '@/components/ui/button';
 import AdminLayout from '@/layouts/AdminLayout';
@@ -1620,8 +1621,15 @@ export default function PosIndex() {
     const requireCustomerName = !!settings?.require_customer_name;
 
     /** Load a waiter's table ticket into the cart so the cashier can charge it. */
-    const loadTicket = (ticket: PendingTicket) => {
-        if (cart.length > 0 && activeTicket?.id !== ticket.id && !confirm('Replace the current cart with this table ticket?')) return;
+    const loadTicket = async (ticket: PendingTicket) => {
+        if (cart.length > 0 && activeTicket?.id !== ticket.id) {
+            const confirmed = await confirmDialog({
+                title: 'Replace the current cart?',
+                description: 'The items in the cart will be swapped for this table ticket.',
+                confirmLabel: 'Replace cart',
+            });
+            if (!confirmed) return;
+        }
         const merged: CartItem[] = [];
         for (const i of ticket.items) {
             const key = `${i.product_id}-${i.variant_id ?? 'base'}`;
@@ -1994,7 +2002,7 @@ export default function PosIndex() {
 
     useEffect(() => {
         const handleGlobalScan = (e: KeyboardEvent) => {
-            if (e.ctrlKey || e.altKey || e.metaKey) return;
+            if (e.ctrlKey || e.altKey || e.metaKey || isConfirmDialogOpen()) return;
             if (['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12', 'Tab', 'Escape'].includes(e.key)) return;
 
             const now = Date.now();
@@ -2043,6 +2051,29 @@ export default function PosIndex() {
         return () => window.removeEventListener('keydown', handleGlobalScan);
     }, [products, handleProductClick, refocus]);
 
+    // ── Leaving or reloading with an unfinished sale ────────────────────────────
+    const leaveConfirmed = useRef(false);
+
+    const confirmLeave = useCallback(
+        (intent: 'leave' | 'reload') =>
+            confirmDialog({
+                title: intent === 'reload' ? 'Reload the register?' : 'Leave the register?',
+                description: `The cart has ${itemCount} ${itemCount === 1 ? 'item' : 'items'} that ${itemCount === 1 ? 'has' : 'have'} not been charged. ${
+                    intent === 'reload' ? 'Reloading' : 'Leaving'
+                } clears the cart.`,
+                confirmLabel: intent === 'reload' ? 'Reload' : 'Leave',
+                cancelLabel: 'Stay',
+                tone: 'danger',
+            }),
+        [itemCount],
+    );
+
+    const reloadRegister = useCallback(async () => {
+        if (cart.length > 0 && !(await confirmLeave('reload'))) return;
+        leaveConfirmed.current = true;
+        window.location.reload();
+    }, [cart.length, confirmLeave]);
+
     // ── POS System Hotkeys ──────────────────────────────────────────────────────
     // Overrides PC & browser shortcuts (e.g. F1 Help, F3 Find, F4/F6 URL bar, F7 Caret, F10 Menu)
     // to strictly prioritize the POS system's custom cashier actions.
@@ -2059,6 +2090,16 @@ export default function PosIndex() {
                 if (typeof e.stopImmediatePropagation === 'function') {
                     e.stopImmediatePropagation();
                 }
+            }
+
+            // A confirm modal owns the keyboard while it is open (Enter / Escape answer it).
+            if (isConfirmDialogOpen()) return;
+
+            // Ctrl/Cmd+R: reload, asking first when a sale is in progress
+            if ((e.ctrlKey || e.metaKey) && isKey('R') && cart.length > 0) {
+                e.preventDefault();
+                reloadRegister();
+                return;
             }
 
             // F1 / F2: Focus and select Barcode & Product Search input
@@ -2082,14 +2123,10 @@ export default function PosIndex() {
                 return;
             }
 
-            // F5: Prevent accidental reload during cashier transaction
+            // F5: Reload, asking first when a sale is in progress
             if (isKey('F5')) {
-                if (cart.length > 0) {
-                    return; // Protect active transaction
-                } else {
-                    window.location.reload();
-                    return;
-                }
+                reloadRegister();
+                return;
             }
 
             // F8: Void / Clear Transaction (opens confirmation modal)
@@ -2151,20 +2188,40 @@ export default function PosIndex() {
             window.removeEventListener('help', handleHelp, { capture: true });
             (window as unknown as HelpKeyWindow).onhelp = null;
         };
-    }, [cart, clearCart, showPayment, refocus]);
+    }, [cart, clearCart, showPayment, refocus, reloadRegister]);
 
-    // Protect active cashier transaction from accidental tab close or page navigation
+    // Protect an unfinished sale from being lost by leaving the register
     useEffect(() => {
+        if (cart.length === 0) return;
+
+        // Moving to another page inside the app (History, sidebar, Alt+number shortcuts): ask with our own modal.
+        const stopGuarding = router.on('before', (event) => {
+            const { visit } = event.detail;
+            const staysOnRegister = visit.method !== 'get' || visit.prefetch || visit.url.pathname === window.location.pathname;
+            if (leaveConfirmed.current || staysOnRegister) return;
+
+            confirmLeave('leave').then((confirmed) => {
+                if (!confirmed) return;
+                leaveConfirmed.current = true;
+                router.visit(visit.url, { onFinish: () => (leaveConfirmed.current = false) });
+            });
+            return false;
+        });
+
+        // Closing the tab, the browser's own reload button or a typed address can only show the
+        // browser's built-in prompt — no page is allowed to replace it — so it stays as the last resort.
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-            if (cart.length > 0) {
-                e.preventDefault();
-                e.returnValue = '';
-                return '';
-            }
+            if (leaveConfirmed.current) return;
+            e.preventDefault();
+            e.returnValue = '';
         };
         window.addEventListener('beforeunload', handleBeforeUnload);
-        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-    }, [cart.length]);
+
+        return () => {
+            stopGuarding();
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [cart.length, confirmLeave]);
 
     // Combined search input
     const searchInput = (
@@ -2263,16 +2320,18 @@ export default function PosIndex() {
                         )}
                     </button>
 
-                    <a
+                    <Link
                         href={routes.sales.history()}
                         className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 text-xs font-medium whitespace-nowrap text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                     >
                         <History className="h-3.5 w-3.5" />
                         <span className="inline">History</span>
-                    </a>
+                    </Link>
 
                     <button
-                        onClick={() => window.location.reload()}
+                        onClick={reloadRegister}
+                        title="Reload the register"
+                        aria-label="Reload the register"
                         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                     >
                         <RefreshCw className="h-3.5 w-3.5" />

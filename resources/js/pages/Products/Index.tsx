@@ -20,6 +20,7 @@ import {
     ChevronsRight,
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { noticeDialog } from '@/components/ConfirmDialog';
 import ProductThumbnail from '@/components/ProductThumbnail';
 import { Button } from '@/components/ui/button';
 import AdminLayout from '@/layouts/AdminLayout';
@@ -1873,7 +1874,10 @@ function BundlesTab({
         e.preventDefault();
         if (!addItemFor?.bundle) {
             // Bundle not configured yet — show a message
-            alert('Please click "Configure" on this bundle first before adding products.');
+            noticeDialog({
+                title: 'Configure this bundle first',
+                description: 'Click "Configure" on the bundle to set it up before adding products.',
+            });
             return;
         }
         postItem(routes.products.bundles.addItem(addItemFor.bundle.id), {
@@ -2038,7 +2042,14 @@ function BundlesTab({
                                             size="sm"
                                             className={cn('h-8 gap-1 text-xs', !bp.bundle && 'cursor-not-allowed opacity-40')}
                                             title={!bp.bundle ? 'Configure this bundle first' : 'Add a product to this bundle'}
-                                            onClick={() => (bp.bundle ? openAddItem(bp) : alert('Click "Configure" first to set up this bundle.'))}
+                                            onClick={() =>
+                                                bp.bundle
+                                                    ? openAddItem(bp)
+                                                    : noticeDialog({
+                                                          title: 'Configure this bundle first',
+                                                          description: 'Click "Configure" on the bundle to set it up before adding products.',
+                                                      })
+                                            }
                                         >
                                             <Plus className="h-3 w-3" /> Add Product
                                         </Button>

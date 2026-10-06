@@ -3,6 +3,7 @@
 import { Head, router, usePage } from '@inertiajs/react';
 import { Plus, Edit2, Trash2, Table2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useState, useMemo } from 'react';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -107,8 +108,14 @@ export default function DiningTablesIndex() {
         router.patch(routes.diningTables.update(t.id), { is_active: !t.is_active });
     };
 
-    const handleDelete = (t: DiningTable) => {
-        if (!confirm(`Delete table "${t.label}"? This cannot be undone.`)) return;
+    const handleDelete = async (t: DiningTable) => {
+        const confirmed = await confirmDialog({
+            title: `Delete table "${t.label}"?`,
+            description: 'This cannot be undone.',
+            confirmLabel: 'Delete',
+            tone: 'danger',
+        });
+        if (!confirmed) return;
         router.delete(routes.diningTables.destroy(t.id));
     };
 

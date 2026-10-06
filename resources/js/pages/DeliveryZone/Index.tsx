@@ -4,6 +4,7 @@ import { Crosshair, Loader2, MapPin, PencilLine, Save, Trash2, Undo2 } from 'luc
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+import { confirmDialog } from '@/components/ConfirmDialog';
 import AdminLayout from '@/layouts/AdminLayout';
 import { cn } from '@/lib/utils';
 
@@ -113,7 +114,9 @@ export default function DeliveryZone({ zone, barangays, settings, status, branch
                                 <button
                                     type="button"
                                     disabled={!d.polygon.length}
-                                    onClick={() => confirm('Clear the drawn boundary?') && set('polygon', [])}
+                                    onClick={async () => {
+                                        if (await confirmDialog({ title: 'Clear the drawn boundary?', confirmLabel: 'Clear', tone: 'danger' })) set('polygon', []);
+                                    }}
                                     className="flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-sm text-destructive disabled:opacity-40"
                                 >
                                     <Trash2 className="h-4 w-4" /> Clear
