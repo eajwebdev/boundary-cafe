@@ -11,13 +11,13 @@ class MenuHelper
     public static function all(): array
     {
         return [
-            '1'  => 'Dashboard',
-            '2'  => 'POS / Cashier',
-            '3'  => 'Sales History',
-            '6'  => 'Products',
-            '7'  => 'Categories',
-            '8'  => 'Variants',
-            '9'  => 'Bundles',
+            '1' => 'Dashboard',
+            '2' => 'POS / Cashier',
+            '3' => 'Sales History',
+            '6' => 'Products',
+            '7' => 'Categories',
+            '8' => 'Variants',
+            '9' => 'Bundles',
             '10' => 'Recipes',
             '11' => 'Stock Management',
             '12' => 'Purchase Orders',
@@ -48,6 +48,8 @@ class MenuHelper
             '42' => 'Dining Tables',
             '43' => 'Delivery Zone',
             '44' => 'Loyalty Program',
+            '45' => 'Employees',
+            '46' => 'Attendance',
         ];
     }
 
@@ -83,11 +85,11 @@ class MenuHelper
     {
         return [
             'Main' => [
-                '1'  => 'Dashboard',
+                '1' => 'Dashboard',
             ],
             'Sales' => [
-                '2'  => 'POS / Cashier',
-                '3'  => 'Sales History',
+                '2' => 'POS / Cashier',
+                '3' => 'Sales History',
                 '40' => 'Online Orders',
                 '41' => 'Table Ordering',
                 '29' => 'Promos & Discounts',
@@ -95,10 +97,10 @@ class MenuHelper
                 '44' => 'Loyalty Program',
             ],
             'Inventory' => [
-                '6'  => 'All Products',
-                '7'  => 'Categories',
-                '8'  => 'Variants',
-                '9'  => 'Bundles',
+                '6' => 'All Products',
+                '7' => 'Categories',
+                '8' => 'Variants',
+                '9' => 'Bundles',
                 '10' => 'Recipes',
                 '11' => 'Stock Management',
                 '12' => 'Purchase Orders',
@@ -124,6 +126,8 @@ class MenuHelper
             ],
             'Management' => [
                 '23' => 'Users',
+                '45' => 'Employees',
+                '46' => 'Attendance',
                 '24' => 'Suppliers',
                 '25' => 'Branches',
                 '27' => 'Expense Categories',

@@ -1,7 +1,10 @@
 'use client';
 import { Head, router } from '@inertiajs/react';
-import { ArrowLeftRight, Plus, CheckCircle2, XCircle, Clock, Warehouse, Building2, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowLeftRight, ArrowRight, Plus, CheckCircle2, XCircle, Clock, Warehouse, Building2, Package, Search, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { Chip, controlCls, EmptyRow, PageHeader, Panel, SimplePager, Stat, StatStrip, StatusPill, thCls } from '@/components/AdminKit';
+import type { Tone } from '@/components/AdminKit';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -59,24 +62,32 @@ interface PageProps {
     products: Product[];
     filters: { status: string; search: string; per_page: number };
     is_admin: boolean;
-    message?: { type: string; text: string };
+    stats: { pending: number; completed_month: number; units_month: number; cancelled_month: number };
+    flash?: { message?: { type: string; text: string } };
     [key: string]: unknown;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const statusMeta = {
-    pending: { label: 'Pending', color: 'bg-yellow-500/15 text-yellow-400 border border-yellow-500/20', icon: Clock },
-    completed: { label: 'Completed', color: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20', icon: CheckCircle2 },
-    cancelled: { label: 'Cancelled', color: 'bg-red-500/15 text-red-400 border border-red-500/20', icon: XCircle },
+const statusMeta: Record<Transfer['status'], { label: string; tone: Tone; icon: React.ElementType }> = {
+    pending: { label: 'Pending', tone: 'warning', icon: Clock },
+    completed: { label: 'Completed', tone: 'success', icon: CheckCircle2 },
+    cancelled: { label: 'Cancelled', tone: 'muted', icon: XCircle },
 };
 
 function LocationIcon({ type }: { type: 'branch' | 'warehouse' }) {
     return type === 'warehouse' ? (
-        <Warehouse className="-mt-0.5 mr-1 inline h-3.5 w-3.5 text-purple-400" />
+        <Warehouse className="h-3 w-3 shrink-0 text-muted-foreground" />
     ) : (
-        <Building2 className="-mt-0.5 mr-1 inline h-3.5 w-3.5 text-blue-400" />
+        <Building2 className="h-3 w-3 shrink-0 text-muted-foreground" />
     );
 }
+
+const STATUS_FILTERS = [
+    { value: '', label: 'All' },
+    { value: 'pending', label: 'Pending' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'cancelled', label: 'Cancelled' },
+];
 
 function fmtDate(iso: string) {
     return new Date(iso).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -304,12 +315,20 @@ function CreateTransferModal({
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
-export default function StockTransfersIndex({ transfers, pagination, branches, warehouses, products, filters, message }: PageProps) {
+export default function StockTransfersIndex({ transfers, pagination, branches, warehouses, products, filters, stats, flash }: PageProps) {
     const [createOpen, setCreateOpen] = useState(false);
     const [search, setSearch] = useState(filters.search || '');
     const [statusFilter, setStatus] = useState(filters.status || '');
     const [completing, setCompleting] = useState<number | null>(null);
     const [cancelling, setCancelling] = useState<number | null>(null);
+
+    useEffect(() => {
+        const message = flash?.message;
+        if (!message) return;
+        if (message.type === 'success') toast.success(message.text);
+        else if (message.type === 'warning') toast.warning(message.text);
+        else toast.error(message.text);
+    }, [flash]);
 
     const applyFilters = (overrides: Record<string, unknown> = {}) => {
         router.get(
@@ -354,159 +373,141 @@ export default function StockTransfersIndex({ transfers, pagination, branches, w
         );
     };
 
+    const pageFrom = pagination.total === 0 ? 0 : (pagination.current_page - 1) * pagination.per_page + 1;
+    const pageTo = Math.min(pagination.current_page * pagination.per_page, pagination.total);
+
     return (
         <AdminLayout>
             <Head title="Stock Transfers" />
 
-            <div className="space-y-6 p-4 md:p-6">
-                {/* Header */}
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                        <h1 className="text-2xl font-bold text-foreground">Stock Transfers</h1>
-                        <p className="mt-0.5 text-sm text-muted-foreground">Move stock between branches and warehouses</p>
-                    </div>
-                    <Button onClick={() => setCreateOpen(true)}>
-                        <Plus className="mr-1.5 h-4 w-4" /> New Transfer
+            <div className="space-y-4">
+                <PageHeader title="Stock Transfers" subtitle="Move stock between branches and the warehouse.">
+                    <Button size="sm" className="h-9 gap-1.5" onClick={() => setCreateOpen(true)}>
+                        <Plus className="h-4 w-4" /> New transfer
                     </Button>
-                </div>
+                </PageHeader>
 
-                {/* Flash */}
-                {message && (
-                    <div
-                        className={cn(
-                            'rounded-xl border px-4 py-3 text-sm',
-                            message.type === 'success'
-                                ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
-                                : message.type === 'warning'
-                                  ? 'border-yellow-500/20 bg-yellow-500/10 text-yellow-400'
-                                  : 'border-red-500/20 bg-red-500/10 text-red-400',
-                        )}
-                    >
-                        {message.text}
-                    </div>
-                )}
+                <StatStrip count={4}>
+                    <Stat
+                        icon={Clock}
+                        label="Waiting to move"
+                        value={stats.pending.toLocaleString()}
+                        tone={stats.pending > 0 ? 'warning' : undefined}
+                    />
+                    <Stat icon={CheckCircle2} label="Completed · this month" value={stats.completed_month.toLocaleString()} tone="success" />
+                    <Stat icon={Package} label="Units moved · this month" value={stats.units_month.toLocaleString()} />
+                    <Stat
+                        icon={XCircle}
+                        label="Cancelled · this month"
+                        value={stats.cancelled_month.toLocaleString()}
+                        tone={stats.cancelled_month > 0 ? 'muted' : undefined}
+                    />
+                </StatStrip>
 
-                {/* Filters */}
-                <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative max-w-xs min-w-[180px] flex-1">
-                        <Search className="absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                        <input
-                            className={cn(inp, 'pl-9')}
-                            placeholder="Search product…"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
-                        />
-                        {search && (
-                            <button
+                <Panel
+                    flush
+                    icon={ArrowLeftRight}
+                    title="Transfers"
+                    actions={
+                        <div className="relative w-full sm:w-64">
+                            <Search className="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                            <input
+                                className={cn(controlCls, 'w-full pr-8 pl-8')}
+                                placeholder="Search product, then Enter"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+                            />
+                            {search && (
+                                <button
+                                    onClick={() => {
+                                        setSearch('');
+                                        applyFilters({ search: undefined });
+                                    }}
+                                    className="absolute top-1/2 right-2.5 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                    aria-label="Clear search"
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                </button>
+                            )}
+                        </div>
+                    }
+                >
+                    <div className="flex flex-wrap gap-1 border-b border-border bg-muted/20 px-4 py-2">
+                        {STATUS_FILTERS.map((option) => (
+                            <Chip
+                                key={option.value}
+                                active={statusFilter === option.value}
                                 onClick={() => {
-                                    setSearch('');
-                                    applyFilters({ search: undefined });
+                                    setStatus(option.value);
+                                    applyFilters({ status: option.value || undefined, page: undefined });
                                 }}
                             >
-                                <X className="absolute top-1/2 right-2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                            </button>
-                        )}
+                                {option.label}
+                                {option.value === 'pending' && stats.pending > 0 && <span className="opacity-60"> {stats.pending}</span>}
+                            </Chip>
+                        ))}
                     </div>
-                    <select
-                        className={cn(sel, 'w-36')}
-                        value={statusFilter}
-                        onChange={(e) => {
-                            setStatus(e.target.value);
-                            applyFilters({ status: e.target.value || undefined });
-                        }}
-                    >
-                        <option value="">All Status</option>
-                        <option value="pending">Pending</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                    </select>
-                </div>
 
-                {/* Table */}
-                <div className="overflow-hidden rounded-xl border border-border bg-card">
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-border bg-muted/30">
-                                    <th className="px-4 py-3 text-left text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-                                        Transfer #
-                                    </th>
-                                    <th className="px-4 py-3 text-left text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-                                        From → To
-                                    </th>
-                                    <th className="px-4 py-3 text-left text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-                                        Product
-                                    </th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold tracking-wider text-muted-foreground uppercase">Qty</th>
-                                    <th className="px-4 py-3 text-center text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-                                        Status
-                                    </th>
-                                    <th className="hidden px-4 py-3 text-left text-xs font-semibold tracking-wider text-muted-foreground uppercase lg:table-cell">
-                                        Requested By
-                                    </th>
-                                    <th className="hidden px-4 py-3 text-left text-xs font-semibold tracking-wider text-muted-foreground uppercase lg:table-cell">
-                                        Date
-                                    </th>
-                                    <th className="px-4 py-3"></th>
+                            <thead className="border-b border-border">
+                                <tr>
+                                    <th className={thCls}>Transfer</th>
+                                    <th className={thCls}>Product</th>
+                                    <th className={thCls}>From → To</th>
+                                    <th className={cn(thCls, 'text-right')}>Qty</th>
+                                    <th className={thCls}>Status</th>
+                                    <th className={cn(thCls, 'hidden lg:table-cell')}>Requested</th>
+                                    <th className="w-36" />
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
                                 {transfers.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={8} className="py-16 text-center text-muted-foreground">
-                                            <ArrowLeftRight className="mx-auto mb-2 h-8 w-8 opacity-20" />
-                                            No transfers found
-                                        </td>
-                                    </tr>
+                                    <EmptyRow colSpan={7} icon={ArrowLeftRight}>
+                                        No transfers found.
+                                    </EmptyRow>
                                 ) : (
                                     transfers.map((t) => {
                                         const meta = statusMeta[t.status];
                                         return (
-                                            <tr key={t.id} className="transition-colors hover:bg-muted/20">
-                                                <td className="px-4 py-3 font-mono text-xs font-semibold text-primary">{t.transfer_number}</td>
-                                                <td className="px-4 py-3">
-                                                    <div className="space-y-0.5 text-xs">
-                                                        <div>
-                                                            <LocationIcon type={t.from_type} />
-                                                            <span className="font-medium text-foreground">{t.from_name}</span>
-                                                        </div>
-                                                        <div className="pl-4 text-muted-foreground">↓</div>
-                                                        <div>
-                                                            <LocationIcon type={t.to_type} />
-                                                            <span className="font-medium text-foreground">{t.to_name}</span>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <div className="font-medium text-foreground">{t.product_name}</div>
-                                                    {t.product_barcode && (
-                                                        <div className="font-mono text-xs text-muted-foreground">{t.product_barcode}</div>
+                                            <tr key={t.id} className={cn('hover:bg-muted/30', t.status === 'cancelled' && 'opacity-60')}>
+                                                <td className="px-4 py-2 font-mono text-xs font-bold whitespace-nowrap">{t.transfer_number}</td>
+                                                <td className="px-4 py-2">
+                                                    <p className="font-semibold">{t.product_name}</p>
+                                                    {(t.product_barcode || t.notes) && (
+                                                        <p className="max-w-64 truncate text-[11px] text-muted-foreground">
+                                                            {t.product_barcode && <span className="font-mono">{t.product_barcode}</span>}
+                                                            {t.product_barcode && t.notes && ' · '}
+                                                            {t.notes && <span className="italic">{t.notes}</span>}
+                                                        </p>
                                                     )}
-                                                    {t.notes && <div className="mt-0.5 text-xs text-muted-foreground italic">{t.notes}</div>}
                                                 </td>
-                                                <td className="px-4 py-3 text-right font-bold tabular-nums">{t.quantity.toLocaleString()}</td>
-                                                <td className="px-4 py-3 text-center">
-                                                    <span
-                                                        className={cn(
-                                                            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
-                                                            meta.color,
-                                                        )}
-                                                    >
-                                                        <meta.icon className="h-3 w-3" />
-                                                        {meta.label}
+                                                <td className="px-4 py-2 text-xs">
+                                                    <span className="flex items-center gap-1 whitespace-nowrap">
+                                                        <LocationIcon type={t.from_type} />
+                                                        <span className="font-semibold">{t.from_name}</span>
+                                                        <ArrowRight className="mx-0.5 h-3 w-3 text-muted-foreground" />
+                                                        <LocationIcon type={t.to_type} />
+                                                        <span className="font-semibold">{t.to_name}</span>
                                                     </span>
                                                 </td>
-                                                <td className="hidden px-4 py-3 text-xs text-muted-foreground lg:table-cell">{t.requested_by}</td>
-                                                <td className="hidden px-4 py-3 text-xs text-muted-foreground lg:table-cell">
-                                                    {fmtDate(t.created_at)}
+                                                <td className="px-4 py-2 text-right font-bold tabular-nums">{t.quantity.toLocaleString()}</td>
+                                                <td className="px-4 py-2">
+                                                    <StatusPill tone={meta.tone}>
+                                                        <meta.icon className="h-3 w-3" /> {meta.label}
+                                                    </StatusPill>
                                                 </td>
-                                                <td className="px-4 py-3">
+                                                <td className="hidden px-4 py-2 text-xs text-muted-foreground lg:table-cell">
+                                                    <p>{t.requested_by}</p>
+                                                    <p className="text-[11px]">{fmtDate(t.created_at)}</p>
+                                                </td>
+                                                <td className="px-4 py-2">
                                                     {t.status === 'pending' && (
-                                                        <div className="flex justify-end gap-1.5">
+                                                        <div className="flex justify-end gap-1">
                                                             <Button
                                                                 size="sm"
-                                                                variant="default"
+                                                                className="h-7 gap-1 px-2.5 text-xs"
                                                                 disabled={completing === t.id}
                                                                 onClick={() => handleComplete(t.id)}
                                                             >
@@ -514,19 +515,18 @@ export default function StockTransfersIndex({ transfers, pagination, branches, w
                                                                     '…'
                                                                 ) : (
                                                                     <>
-                                                                        <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-                                                                        Transfer
+                                                                        <CheckCircle2 className="h-3.5 w-3.5" /> Move stock
                                                                     </>
                                                                 )}
                                                             </Button>
-                                                            <Button
-                                                                size="sm"
-                                                                variant="outline"
+                                                            <button
                                                                 disabled={cancelling === t.id}
                                                                 onClick={() => handleCancel(t.id)}
+                                                                className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+                                                                aria-label={`Cancel ${t.transfer_number}`}
                                                             >
-                                                                {cancelling === t.id ? '…' : <XCircle className="h-3.5 w-3.5" />}
-                                                            </Button>
+                                                                <XCircle className="h-3.5 w-3.5" />
+                                                            </button>
                                                         </div>
                                                     )}
                                                 </td>
@@ -537,32 +537,18 @@ export default function StockTransfersIndex({ transfers, pagination, branches, w
                             </tbody>
                         </table>
                     </div>
-                </div>
 
-                {/* Pagination */}
-                {pagination.last_page > 1 && (
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                        <span>
-                            Page {pagination.current_page} of {pagination.last_page} ({pagination.total} transfers)
-                        </span>
-                        <div className="flex gap-1">
-                            <button
-                                disabled={pagination.current_page <= 1}
-                                onClick={() => applyFilters({ page: pagination.current_page - 1 })}
-                                className="rounded-lg border border-border p-1.5 hover:bg-muted/30 disabled:opacity-40"
-                            >
-                                <ChevronLeft className="h-4 w-4" />
-                            </button>
-                            <button
-                                disabled={pagination.current_page >= pagination.last_page}
-                                onClick={() => applyFilters({ page: pagination.current_page + 1 })}
-                                className="rounded-lg border border-border p-1.5 hover:bg-muted/30 disabled:opacity-40"
-                            >
-                                <ChevronRight className="h-4 w-4" />
-                            </button>
-                        </div>
-                    </div>
-                )}
+                    {pagination.last_page > 1 && (
+                        <SimplePager
+                            from={pageFrom}
+                            to={pageTo}
+                            total={pagination.total}
+                            page={pagination.current_page}
+                            lastPage={pagination.last_page}
+                            onPage={(page) => applyFilters({ page })}
+                        />
+                    )}
+                </Panel>
             </div>
 
             <CreateTransferModal

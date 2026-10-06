@@ -13,12 +13,13 @@ import {
     CreditCard,
     TrendingUp,
     CheckCircle2,
-    XCircle,
     Clock,
     ChevronRight,
     CalendarClock,
 } from 'lucide-react';
 import { useState } from 'react';
+import { EmptyRow, Line, PageHeader, Pager, Panel, Stat, StatStrip, StatusPill, thCls, useFlashToasts } from '@/components/AdminKit';
+import type { Tone } from '@/components/AdminKit';
 import { Button } from '@/components/ui/button';
 import AdminLayout from '@/layouts/AdminLayout';
 import { fmtDate } from '@/lib/date';
@@ -85,14 +86,6 @@ const fmt = (n: number, currency = '₱') => `${currency}${n.toLocaleString('en-
 
 const inp =
     'w-full bg-background border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/20 transition-all';
-
-const overShortCls = (status: string) =>
-    ({
-        balanced: 'text-emerald-600 dark:text-emerald-400',
-        over: 'text-amber-500',
-        short: 'text-destructive',
-        pending: 'text-muted-foreground',
-    })[status] ?? 'text-muted-foreground';
 
 // ─── Open Session Modal ───────────────────────────────────────────────────────
 
@@ -577,71 +570,48 @@ function ActiveSessionPanel({
     const [showClose, setShowClose] = useState(false);
     const ago = formatDistanceToNow(new Date(session.opened_at), { addSuffix: false });
 
-    const cashLabel = (session.installment_dp ?? 0) > 0 ? 'Cash + DP' : 'Cash Sales';
-    const cashAmount = (session.pure_cash_sales ?? 0) + (session.installment_dp ?? 0);
-
-    const stats = [
-        { label: 'Opening Cash', val: session.formatted_opening_cash, color: 'text-foreground', icon: Banknote },
-        { label: cashLabel, val: fmt(cashAmount, currency), color: 'text-emerald-600 dark:text-emerald-400', icon: TrendingUp },
-        { label: 'Total Collected', val: fmt(session.total_sales ?? 0, currency), color: 'text-foreground', icon: TrendingUp },
-        { label: 'Transactions', val: String(session.sale_count ?? 0), color: 'text-foreground', icon: CheckCircle2 },
-    ];
-
     return (
         <>
-            <div className="overflow-hidden rounded-2xl border border-emerald-500/25 bg-emerald-500/5">
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-emerald-500/15 px-5 py-4">
-                    <div className="flex items-center gap-3">
-                        <div className="relative h-3 w-3">
-                            <span className="absolute inset-0 animate-ping rounded-full bg-emerald-500 opacity-50" />
-                            <span className="relative block h-3 w-3 rounded-full bg-emerald-500" />
-                        </div>
-                        <div>
-                            <p className="font-bold text-foreground">Session Open</p>
-                            <p className="font-mono text-xs text-muted-foreground">{session.session_number}</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={() => router.reload({ preserveScroll: true })}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                        >
-                            <RefreshCw className="h-3.5 w-3.5" />
-                        </button>
-                        <Link href={routes.cashSessions.show(session.id)}>
-                            <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
-                                <Eye className="h-3.5 w-3.5" /> Details
-                            </Button>
-                        </Link>
-                    </div>
-                </div>
-
-                {/* Stats grid */}
-                <div className="grid grid-cols-2 divide-x divide-y divide-emerald-500/10 sm:grid-cols-4 sm:divide-y-0">
-                    {stats.map((s) => {
-                        const Icon = s.icon;
-                        return (
-                            <div key={s.label} className="px-5 py-4 text-center">
-                                <Icon className="mx-auto mb-1.5 h-4 w-4 text-muted-foreground" />
-                                <p className={cn('text-xl font-black tabular-nums', s.color)}>{s.val}</p>
-                                <p className="mt-0.5 text-[10px] tracking-wide text-muted-foreground uppercase">{s.label}</p>
-                            </div>
-                        );
-                    })}
-                </div>
-
-                {/* Footer */}
-                <div className="flex items-center justify-between border-t border-emerald-500/15 px-5 py-3 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1.5">
-                        <Clock className="h-3.5 w-3.5" />
-                        {ago} · {session.cashier} · Opened {fmtDate(session.opened_at, 'h:mm a, MMM d')}
+            <Panel
+                icon={Unlock}
+                title="Your session"
+                actions={
+                    <span className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                        <span className="relative flex h-2 w-2">
+                            <span className="absolute inset-0 animate-ping rounded-full bg-emerald-500 opacity-60" />
+                            <span className="relative h-2 w-2 rounded-full bg-emerald-500" />
+                        </span>
+                        Open
                     </span>
-                    <span>
-                        Expected: <strong className="text-foreground">{fmt(session.computed_expected ?? session.opening_cash, currency)}</strong>
-                    </span>
+                }
+            >
+                <div>
+                    <Line label="Session" value={<span className="font-mono text-xs font-bold">{session.session_number}</span>} />
+                    <Line label="Cashier" value={session.cashier} />
+                    <Line label="Opened" value={`${fmtDate(session.opened_at, 'h:mm a, MMM d')} · ${ago}`} />
+                    <Line strong label="Expected in drawer" value={fmt(session.computed_expected ?? session.opening_cash, currency)} />
                 </div>
-            </div>
+                <div className="flex gap-2">
+                    <Link href={routes.cashCounts.index()} className="flex-1">
+                        <Button size="sm" className="h-8 w-full gap-1.5">
+                            <Lock className="h-3.5 w-3.5" /> Count & close
+                        </Button>
+                    </Link>
+                    <Link href={routes.cashSessions.show(session.id)}>
+                        <Button variant="outline" size="sm" className="h-8 gap-1.5">
+                            <Eye className="h-3.5 w-3.5" /> Details
+                        </Button>
+                    </Link>
+                    <button
+                        onClick={() => router.reload()}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                        aria-label="Refresh"
+                        title="Refresh"
+                    >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                    </button>
+                </div>
+            </Panel>
             {showClose && (
                 <CloseSessionModal
                     session={session}
@@ -655,258 +625,182 @@ function ActiveSessionPanel({
     );
 }
 
+const OVER_SHORT_TONE: Record<string, Tone> = { balanced: 'success', over: 'warning', short: 'danger', pending: 'muted' };
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function CashSessionsIndex() {
-    const { open_sessions, my_session, history, require_count, over_short_alert, app, flash } = usePage<PageProps>().props;
+    const { open_sessions, my_session, history, require_count, over_short_alert, app } = usePage<PageProps>().props;
+    useFlashToasts();
 
     const currency = app?.currency ?? '₱';
     const [showOpen, setShowOpen] = useState(false);
-    const [toast, setToast] = useState(flash?.message ?? null);
+    const others = open_sessions.filter((s) => s.id !== my_session?.id);
+
+    const cashLabel = (my_session?.installment_dp ?? 0) > 0 ? 'Cash + DP' : 'Cash sales';
+    const cashAmount = (my_session?.pure_cash_sales ?? 0) + (my_session?.installment_dp ?? 0);
 
     return (
         <AdminLayout>
             <Head title="Cash Sessions" />
 
-            {/* Toast */}
-            {toast && (
-                <div
-                    className={cn(
-                        'fixed top-4 right-4 z-[9999] flex max-w-sm items-center gap-3 rounded-xl border px-5 py-3.5 text-sm font-medium shadow-2xl',
-                        toast.type === 'success'
-                            ? 'border-emerald-500/40 bg-[#0b1a10] text-emerald-300'
-                            : toast.type === 'warning'
-                              ? 'border-amber-500/40 bg-[#1a150b] text-amber-300'
-                              : 'border-red-500/40 bg-[#1a0b0b] text-red-300',
-                    )}
+            <div className="space-y-4">
+                <PageHeader
+                    title="Cash Sessions"
+                    subtitle={
+                        open_sessions.length > 0
+                            ? `${open_sessions.length} open session${open_sessions.length > 1 ? 's' : ''} · ${my_session ? 'yours is open' : 'you have none open'}`
+                            : 'No open sessions. Open one to start the day.'
+                    }
                 >
-                    {toast.type === 'success' ? (
-                        <CheckCircle2 className="h-4 w-4 shrink-0" />
-                    ) : toast.type === 'warning' ? (
-                        <AlertTriangle className="h-4 w-4 shrink-0" />
-                    ) : (
-                        <XCircle className="h-4 w-4 shrink-0" />
-                    )}
-                    <span className="flex-1">{toast.text}</span>
-                    <button onClick={() => setToast(null)} className="opacity-50 hover:opacity-100">
-                        <X className="h-3.5 w-3.5" />
-                    </button>
-                </div>
-            )}
-
-            <div className="mx-auto max-w-[1100px] space-y-6">
-                {/* Page header */}
-                <div className="flex items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-xl font-bold text-foreground">Cash Sessions</h1>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                            {open_sessions.length > 0
-                                ? `${open_sessions.length} active session${open_sessions.length > 1 ? 's' : ''} · ${my_session ? 'Your session is open' : 'You have no open session'}`
-                                : 'No active sessions — open one to start the day'}
-                        </p>
-                    </div>
                     {!my_session && (
-                        <Button className="h-9 gap-2 font-semibold" onClick={() => setShowOpen(true)}>
-                            <Plus className="h-4 w-4" /> Open Session
+                        <Button size="sm" className="h-9 gap-1.5" onClick={() => setShowOpen(true)}>
+                            <Plus className="h-4 w-4" /> Open session
                         </Button>
                     )}
-                </div>
+                </PageHeader>
 
-                {/* My active session */}
                 {my_session ? (
-                    <ActiveSessionPanel session={my_session} requireCount={require_count} overShortAlert={over_short_alert} currency={currency} />
+                    <StatStrip count={4}>
+                        <Stat icon={Banknote} label="Opening cash" value={my_session.formatted_opening_cash} />
+                        <Stat icon={TrendingUp} label={cashLabel} value={fmt(cashAmount, currency)} tone="success" />
+                        <Stat icon={TrendingUp} label="Total collected" value={fmt(my_session.total_sales ?? 0, currency)} />
+                        <Stat icon={CheckCircle2} label="Transactions" value={String(my_session.sale_count ?? 0)} />
+                    </StatStrip>
                 ) : (
-                    <div className="flex flex-col items-center gap-5 rounded-2xl border border-amber-500/20 bg-amber-500/5 px-6 py-8 text-center sm:flex-row sm:text-left">
-                        <div className="shrink-0 rounded-2xl bg-amber-500/10 p-4">
-                            <Banknote className="h-7 w-7 text-amber-500" />
-                        </div>
-                        <div className="flex-1">
-                            <p className="text-base font-bold text-foreground">No open session</p>
-                            <p className="mt-1 text-sm text-muted-foreground">Open a cash session to begin tracking sales and cash flow for today.</p>
-                        </div>
-                        <Button className="shrink-0 gap-2" onClick={() => setShowOpen(true)}>
-                            <Unlock className="h-4 w-4" /> Open Session
+                    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+                        <Banknote className="h-5 w-5 shrink-0 text-amber-600" />
+                        <p className="min-w-0 flex-1 text-sm">
+                            <span className="font-bold">You have no open session.</span>{' '}
+                            <span className="text-muted-foreground">Open one with your starting cash before ringing up sales.</span>
+                        </p>
+                        <Button size="sm" className="h-8 gap-1.5" onClick={() => setShowOpen(true)}>
+                            <Unlock className="h-3.5 w-3.5" /> Open session
                         </Button>
                     </div>
                 )}
 
-                {/* Other open sessions from other cashiers */}
-                {open_sessions.filter((s) => s.id !== my_session?.id).length > 0 && (
-                    <div className="space-y-2">
-                        <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase">Other Open Sessions</p>
-                        {open_sessions
-                            .filter((s) => s.id !== my_session?.id)
-                            .map((s) => (
-                                <div key={s.id} className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card px-4 py-3">
-                                    <div className="flex items-center gap-3">
-                                        <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
-                                        <div>
-                                            <p className="text-sm font-semibold text-foreground">{s.cashier}</p>
-                                            <p className="font-mono text-xs text-muted-foreground">{s.session_number}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                        <span>
-                                            Opening: <strong className="text-foreground">{s.formatted_opening_cash}</strong>
-                                        </span>
-                                        <Link href={routes.cashSessions.show(s.id)}>
-                                            <Button variant="outline" size="sm" className="h-7 gap-1 text-xs">
-                                                <Eye className="h-3 w-3" /> View
-                                            </Button>
-                                        </Link>
-                                    </div>
-                                </div>
-                            ))}
-                    </div>
-                )}
-
-                {/* Session history */}
-                <div>
-                    <div className="mb-3 flex items-center justify-between">
-                        <h2 className="text-sm font-bold text-foreground">
-                            Session History
-                            <span className="ml-2 text-xs font-normal text-muted-foreground">{history.total} total</span>
-                        </h2>
-                    </div>
-
-                    <div className="overflow-hidden rounded-xl border border-border bg-card">
-                        {history.data.length === 0 ? (
-                            <div className="py-16 text-center text-muted-foreground">
-                                <Clock className="mx-auto mb-2 h-8 w-8 opacity-20" />
-                                <p className="text-sm">No sessions yet</p>
-                            </div>
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="border-b border-border bg-muted/30">
-                                            <th className="px-4 py-3 text-left text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                                                Session
-                                            </th>
-                                            <th className="hidden px-4 py-3 text-left text-[10px] font-bold tracking-widest text-muted-foreground uppercase sm:table-cell">
-                                                Date
-                                            </th>
-                                            <th className="px-4 py-3 text-right text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                                                Opening
-                                            </th>
-                                            <th className="hidden px-4 py-3 text-right text-[10px] font-bold tracking-widest text-muted-foreground uppercase md:table-cell">
-                                                Expected
-                                            </th>
-                                            <th className="hidden px-4 py-3 text-right text-[10px] font-bold tracking-widest text-muted-foreground uppercase md:table-cell">
-                                                Counted
-                                            </th>
-                                            <th className="px-4 py-3 text-right text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                                                Over/Short
-                                            </th>
-                                            <th className="px-4 py-3 text-center text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                                                Status
-                                            </th>
-                                            <th className="w-10" />
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-border">
-                                        {history.data.map((s) => {
+                <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
+                    <Panel
+                        flush
+                        icon={Clock}
+                        title="Session history"
+                        actions={<span className="text-[11px] font-semibold text-muted-foreground">{history.total.toLocaleString()} total</span>}
+                    >
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead className="border-b border-border">
+                                    <tr>
+                                        <th className={thCls}>Session</th>
+                                        <th className={cn(thCls, 'hidden sm:table-cell')}>Opened</th>
+                                        <th className={cn(thCls, 'text-right')}>Opening</th>
+                                        <th className={cn(thCls, 'hidden text-right md:table-cell')}>Expected</th>
+                                        <th className={cn(thCls, 'hidden text-right md:table-cell')}>Counted</th>
+                                        <th className={cn(thCls, 'text-right')}>Over / short</th>
+                                        <th className="w-8" />
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                    {history.data.length === 0 ? (
+                                        <EmptyRow colSpan={7} icon={Clock}>
+                                            No sessions yet.
+                                        </EmptyRow>
+                                    ) : (
+                                        history.data.map((s) => {
                                             const isOpen = s.status === 'open';
-                                            const durationStr = s.closed_at
-                                                ? (() => {
-                                                      const mins = Math.round(
-                                                          (new Date(s.closed_at).getTime() - new Date(s.opened_at).getTime()) / 60000,
-                                                      );
-                                                      return mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
-                                                  })()
+                                            const mins = s.closed_at
+                                                ? Math.round((new Date(s.closed_at).getTime() - new Date(s.opened_at).getTime()) / 60000)
                                                 : null;
+                                            const duration =
+                                                mins === null ? null : mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
 
                                             return (
-                                                <tr key={s.id} className="group transition-colors hover:bg-muted/20">
-                                                    <td className="px-4 py-3">
-                                                        <div className="flex items-center gap-2">
-                                                            <span
-                                                                className={cn(
-                                                                    'h-2 w-2 shrink-0 rounded-full',
-                                                                    isOpen ? 'animate-pulse bg-emerald-500' : 'bg-muted-foreground/20',
-                                                                )}
-                                                            />
-                                                            <span className="font-mono text-xs font-bold text-foreground">{s.session_number}</span>
-                                                        </div>
-                                                        <p className="mt-0.5 pl-4 text-[11px] text-muted-foreground">{s.cashier}</p>
-                                                    </td>
-                                                    <td className="hidden px-4 py-3 sm:table-cell">
-                                                        <p className="text-sm text-foreground">{fmtDate(s.opened_at, 'MMM d, yyyy')}</p>
-                                                        <p className="text-[11px] text-muted-foreground">
-                                                            {fmtDate(s.opened_at, 'h:mm a')}
-                                                            {durationStr && <span className="ml-1 opacity-60">· {durationStr}</span>}
+                                                <tr
+                                                    key={s.id}
+                                                    className="cursor-pointer hover:bg-muted/30"
+                                                    onClick={() => router.visit(routes.cashSessions.show(s.id))}
+                                                >
+                                                    <td className="px-4 py-2">
+                                                        <p className="flex items-center gap-1.5 font-mono text-xs font-bold">
+                                                            {s.session_number}
+                                                            {isOpen && <StatusPill tone="success">Open</StatusPill>}
                                                         </p>
+                                                        <p className="text-[11px] text-muted-foreground">{s.cashier}</p>
                                                     </td>
-                                                    <td className="px-4 py-3 text-right text-sm font-medium text-foreground tabular-nums">
-                                                        {s.formatted_opening_cash}
+                                                    <td className="hidden px-4 py-2 text-xs sm:table-cell">
+                                                        {fmtDate(s.opened_at, 'MMM d, h:mm a')}
+                                                        {duration && <span className="block text-[11px] text-muted-foreground">{duration}</span>}
                                                     </td>
-                                                    <td className="hidden px-4 py-3 text-right text-sm text-muted-foreground tabular-nums md:table-cell">
+                                                    <td className="px-4 py-2 text-right tabular-nums">{s.formatted_opening_cash}</td>
+                                                    <td className="hidden px-4 py-2 text-right text-muted-foreground tabular-nums md:table-cell">
                                                         {s.expected_cash !== null ? s.formatted_expected_cash : '—'}
                                                     </td>
-                                                    <td className="hidden px-4 py-3 text-right text-sm text-muted-foreground tabular-nums md:table-cell">
+                                                    <td className="hidden px-4 py-2 text-right text-muted-foreground tabular-nums md:table-cell">
                                                         {s.counted_cash !== null ? s.formatted_counted_cash : '—'}
                                                     </td>
-                                                    <td className="px-4 py-3 text-right">
+                                                    <td className="px-4 py-2 text-right">
                                                         {s.over_short !== null ? (
-                                                            <span className={cn('text-sm font-bold tabular-nums', overShortCls(s.over_short_status))}>
+                                                            <StatusPill tone={OVER_SHORT_TONE[s.over_short_status] ?? 'muted'}>
                                                                 {s.formatted_over_short}
-                                                            </span>
+                                                            </StatusPill>
                                                         ) : (
                                                             <span className="text-xs text-muted-foreground">—</span>
                                                         )}
                                                     </td>
-                                                    <td className="px-4 py-3 text-center">
-                                                        <span
-                                                            className={cn(
-                                                                'rounded-full px-2.5 py-1 text-[10px] font-bold',
-                                                                isOpen
-                                                                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                                                                    : 'bg-muted text-muted-foreground',
-                                                            )}
-                                                        >
-                                                            {isOpen ? '● Open' : 'Closed'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-3 py-3">
-                                                        <Link
-                                                            href={routes.cashSessions.show(s.id)}
-                                                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-border text-muted-foreground opacity-0 transition-colors group-hover:opacity-100 hover:bg-muted hover:text-foreground"
-                                                        >
-                                                            <ChevronRight className="h-3.5 w-3.5" />
-                                                        </Link>
+                                                    <td className="px-2 py-2">
+                                                        <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
                                                     </td>
                                                 </tr>
                                             );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                        {history.last_page > 1 && (
+                            <Pager
+                                from={history.from}
+                                to={history.to}
+                                total={history.total}
+                                links={history.links}
+                                onVisit={(url) => router.get(url, {}, { preserveState: true })}
+                            />
+                        )}
+                    </Panel>
+
+                    <div className="space-y-4">
+                        {my_session && (
+                            <ActiveSessionPanel
+                                session={my_session}
+                                requireCount={require_count}
+                                overShortAlert={over_short_alert}
+                                currency={currency}
+                            />
                         )}
 
-                        {/* Pagination */}
-                        {history.last_page > 1 && (
-                            <div className="flex items-center justify-between border-t border-border bg-muted/10 px-4 py-3">
-                                <p className="text-xs text-muted-foreground">
-                                    {history.from}–{history.to} of {history.total}
-                                </p>
-                                <div className="flex items-center gap-1">
-                                    {history.links.map((link, i) => (
-                                        <button
-                                            key={i}
-                                            disabled={!link.url}
-                                            onClick={() => link.url && router.get(link.url, {}, { preserveState: true })}
-                                            className={cn(
-                                                'h-7 min-w-[28px] rounded-md border px-2 text-xs font-medium transition-all',
-                                                link.active
-                                                    ? 'border-primary bg-primary text-primary-foreground'
-                                                    : 'border-border text-muted-foreground hover:bg-muted disabled:opacity-30',
-                                            )}
-                                            dangerouslySetInnerHTML={{ __html: link.label }}
-                                        />
+                        <Panel flush icon={Banknote} title="Other open sessions">
+                            {others.length === 0 ? (
+                                <p className="py-6 text-center text-sm text-muted-foreground">No other cashier has a session open.</p>
+                            ) : (
+                                <ul className="divide-y divide-border">
+                                    {others.map((s) => (
+                                        <li key={s.id}>
+                                            <Link
+                                                href={routes.cashSessions.show(s.id)}
+                                                className="flex items-center gap-2.5 px-4 py-2 text-sm hover:bg-muted/30"
+                                            >
+                                                <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                                                <span className="min-w-0 flex-1">
+                                                    <span className="block truncate font-semibold">{s.cashier}</span>
+                                                    <span className="block font-mono text-[11px] text-muted-foreground">{s.session_number}</span>
+                                                </span>
+                                                <span className="text-xs text-muted-foreground tabular-nums">{s.formatted_opening_cash}</span>
+                                            </Link>
+                                        </li>
                                     ))}
-                                </div>
-                            </div>
-                        )}
+                                </ul>
+                            )}
+                        </Panel>
                     </div>
                 </div>
             </div>

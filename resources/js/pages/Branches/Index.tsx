@@ -1,10 +1,12 @@
 'use client';
 
 import { usePage, router } from '@inertiajs/react';
-import { Plus, Search, X, Edit2, Trash2, AlertTriangle, CircleDot, Users, Phone, MapPin, User } from 'lucide-react';
+import { Plus, Search, X, Edit2, Trash2, AlertTriangle, CircleDot, Users, Phone, MapPin, Store } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
+import { Chip, controlCls, EmptyRow, PageHeader, Panel, Stat, StatStrip, StatusPill, thCls, useFlashToasts } from '@/components/AdminKit';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import AdminLayout from '@/layouts/AdminLayout';
 import { cn } from '@/lib/utils';
 import { routes } from '@/routes';
@@ -85,19 +87,19 @@ const EMPTY_FORM: BranchForm = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const typeBadge: Record<string, string> = {
-    cafe: 'bg-purple-500/15 text-purple-400 border border-purple-500/20',
-    restaurant: 'bg-orange-500/15 text-orange-400 border border-orange-500/20',
-    food_stall: 'bg-yellow-500/15 text-yellow-500 border border-yellow-500/20',
-    bakery: 'bg-pink-500/15 text-pink-400 border border-pink-500/20',
-    bar: 'bg-rose-500/15 text-rose-400 border border-rose-500/20',
-    retail: 'bg-blue-500/15 text-blue-400 border border-blue-500/20',
-    pharmacy: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20',
-    hardware: 'bg-stone-500/15 text-stone-400 border border-stone-500/20',
-    salon: 'bg-fuchsia-500/15 text-fuchsia-400 border border-fuchsia-500/20',
-    laundry: 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20',
-    school: 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/20',
-    warehouse: 'bg-slate-500/15 text-slate-400 border border-slate-500/20',
-    mixed: 'bg-teal-500/15 text-teal-400 border border-teal-500/20',
+    cafe: 'bg-purple-500/10 text-purple-700 dark:text-purple-400',
+    restaurant: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+    food_stall: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+    bakery: 'bg-pink-500/10 text-pink-700 dark:text-pink-400',
+    bar: 'bg-rose-500/10 text-rose-700 dark:text-rose-400',
+    retail: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
+    pharmacy: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+    hardware: 'bg-stone-500/10 text-stone-700 dark:text-stone-400',
+    salon: 'bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-400',
+    laundry: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-400',
+    school: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400',
+    warehouse: 'bg-slate-500/10 text-slate-700 dark:text-slate-400',
+    mixed: 'bg-teal-500/10 text-teal-700 dark:text-teal-400',
 };
 
 const typeIcon: Record<string, string> = {
@@ -583,14 +585,14 @@ function DeleteDialog({ branch, onClose }: { branch: Branch; onClose: () => void
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function BranchesIndex() {
-    const { branches, suppliers, businessTypes, auth, flash } = usePage<PageProps>().props;
+    const { branches, suppliers, businessTypes, auth } = usePage<PageProps>().props;
+    useFlashToasts();
 
     const [search, setSearch] = useState('');
     const [typeFilter, setTypeFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [drawer, setDrawer] = useState<{ mode: FormMode; branch: Branch | null } | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<Branch | null>(null);
-    const [toast, setToast] = useState<{ type: string; text: string } | null>(flash?.message ?? null);
 
     const filtered = useMemo(() => {
         let list = branches;
@@ -612,309 +614,188 @@ export default function BranchesIndex() {
         router.patch(routes.branches.toggle(b.id), {}, { preserveScroll: true });
     };
 
+    const staffCount = branches.reduce((sum, b) => sum + (b.users_count ?? 0), 0);
+    const typesInUse = Object.entries(businessTypes).filter(([type]) => branches.some((b) => b.business_type === type));
+    const hasFilters = !!(search || typeFilter || statusFilter);
+
     return (
         <AdminLayout>
-            {toast && (
-                <div
-                    className={cn(
-                        'fixed top-4 right-4 z-[9999] flex items-center gap-3 rounded-xl border px-5 py-3.5 text-sm font-medium shadow-2xl',
-                        toast.type === 'success'
-                            ? 'border-emerald-500/40 bg-[#0b1a10] text-emerald-300'
-                            : 'border-red-500/40 bg-[#1a0b0b] text-red-300',
-                    )}
-                >
-                    <span>{toast.type === 'success' ? '✓' : '✕'}</span>
-                    <span>{toast.text}</span>
-                    <button onClick={() => setToast(null)} className="ml-1 opacity-50 hover:opacity-100">
-                        ✕
-                    </button>
-                </div>
-            )}
-
-            <div className="mx-auto max-w-[1400px] space-y-5">
-                {/* Header */}
-                <div className="flex items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-xl font-bold text-foreground">Branches</h1>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                            {branches.length} branch{branches.length !== 1 ? 'es' : ''} · {activeCount} active
-                        </p>
-                    </div>
+            <div className="space-y-4">
+                <PageHeader title="Branches" subtitle="Each store location, its business type and the features it uses.">
                     {canManage && (
-                        <Button className="h-9 gap-2 font-semibold" onClick={() => setDrawer({ mode: 'create', branch: null })}>
-                            <Plus className="h-4 w-4" /> Add Branch
+                        <Button size="sm" className="h-9 gap-1.5" onClick={() => setDrawer({ mode: 'create', branch: null })}>
+                            <Plus className="h-4 w-4" /> Add branch
                         </Button>
                     )}
-                </div>
+                </PageHeader>
 
-                {/* Filters */}
-                <div className="rounded-xl border border-border bg-card p-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <div className="relative min-w-[200px] flex-1">
-                            <Search className="absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <StatStrip count={4}>
+                    <Stat icon={Store} label="Branches" value={branches.length.toLocaleString()} />
+                    <Stat icon={CircleDot} label="Active" value={activeCount.toLocaleString()} tone="success" />
+                    <Stat
+                        icon={CircleDot}
+                        label="Inactive"
+                        value={(branches.length - activeCount).toLocaleString()}
+                        tone={branches.length - activeCount > 0 ? 'muted' : undefined}
+                    />
+                    <Stat icon={Users} label="Staff accounts" value={staffCount.toLocaleString()} />
+                </StatStrip>
+
+                <Panel
+                    flush
+                    icon={Store}
+                    title="All branches"
+                    actions={
+                        <div className="relative w-full sm:w-72">
+                            <Search className="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                             <input
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                placeholder="Search by name, code, or address…"
-                                className="h-9 w-full rounded-lg border border-border bg-background pr-9 pl-9 text-sm text-foreground placeholder:text-muted-foreground focus:ring-1 focus:ring-primary focus:outline-none"
+                                placeholder="Name, code or address"
+                                className={cn(controlCls, 'w-full pr-8 pl-8')}
                             />
                             {search && (
                                 <button
                                     onClick={() => setSearch('')}
-                                    className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                    className="absolute top-1/2 right-2.5 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                    aria-label="Clear search"
                                 >
                                     <X className="h-3.5 w-3.5" />
                                 </button>
                             )}
                         </div>
-                        <select
-                            value={typeFilter}
-                            onChange={(e) => setTypeFilter(e.target.value)}
-                            className="h-9 min-w-[160px] rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
-                        >
-                            <option value="">All types</option>
-                            {Object.entries(businessTypes).map(([val, label]) => (
-                                <option key={val} value={val}>
-                                    {label}
-                                </option>
-                            ))}
-                        </select>
+                    }
+                >
+                    <div className="flex flex-wrap items-center gap-1.5 border-b border-border bg-muted/20 px-4 py-2">
+                        <Chip active={typeFilter === ''} onClick={() => setTypeFilter('')}>
+                            All types
+                        </Chip>
+                        {typesInUse.map(([type, label]) => (
+                            <Chip key={type} active={typeFilter === type} onClick={() => setTypeFilter(typeFilter === type ? '' : type)}>
+                                {typeIcon[type]} {label} <span className="opacity-60">{branches.filter((b) => b.business_type === type).length}</span>
+                            </Chip>
+                        ))}
                         <select
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value)}
-                            className="h-9 min-w-[130px] rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
+                            className={cn(controlCls, 'ml-auto h-7 text-xs')}
+                            aria-label="Status"
                         >
-                            <option value="">All status</option>
+                            <option value="">Any status</option>
                             <option value="active">Active</option>
                             <option value="inactive">Inactive</option>
                         </select>
-                        {(search || typeFilter || statusFilter) && (
+                        {hasFilters && (
                             <button
                                 onClick={() => {
                                     setSearch('');
                                     setTypeFilter('');
                                     setStatusFilter('');
                                 }}
-                                className="flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
+                                className="h-7 rounded-lg px-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
                             >
-                                <X className="h-3.5 w-3.5" /> Clear
+                                Clear
                             </button>
                         )}
-                        <span className="ml-auto text-xs text-muted-foreground">
-                            {filtered.length} result{filtered.length !== 1 ? 's' : ''}
-                        </span>
                     </div>
-                </div>
 
-                {/* Summary cards — clickable to filter by type */}
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                    {Object.entries(businessTypes).map(([type, label]) => {
-                        const count = branches.filter((b) => b.business_type === type).length;
-                        return (
-                            <button
-                                key={type}
-                                onClick={() => setTypeFilter(typeFilter === type ? '' : type)}
-                                className={cn(
-                                    'rounded-xl border bg-card p-4 text-left transition-all hover:shadow-sm',
-                                    typeFilter === type ? 'border-primary bg-primary/5' : 'border-border',
-                                )}
-                            >
-                                <div className="mb-1.5 flex items-center gap-2">
-                                    <span className="text-lg">{typeIcon[type]}</span>
-                                    <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-bold capitalize', typeBadge[type])}>{type}</span>
-                                </div>
-                                <p className="text-2xl font-bold text-foreground tabular-nums">{count}</p>
-                                <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{label}</p>
-                            </button>
-                        );
-                    })}
-                </div>
-
-                {/* Table */}
-                <div className="overflow-hidden rounded-xl border border-border bg-card">
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-border bg-muted/30">
-                                    {['Branch', 'Type', 'Contact', 'Features', 'Users', 'Status', ''].map((h, i) => (
-                                        <th
-                                            key={i}
-                                            className={cn(
-                                                'px-4 py-3 text-[10px] font-bold tracking-widest text-muted-foreground uppercase',
-                                                i === 0 ? 'text-left' : i === 6 ? 'w-10 text-right' : 'text-left',
-                                                i === 2 ? 'hidden md:table-cell' : '',
-                                                i === 3 ? 'hidden lg:table-cell' : '',
-                                                i === 4 ? 'hidden sm:table-cell' : '',
-                                            )}
-                                        >
-                                            {h}
-                                        </th>
-                                    ))}
+                            <thead className="border-b border-border">
+                                <tr>
+                                    <th className={thCls}>Branch</th>
+                                    <th className={thCls}>Type</th>
+                                    <th className={cn(thCls, 'hidden md:table-cell')}>Contact</th>
+                                    <th className={cn(thCls, 'hidden lg:table-cell')}>Features</th>
+                                    <th className={cn(thCls, 'hidden text-right sm:table-cell')}>Staff</th>
+                                    <th className={thCls}>Active</th>
+                                    <th className="w-20" />
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
                                 {filtered.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={7} className="px-4 py-12 text-center text-sm text-muted-foreground">
-                                            No branches found
-                                        </td>
-                                    </tr>
+                                    <EmptyRow colSpan={7} icon={Store}>
+                                        {hasFilters ? 'No branches match these filters.' : 'No branches yet.'}
+                                    </EmptyRow>
                                 ) : (
                                     filtered.map((b) => {
-                                        const activeFlags = Object.values(b.feature_flags).filter(Boolean).length;
+                                        const features = [
+                                            b.use_table_ordering && 'Tables',
+                                            b.use_variants && 'Variants',
+                                            b.use_expiry_tracking && 'Expiry',
+                                            b.use_recipe_system && 'Recipes',
+                                            b.use_bundles && 'Bundles',
+                                        ].filter(Boolean) as string[];
                                         return (
-                                            <tr key={b.id} className="group transition-colors hover:bg-muted/20">
-                                                {/* Name + Code */}
-                                                <td className="px-4 py-3">
-                                                    <div className="flex items-center gap-3">
-                                                        <div
-                                                            className={cn(
-                                                                'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base',
-                                                                b.is_active ? 'bg-primary/10' : 'bg-muted',
-                                                            )}
-                                                        >
+                                            <tr key={b.id} className={cn('hover:bg-muted/30', !b.is_active && 'opacity-60')}>
+                                                <td className="px-4 py-2">
+                                                    <div className="flex items-center gap-2.5">
+                                                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-base">
                                                             {typeIcon[b.business_type]}
-                                                        </div>
+                                                        </span>
                                                         <div className="min-w-0">
-                                                            <div className="flex items-center gap-2">
-                                                                <p className="truncate text-sm font-semibold text-foreground">{b.name}</p>
-                                                                {!b.is_active && (
-                                                                    <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground">
-                                                                        inactive
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            <p className="font-mono text-[11px] tracking-wider text-muted-foreground">{b.code}</p>
+                                                            <p className="truncate font-semibold">{b.name}</p>
+                                                            <p className="font-mono text-[11px] text-muted-foreground">{b.code}</p>
                                                         </div>
                                                     </div>
                                                 </td>
-
-                                                {/* Business type */}
-                                                <td className="px-4 py-3">
+                                                <td className="px-4 py-2">
                                                     <span
-                                                        className={cn(
-                                                            'rounded-full px-2 py-1 text-[10px] font-bold capitalize',
-                                                            typeBadge[b.business_type],
-                                                        )}
+                                                        className={cn('rounded-full px-2 py-0.5 text-[11px] font-bold', typeBadge[b.business_type])}
                                                     >
-                                                        {b.business_type}
+                                                        {b.business_type_label || b.business_type}
                                                     </span>
                                                 </td>
-
-                                                {/* Contact */}
-                                                <td className="hidden px-4 py-3 md:table-cell">
-                                                    <div className="min-w-0 space-y-0.5">
-                                                        {b.contact_person && (
-                                                            <p className="flex items-center gap-1.5 truncate text-xs font-medium text-foreground">
-                                                                <User className="h-3 w-3 shrink-0 text-muted-foreground" />
-                                                                {b.contact_person}
-                                                            </p>
-                                                        )}
-                                                        {b.phone && (
-                                                            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                                                <Phone className="h-3 w-3 shrink-0" />
-                                                                {b.phone}
-                                                            </p>
-                                                        )}
-                                                        {b.address && (
-                                                            <p className="flex max-w-[200px] items-center gap-1.5 truncate text-xs text-muted-foreground">
-                                                                <MapPin className="h-3 w-3 shrink-0" />
-                                                                {b.address}
-                                                            </p>
-                                                        )}
-                                                        {!b.contact_person && !b.phone && !b.address && (
-                                                            <span className="text-xs text-muted-foreground">—</span>
-                                                        )}
-                                                    </div>
-                                                </td>
-
-                                                {/* Feature flags */}
-                                                <td className="hidden px-4 py-3 lg:table-cell">
-                                                    <div className="mb-1.5 flex items-center gap-1.5">
-                                                        <div className="h-1.5 w-16 flex-1 overflow-hidden rounded-full bg-muted">
-                                                            <div
-                                                                className="h-full rounded-full bg-primary transition-all"
-                                                                style={{ width: `${(activeFlags / 5) * 100}%` }}
-                                                            />
-                                                        </div>
-                                                        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{activeFlags}/5</span>
-                                                    </div>
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {b.use_table_ordering && (
-                                                            <span className="rounded bg-purple-500/15 px-1.5 py-0.5 text-[9px] text-purple-400">
-                                                                tables
-                                                            </span>
-                                                        )}
-                                                        {b.use_variants && (
-                                                            <span className="rounded bg-blue-500/15 px-1.5 py-0.5 text-[9px] text-blue-400">
-                                                                variants
-                                                            </span>
-                                                        )}
-                                                        {b.use_expiry_tracking && (
-                                                            <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] text-amber-400">
-                                                                expiry
-                                                            </span>
-                                                        )}
-                                                        {b.use_recipe_system && (
-                                                            <span className="rounded bg-cyan-500/15 px-1.5 py-0.5 text-[9px] text-cyan-400">
-                                                                recipes
-                                                            </span>
-                                                        )}
-                                                        {b.use_bundles && (
-                                                            <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[9px] text-emerald-400">
-                                                                bundles
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </td>
-
-                                                {/* Users */}
-                                                <td className="hidden px-4 py-3 sm:table-cell">
-                                                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                                                        <Users className="h-3.5 w-3.5" />
-                                                        <span className="text-sm tabular-nums">{b.users_count}</span>
-                                                    </div>
-                                                </td>
-
-                                                {/* Status — clickable toggle */}
-                                                <td className="px-4 py-3">
-                                                    <button
-                                                        onClick={() => canManage && handleToggle(b)}
-                                                        disabled={!canManage}
-                                                        title={b.is_active ? 'Click to deactivate' : 'Click to activate'}
-                                                        className={cn(
-                                                            'flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold transition-all',
-                                                            b.is_active
-                                                                ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25'
-                                                                : 'bg-muted text-muted-foreground hover:bg-muted/80',
-                                                            !canManage && 'cursor-default',
-                                                        )}
-                                                    >
-                                                        <span
-                                                            className={cn(
-                                                                'h-1.5 w-1.5 shrink-0 rounded-full',
-                                                                b.is_active ? 'bg-emerald-400' : 'bg-muted-foreground/50',
+                                                <td className="hidden px-4 py-2 text-xs md:table-cell">
+                                                    {b.contact_person || b.phone || b.address ? (
+                                                        <div className="min-w-0 space-y-0.5">
+                                                            {b.contact_person && <p className="truncate font-semibold">{b.contact_person}</p>}
+                                                            {b.phone && (
+                                                                <p className="flex items-center gap-1 text-muted-foreground">
+                                                                    <Phone className="h-3 w-3" /> {b.phone}
+                                                                </p>
                                                             )}
-                                                        />
-                                                        {b.is_active ? 'Active' : 'Inactive'}
-                                                    </button>
+                                                            {b.address && (
+                                                                <p className="flex max-w-56 items-center gap-1 truncate text-muted-foreground">
+                                                                    <MapPin className="h-3 w-3 shrink-0" /> {b.address}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-muted-foreground">—</span>
+                                                    )}
                                                 </td>
-
-                                                {/* Actions */}
-                                                <td className="px-4 py-3 text-right">
+                                                <td className="hidden px-4 py-2 text-xs text-muted-foreground lg:table-cell">
+                                                    {features.length ? features.join(' · ') : 'None'}
+                                                </td>
+                                                <td className="hidden px-4 py-2 text-right tabular-nums sm:table-cell">{b.users_count}</td>
+                                                <td className="px-4 py-2">
+                                                    {canManage ? (
+                                                        <Switch
+                                                            checked={b.is_active}
+                                                            onCheckedChange={() => handleToggle(b)}
+                                                            aria-label={b.is_active ? `Deactivate ${b.name}` : `Activate ${b.name}`}
+                                                        />
+                                                    ) : (
+                                                        <StatusPill tone={b.is_active ? 'success' : 'muted'}>
+                                                            {b.is_active ? 'Active' : 'Inactive'}
+                                                        </StatusPill>
+                                                    )}
+                                                </td>
+                                                <td className="px-2 py-2">
                                                     {canManage && (
-                                                        <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                                                        <div className="flex justify-end gap-0.5">
                                                             <button
                                                                 onClick={() => setDrawer({ mode: 'edit', branch: b })}
-                                                                className="flex h-7 w-7 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                                                                title="Edit"
+                                                                className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                                                                aria-label={`Edit ${b.name}`}
                                                             >
                                                                 <Edit2 className="h-3.5 w-3.5" />
                                                             </button>
                                                             <button
                                                                 onClick={() => setDeleteTarget(b)}
-                                                                className="flex h-7 w-7 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-destructive/30 hover:text-destructive"
-                                                                title="Delete"
+                                                                className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                                                aria-label={`Delete ${b.name}`}
                                                             >
                                                                 <Trash2 className="h-3.5 w-3.5" />
                                                             </button>
@@ -928,7 +809,7 @@ export default function BranchesIndex() {
                             </tbody>
                         </table>
                     </div>
-                </div>
+                </Panel>
             </div>
 
             {drawer && (

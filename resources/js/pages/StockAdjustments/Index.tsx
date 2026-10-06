@@ -15,7 +15,10 @@ import {
     Check,
     ChevronsUpDown,
 } from 'lucide-react';
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import { toast } from 'sonner';
+import { controlCls, EmptyRow, PageHeader, Pager, Panel, Stat, StatStrip, StatusPill, thCls } from '@/components/AdminKit';
+import type { Tone } from '@/components/AdminKit';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -53,6 +56,8 @@ interface PageProps {
         current_page: number;
         last_page: number;
         total: number;
+        from: number | null;
+        to: number | null;
         links: { url: string | null; label: string; active: boolean }[];
     };
     products: Product[];
@@ -61,18 +66,18 @@ interface PageProps {
     filters: { type?: string; from?: string; to?: string; search?: string; branch_id?: string };
     can_delete: boolean;
     app: { currency: string };
-    message?: { type: string; text: string };
+    flash?: { message?: { type: string; text: string } };
     branch_id?: number | null;
     [key: string]: unknown;
 }
 
-const TYPE_META: Record<string, { label: string; color: string; icon: React.ElementType }> = {
-    damage: { label: 'Damage', color: 'text-red-500 bg-red-500/10 border-red-500/20', icon: AlertTriangle },
-    loss: { label: 'Loss', color: 'text-orange-500 bg-orange-500/10 border-orange-500/20', icon: TrendingDown },
-    expired: { label: 'Expired', color: 'text-amber-500 bg-amber-500/10 border-amber-500/20', icon: Clock },
-    theft: { label: 'Theft', color: 'text-purple-500 bg-purple-500/10 border-purple-500/20', icon: ShieldAlert },
-    correction: { label: 'Correction', color: 'text-blue-500 bg-blue-500/10 border-blue-500/20', icon: RefreshCw },
-    other: { label: 'Other', color: 'text-muted-foreground bg-muted border-border', icon: MoreHorizontal },
+const TYPE_META: Record<string, { label: string; tone: Tone; icon: React.ElementType }> = {
+    damage: { label: 'Damage', tone: 'danger', icon: AlertTriangle },
+    loss: { label: 'Loss', tone: 'warning', icon: TrendingDown },
+    expired: { label: 'Expired', tone: 'warning', icon: Clock },
+    theft: { label: 'Theft', tone: 'danger', icon: ShieldAlert },
+    correction: { label: 'Correction', tone: 'info', icon: RefreshCw },
+    other: { label: 'Other', tone: 'muted', icon: MoreHorizontal },
 };
 
 function fmtMoney(n: number | string, currency: string) {
@@ -83,10 +88,9 @@ function TypeBadge({ type }: { type: string }) {
     const meta = TYPE_META[type] ?? TYPE_META.other;
     const Icon = meta.icon;
     return (
-        <span className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold', meta.color)}>
-            <Icon className="h-3 w-3" />
-            {meta.label}
-        </span>
+        <StatusPill tone={meta.tone}>
+            <Icon className="h-3 w-3" /> {meta.label}
+        </StatusPill>
     );
 }
 
@@ -334,10 +338,17 @@ function RecordAdjustmentModal({
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function StockAdjustmentsIndex() {
-    const { adjustments, products, types, summary, filters, can_delete, app, message, branch_id } = usePage<PageProps>().props;
+    const { adjustments, products, types, summary, filters, can_delete, app, flash, branch_id } = usePage<PageProps>().props;
     const currency = app?.currency ?? '₱';
 
     const [showModal, setShowModal] = useState(false);
+
+    useEffect(() => {
+        const message = flash?.message;
+        if (!message) return;
+        if (message.type === 'success') toast.success(message.text);
+        else toast.error(message.text);
+    }, [flash]);
     const [deleting, setDeleting] = useState<number | null>(null);
 
     // ── Filter state ──────────────────────────────────────────────────────────
@@ -346,19 +357,23 @@ export default function StockAdjustmentsIndex() {
     const [filterTo, setFilterTo] = useState(filters.to ?? '');
     const [filterSearch, setFilterSearch] = useState(filters.search ?? '');
 
-    const applyFilters = useCallback(() => {
-        router.get(
-            routes.stockAdjustments.index(),
-            {
-                type: filterType || undefined,
-                from: filterFrom || undefined,
-                to: filterTo || undefined,
-                search: filterSearch || undefined,
-                branch_id: filters.branch_id || undefined,
-            },
-            { preserveState: true, preserveScroll: true },
-        );
-    }, [filterType, filterFrom, filterTo, filterSearch, filters.branch_id]);
+    const applyFilters = useCallback(
+        (overrides: Record<string, unknown> = {}) => {
+            router.get(
+                routes.stockAdjustments.index(),
+                {
+                    type: filterType || undefined,
+                    from: filterFrom || undefined,
+                    to: filterTo || undefined,
+                    search: filterSearch || undefined,
+                    branch_id: filters.branch_id || undefined,
+                    ...overrides,
+                },
+                { preserveState: true, preserveScroll: true },
+            );
+        },
+        [filterType, filterFrom, filterTo, filterSearch, filters.branch_id],
+    );
 
     const clearFilters = () => {
         setFilterType('');
@@ -382,245 +397,230 @@ export default function StockAdjustmentsIndex() {
         });
     };
 
-    const totalLoss = Object.values(summary).reduce((s, v) => s + Number(v.total_cost), 0);
-    const totalUnits = Object.values(summary).reduce((s, v) => s + v.total_qty, 0);
+    const totalLoss = Object.values(summary).reduce((sum, v) => sum + Number(v.total_cost), 0);
+    const totalUnits = Object.values(summary).reduce((sum, v) => sum + Number(v.total_qty), 0);
     const hasFilters = !!(filters.type || filters.from || filters.to || filters.search);
+    const biggestCause = Object.entries(summary).sort(([, a], [, b]) => Number(b.total_cost) - Number(a.total_cost))[0];
+    const scopeLabel = hasFilters ? 'matching filters' : 'all time';
+
+    const filterByType = (type: string) => {
+        const next = filterType === type ? '' : type;
+        setFilterType(next);
+        applyFilters({ type: next || undefined });
+    };
 
     return (
         <AdminLayout>
             <Head title="Losses / Damages" />
-            <div className="mx-auto max-w-7xl space-y-6 p-6">
-                {/* Header */}
-                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-                    <div>
-                        <h1 className="text-2xl font-bold text-foreground">Losses / Damages</h1>
-                        <p className="mt-0.5 text-sm text-muted-foreground">Record damages, losses, expired goods, theft, and corrections</p>
-                    </div>
-                    <Button onClick={() => setShowModal(true)} className="shrink-0">
-                        <Plus className="mr-1.5 h-4 w-4" />
-                        Record Adjustment
-                    </Button>
-                </div>
-
-                {/* Flash message */}
-                {message && (
-                    <div
-                        className={cn(
-                            'rounded-xl border px-4 py-3 text-sm font-medium',
-                            message.type === 'success'
-                                ? 'border-green-500/20 bg-green-500/10 text-green-600'
-                                : 'border-destructive/20 bg-destructive/10 text-destructive',
-                        )}
-                    >
-                        {message.text}
-                    </div>
-                )}
-
-                {/* Summary cards */}
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                    {types.map((t) => {
-                        const meta = TYPE_META[t] ?? TYPE_META.other;
-                        const Icon = meta.icon;
-                        const s = summary[t];
-                        return (
-                            <div key={t} className="space-y-1 rounded-xl border border-border bg-card p-3">
-                                <div className={cn('inline-flex items-center gap-1 text-xs font-semibold', meta.color.split(' ')[0])}>
-                                    <Icon className="h-3.5 w-3.5" />
-                                    {meta.label}
-                                </div>
-                                <p className="text-xl font-black tabular-nums">{s ? s.total_qty.toLocaleString() : 0}</p>
-                                <p className="text-xs text-muted-foreground tabular-nums">
-                                    {s ? fmtMoney(Number(s.total_cost), currency) : fmtMoney(0, currency)}
-                                </p>
-                            </div>
-                        );
-                    })}
-                </div>
-
-                {/* Total bar */}
-                <div className="flex items-center gap-6 rounded-xl border border-destructive/20 bg-destructive/8 px-4 py-3">
-                    <div>
-                        <p className="text-xs text-muted-foreground">Total Units Lost</p>
-                        <p className="text-lg font-black tabular-nums">{totalUnits.toLocaleString()}</p>
-                    </div>
-                    <div className="h-8 w-px bg-border" />
-                    <div>
-                        <p className="text-xs text-muted-foreground">Total Loss Value</p>
-                        <p className="text-lg font-black text-destructive tabular-nums">{fmtMoney(totalLoss, currency)}</p>
-                    </div>
-                    {hasFilters && (
-                        <button
-                            onClick={clearFilters}
-                            className="ml-auto flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                        >
-                            <X className="h-3.5 w-3.5" />
-                            Clear filters
-                        </button>
-                    )}
-                </div>
-
-                {/* Filters */}
-                <div className="flex flex-wrap items-end gap-2">
-                    <div className="relative">
-                        <Search className="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                        <input
-                            value={filterSearch}
-                            onChange={(e) => setFilterSearch(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
-                            placeholder="Search product…"
-                            className="h-9 w-48 rounded-xl border border-border bg-background pr-3 pl-9 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
-                        />
-                    </div>
-                    <select
-                        value={filterType}
-                        onChange={(e) => setFilterType(e.target.value)}
-                        className="h-9 rounded-xl border border-border bg-background px-3 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
-                    >
-                        <option value="">All types</option>
-                        {types.map((t) => (
-                            <option key={t} value={t}>
-                                {TYPE_META[t]?.label ?? t}
-                            </option>
-                        ))}
-                    </select>
-                    <input
-                        type="date"
-                        value={filterFrom}
-                        onChange={(e) => setFilterFrom(e.target.value)}
-                        className="h-9 rounded-xl border border-border bg-background px-3 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
-                    />
-                    <input
-                        type="date"
-                        value={filterTo}
-                        onChange={(e) => setFilterTo(e.target.value)}
-                        className="h-9 rounded-xl border border-border bg-background px-3 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
-                    />
-                    <Button variant="outline" size="sm" onClick={applyFilters} className="h-9">
-                        <Search className="mr-1 h-3.5 w-3.5" />
-                        Filter
-                    </Button>
-                    {hasFilters && (
-                        <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 text-muted-foreground">
-                            <X className="mr-1 h-3.5 w-3.5" />
-                            Clear
-                        </Button>
-                    )}
+            <div className="space-y-4">
+                <PageHeader title="Losses / Damages" subtitle="Damaged, lost, expired or stolen stock, and count corrections.">
                     <a
                         href={routes.reports.stockLoss()}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="ml-auto flex h-9 items-center gap-1.5 rounded-xl border border-border px-3 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
                     >
-                        <PackageX className="h-3.5 w-3.5" />
-                        View Report
+                        <PackageX className="h-4 w-4" /> Loss report
                     </a>
-                </div>
+                    <Button size="sm" className="h-9 gap-1.5" onClick={() => setShowModal(true)}>
+                        <Plus className="h-4 w-4" /> Record adjustment
+                    </Button>
+                </PageHeader>
 
-                {/* Table */}
-                <div className="overflow-hidden rounded-2xl border border-border bg-card">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-border bg-muted/30">
-                                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Date</th>
-                                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Product</th>
-                                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Type</th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground">Qty</th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground">Unit Cost</th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground">Loss Value</th>
-                                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Note</th>
-                                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Recorded By</th>
-                                    {can_delete && <th className="px-4 py-3" />}
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border">
-                                {adjustments.data.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={can_delete ? 9 : 8} className="px-4 py-12 text-center text-sm text-muted-foreground">
-                                            <PackageX className="mx-auto mb-2 h-8 w-8 opacity-20" />
-                                            No adjustments recorded yet
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    adjustments.data.map((adj) => (
-                                        <tr key={adj.id} className="transition-colors hover:bg-muted/20">
-                                            <td className="px-4 py-3 text-xs whitespace-nowrap text-muted-foreground">
-                                                {new Date(adj.created_at).toLocaleDateString('en-PH', {
-                                                    month: 'short',
-                                                    day: 'numeric',
-                                                    year: 'numeric',
-                                                })}
-                                                <br />
-                                                <span className="text-[11px] opacity-60">
-                                                    {new Date(adj.created_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <p className="font-semibold text-foreground">{adj.product?.name ?? '—'}</p>
-                                                {adj.product?.barcode && <p className="text-[11px] text-muted-foreground">{adj.product.barcode}</p>}
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <TypeBadge type={adj.type} />
-                                            </td>
-                                            <td className="px-4 py-3 text-right font-bold tabular-nums">{adj.quantity.toLocaleString()}</td>
-                                            <td className="px-4 py-3 text-right text-muted-foreground tabular-nums">
-                                                {fmtMoney(adj.unit_cost, currency)}
-                                            </td>
-                                            <td className="px-4 py-3 text-right font-bold text-destructive tabular-nums">
-                                                {fmtMoney(adj.total_cost, currency)}
-                                            </td>
-                                            <td className="max-w-[180px] truncate px-4 py-3 text-xs text-muted-foreground">{adj.note ?? '—'}</td>
-                                            <td className="px-4 py-3 text-xs text-muted-foreground">
-                                                {adj.recordedBy ? `${adj.recordedBy.fname} ${adj.recordedBy.lname}` : '—'}
-                                            </td>
-                                            {can_delete && (
-                                                <td className="px-4 py-3">
-                                                    <button
-                                                        onClick={() => handleDelete(adj.id)}
-                                                        disabled={deleting === adj.id}
-                                                        className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
-                                                        title="Delete and restore stock"
-                                                    >
-                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                    </button>
-                                                </td>
-                                            )}
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                <StatStrip count={4}>
+                    <Stat icon={PackageX} label={`Records · ${scopeLabel}`} value={adjustments.total.toLocaleString()} />
+                    <Stat icon={TrendingDown} label="Units written off" value={totalUnits.toLocaleString()} />
+                    <Stat
+                        icon={AlertTriangle}
+                        label="Loss value"
+                        value={fmtMoney(totalLoss, currency)}
+                        tone={totalLoss > 0 ? 'warning' : undefined}
+                    />
+                    <Stat
+                        icon={ShieldAlert}
+                        label="Biggest cause"
+                        value={biggestCause ? (TYPE_META[biggestCause[0]]?.label ?? biggestCause[0]) : '—'}
+                        tone={biggestCause ? undefined : 'muted'}
+                    />
+                </StatStrip>
 
-                    {/* Pagination */}
-                    {adjustments.last_page > 1 && (
-                        <div className="flex items-center justify-between border-t border-border px-4 py-3">
-                            <p className="text-xs text-muted-foreground">
-                                Page {adjustments.current_page} of {adjustments.last_page} · {adjustments.total} records
-                            </p>
-                            <div className="flex gap-1">
-                                {adjustments.links.map((link, i) =>
-                                    link.url ? (
-                                        <button
-                                            key={i}
-                                            onClick={() => router.get(link.url!)}
-                                            className={cn(
-                                                'h-8 min-w-[32px] rounded-lg border px-2 text-xs transition-colors',
-                                                link.active ? 'border-primary bg-primary text-primary-foreground' : 'border-border hover:bg-muted',
-                                            )}
-                                            dangerouslySetInnerHTML={{ __html: link.label }}
-                                        />
-                                    ) : (
-                                        <span
-                                            key={i}
-                                            className="flex h-8 min-w-[32px] items-center justify-center px-2 text-xs text-muted-foreground opacity-40"
-                                            dangerouslySetInnerHTML={{ __html: link.label }}
-                                        />
-                                    ),
-                                )}
+                <div className="grid gap-4 xl:grid-cols-[1fr_300px]">
+                    <Panel
+                        flush
+                        icon={PackageX}
+                        title="Adjustments"
+                        actions={
+                            hasFilters && (
+                                <button
+                                    onClick={clearFilters}
+                                    className="flex h-7 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+                                >
+                                    <X className="h-3 w-3" /> Clear filters
+                                </button>
+                            )
+                        }
+                    >
+                        <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/20 px-4 py-2">
+                            <div className="relative min-w-44 flex-1">
+                                <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                                <input
+                                    value={filterSearch}
+                                    onChange={(e) => setFilterSearch(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+                                    placeholder="Search product, then Enter"
+                                    className={cn(controlCls, 'w-full pl-8')}
+                                />
                             </div>
+                            <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className={controlCls} aria-label="Type">
+                                <option value="">All types</option>
+                                {types.map((t) => (
+                                    <option key={t} value={t}>
+                                        {TYPE_META[t]?.label ?? t}
+                                    </option>
+                                ))}
+                            </select>
+                            <input
+                                type="date"
+                                value={filterFrom}
+                                onChange={(e) => setFilterFrom(e.target.value)}
+                                className={controlCls}
+                                aria-label="From"
+                            />
+                            <span className="text-xs text-muted-foreground">to</span>
+                            <input
+                                type="date"
+                                value={filterTo}
+                                onChange={(e) => setFilterTo(e.target.value)}
+                                className={controlCls}
+                                aria-label="To"
+                            />
+                            <Button variant="outline" size="sm" onClick={() => applyFilters()} className="h-8">
+                                Apply
+                            </Button>
                         </div>
-                    )}
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead className="border-b border-border">
+                                    <tr>
+                                        <th className={thCls}>Date</th>
+                                        <th className={thCls}>Product</th>
+                                        <th className={thCls}>Type</th>
+                                        <th className={cn(thCls, 'text-right')}>Qty</th>
+                                        <th className={cn(thCls, 'hidden text-right md:table-cell')}>Unit cost</th>
+                                        <th className={cn(thCls, 'text-right')}>Loss</th>
+                                        <th className={cn(thCls, 'hidden lg:table-cell')}>Note · by</th>
+                                        {can_delete && <th className="w-10" />}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                    {adjustments.data.length === 0 ? (
+                                        <EmptyRow colSpan={can_delete ? 8 : 7} icon={PackageX}>
+                                            {hasFilters ? 'No adjustments match these filters.' : 'No adjustments recorded yet.'}
+                                        </EmptyRow>
+                                    ) : (
+                                        adjustments.data.map((adj) => (
+                                            <tr key={adj.id} className="hover:bg-muted/30">
+                                                <td className="px-4 py-2 text-xs whitespace-nowrap">
+                                                    {new Date(adj.created_at).toLocaleDateString('en-PH', {
+                                                        month: 'short',
+                                                        day: 'numeric',
+                                                        year: 'numeric',
+                                                    })}
+                                                    <span className="block text-[11px] text-muted-foreground">
+                                                        {new Date(adj.created_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-2">
+                                                    <p className="font-semibold">{adj.product?.name ?? '—'}</p>
+                                                    {adj.product?.barcode && (
+                                                        <p className="font-mono text-[11px] text-muted-foreground">{adj.product.barcode}</p>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-2">
+                                                    <TypeBadge type={adj.type} />
+                                                </td>
+                                                <td className="px-4 py-2 text-right font-bold tabular-nums">{adj.quantity.toLocaleString()}</td>
+                                                <td className="hidden px-4 py-2 text-right text-muted-foreground tabular-nums md:table-cell">
+                                                    {fmtMoney(adj.unit_cost, currency)}
+                                                </td>
+                                                <td className="px-4 py-2 text-right font-bold text-red-700 tabular-nums dark:text-red-400">
+                                                    {fmtMoney(adj.total_cost, currency)}
+                                                </td>
+                                                <td className="hidden max-w-56 px-4 py-2 text-xs text-muted-foreground lg:table-cell">
+                                                    <p className="truncate">{adj.note ?? '—'}</p>
+                                                    <p className="text-[11px]">
+                                                        {adj.recordedBy ? `${adj.recordedBy.fname} ${adj.recordedBy.lname}` : '—'}
+                                                    </p>
+                                                </td>
+                                                {can_delete && (
+                                                    <td className="px-2 py-2">
+                                                        <button
+                                                            onClick={() => handleDelete(adj.id)}
+                                                            disabled={deleting === adj.id}
+                                                            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+                                                            title="Delete and restore stock"
+                                                            aria-label="Delete and restore stock"
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </td>
+                                                )}
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {adjustments.last_page > 1 && (
+                            <Pager
+                                from={adjustments.from}
+                                to={adjustments.to}
+                                total={adjustments.total}
+                                links={adjustments.links}
+                                onVisit={(url) => router.get(url, {}, { preserveState: true, preserveScroll: true })}
+                            />
+                        )}
+                    </Panel>
+
+                    <Panel
+                        flush
+                        icon={TrendingDown}
+                        title="By type"
+                        actions={<span className="text-[11px] font-semibold text-muted-foreground">{scopeLabel}</span>}
+                        className="self-start"
+                    >
+                        <ul className="divide-y divide-border">
+                            {types.map((t) => {
+                                const meta = TYPE_META[t] ?? TYPE_META.other;
+                                const row = summary[t];
+                                const value = row ? Number(row.total_cost) : 0;
+                                const share = totalLoss > 0 ? (value / totalLoss) * 100 : 0;
+                                return (
+                                    <li key={t}>
+                                        <button
+                                            onClick={() => filterByType(t)}
+                                            className={cn('w-full px-4 py-2 text-left text-sm hover:bg-muted/30', filterType === t && 'bg-primary/5')}
+                                            title={filterType === t ? 'Show all types' : `Show only ${meta.label.toLowerCase()}`}
+                                        >
+                                            <span className="flex items-center gap-2">
+                                                <meta.icon className="h-3.5 w-3.5 text-muted-foreground" />
+                                                <span className="flex-1 font-semibold">{meta.label}</span>
+                                                <span className="text-xs text-muted-foreground tabular-nums">
+                                                    {row ? Number(row.total_qty).toLocaleString() : 0} u
+                                                </span>
+                                                <span className="w-24 text-right font-bold tabular-nums">{fmtMoney(value, currency)}</span>
+                                            </span>
+                                            <span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-muted">
+                                                <span className="block h-full rounded-full bg-primary" style={{ width: `${share}%` }} />
+                                            </span>
+                                        </button>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    </Panel>
                 </div>
             </div>
 

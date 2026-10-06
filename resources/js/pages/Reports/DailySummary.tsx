@@ -1,16 +1,12 @@
 import { router } from '@inertiajs/react';
 import { Head } from '@inertiajs/react';
 
-import { Calendar, Building2, TrendingUp, DollarSign, CreditCard, FileText, Download } from 'lucide-react';
+import { CreditCard, Download, FileText, Receipt, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import { useState } from 'react';
-import { Badge } from '@/components/ui/badge';
+import { BranchSelect, controlCls, FilterBar, Line, PageHeader, Panel, Stat, StatStrip } from '@/components/AdminKit';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
-
 import AdminLayout from '@/layouts/AdminLayout';
+import { cn } from '@/lib/utils';
 import { reportRoutes, getReportTitle, getDefaultFilters, openLivePdfPreview, type ReportFilters, type DailySummaryData } from './Files';
 
 interface Props {
@@ -18,6 +14,9 @@ interface Props {
     branches: Array<{ id: number; name: string }> | null;
     currentBranchId?: number;
 }
+
+const peso = (n: number | string | null | undefined) =>
+    '₱' + Number(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function DailySummary({ dailySummary, branches, currentBranchId }: Props) {
     const [filters, setFilters] = useState<ReportFilters>(getDefaultFilters('daily', currentBranchId));
@@ -29,224 +28,98 @@ export default function DailySummary({ dailySummary, branches, currentBranchId }
 
     const handleGenerate = () => {
         setLoading(true);
-        router.get(reportRoutes.daily(), filters, {
+        router.get(reportRoutes.daily(), { ...filters }, {
             preserveState: true,
             preserveScroll: true,
             onFinish: () => setLoading(false),
         });
     };
 
-    const handleViewPdf = () => {
-        openLivePdfPreview('daily', filters);
-    };
-
     const netSales = dailySummary ? Number(dailySummary.gross_sales) - Number(dailySummary.total_refunds) : 0;
+    const overShort = Number(dailySummary?.over_short ?? 0);
 
     return (
         <AdminLayout>
             <Head title={getReportTitle('daily')} />
 
-            <div className="mx-auto max-w-5xl space-y-6 p-6">
-                {/* Header */}
-                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-                    <div className="flex items-center gap-3">
-                        <div className="rounded-lg bg-primary/10 p-2">
-                            <FileText className="h-6 w-6 text-primary" />
-                        </div>
-                        <div>
-                            <h1 className="text-2xl font-semibold tracking-tight text-foreground">{getReportTitle('daily')}</h1>
-                            <p className="text-sm text-muted-foreground">Daily performance & cash reconciliation</p>
-                        </div>
-                    </div>
+            <div className="space-y-4">
+                <PageHeader title={getReportTitle('daily')} subtitle="One day's sales, cash drawer and expenses for a branch.">
+                    <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => openLivePdfPreview('daily', filters)}>
+                        <Download className="h-4 w-4" /> PDF preview
+                    </Button>
+                </PageHeader>
 
-                    <div className="flex gap-3">
-                        <Button onClick={handleViewPdf} variant="outline" className="gap-2">
-                            <Download className="h-4 w-4" />
-                            PDF Preview
-                        </Button>
-                    </div>
-                </div>
+                <FilterBar onApply={handleGenerate} loading={loading} applyLabel="Show day">
+                    <BranchSelect
+                        branches={branches}
+                        value={filters.branch_id}
+                        onChange={(v) => handleFilterChange('branch_id', v ? Number(v) : undefined)}
+                    />
+                    <input
+                        type="date"
+                        value={filters.date || ''}
+                        onChange={(e) => handleFilterChange('date', e.target.value)}
+                        className={cn(controlCls, 'h-9')}
+                        aria-label="Report date"
+                    />
+                </FilterBar>
 
-                {/* Filters */}
-                <Card>
-                    <CardHeader className="pb-4">
-                        <CardTitle className="flex items-center gap-2 text-base">
-                            <Calendar className="h-4 w-4" />
-                            Filters
-                        </CardTitle>
-                        <CardDescription>Select branch and date</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
-                            {branches && (
-                                <div className="md:col-span-5">
-                                    <Label className="flex items-center gap-1.5 text-xs font-medium">
-                                        <Building2 className="h-3.5 w-3.5" /> Branch
-                                    </Label>
-                                    <Select
-                                        value={filters.branch_id?.toString() || 'all'}
-                                        onValueChange={(v) => handleFilterChange('branch_id', v === 'all' ? undefined : Number(v))}
-                                    >
-                                        <SelectTrigger className="mt-1.5 h-10">
-                                            <SelectValue placeholder="All Branches" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Branches</SelectItem>
-                                            {branches.map((branch) => (
-                                                <SelectItem key={branch.id} value={branch.id.toString()}>
-                                                    {branch.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            )}
-
-                            <div className="md:col-span-5">
-                                <Label className="text-xs font-medium">Report Date</Label>
-                                <input
-                                    type="date"
-                                    value={filters.date || ''}
-                                    onChange={(e) => handleFilterChange('date', e.target.value)}
-                                    className="mt-1.5 h-10 w-full rounded-lg border border-input bg-background px-4 text-sm focus-visible:ring-2 focus-visible:ring-primary"
-                                />
-                            </div>
-
-                            <div className="flex items-end md:col-span-2">
-                                <Button onClick={handleGenerate} disabled={loading} className="h-10 w-full">
-                                    {loading ? 'Generating...' : 'Generate'}
-                                </Button>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Report Content */}
                 {dailySummary ? (
-                    <div className="space-y-6">
-                        {/* Net Income Highlight */}
-                        <Card className="overflow-hidden border-primary/10">
-                            <CardContent className="bg-gradient-to-r from-primary/5 to-transparent p-6">
-                                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                                    <div>
-                                        <p className="text-xs font-medium tracking-widest text-muted-foreground uppercase">NET INCOME</p>
-                                        <p className="mt-1 text-4xl font-bold tracking-tighter text-foreground tabular-nums">
-                                            ₱{Number(dailySummary.net_income).toLocaleString()}
-                                        </p>
-                                    </div>
-                                    <div className="text-right text-sm text-muted-foreground">
+                    <>
+                        <StatStrip count={5}>
+                            <Stat icon={Wallet} label="Net income" value={peso(dailySummary.net_income)} tone="success" />
+                            <Stat icon={TrendingUp} label="Gross sales" value={peso(dailySummary.gross_sales)} />
+                            <Stat icon={Receipt} label="Net sales" value={peso(netSales)} />
+                            <Stat icon={TrendingDown} label="Expenses" value={peso(dailySummary.total_expenses)} tone="warning" />
+                            <Stat icon={FileText} label="Transactions" value={Number(dailySummary.total_transactions).toLocaleString()} />
+                        </StatStrip>
+
+                        <div className="grid gap-4 lg:grid-cols-2">
+                            <Panel
+                                icon={Wallet}
+                                title="Cash drawer"
+                                actions={
+                                    <span className="text-[11px] font-semibold text-muted-foreground">
                                         {new Date(dailySummary.summary_date).toLocaleDateString('en-US', {
                                             weekday: 'long',
                                             month: 'short',
                                             day: 'numeric',
                                         })}
-                                    </div>
+                                    </span>
+                                }
+                            >
+                                <div>
+                                    <Line label="Opening cash" value={peso(dailySummary.opening_cash)} />
+                                    <Line label="Expected cash" value={peso(dailySummary.expected_cash)} />
+                                    <Line
+                                        label="Counted cash"
+                                        value={dailySummary.counted_cash !== null ? peso(dailySummary.counted_cash) : 'Not counted'}
+                                    />
+                                    <Line
+                                        strong
+                                        label={overShort >= 0 ? 'Over' : 'Short'}
+                                        value={`${overShort >= 0 ? '+' : '−'}${peso(Math.abs(overShort))}`}
+                                        tone={overShort < 0 ? 'danger' : overShort > 0 ? 'success' : undefined}
+                                    />
                                 </div>
-                            </CardContent>
-                        </Card>
+                            </Panel>
 
-                        {/* Metrics Grid */}
-                        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                            <Card>
-                                <CardContent className="p-5">
-                                    <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                                        <TrendingUp className="h-3.5 w-3.5" /> Gross Sales
-                                    </p>
-                                    <p className="mt-2 text-2xl font-semibold tabular-nums">₱{Number(dailySummary.gross_sales).toLocaleString()}</p>
-                                </CardContent>
-                            </Card>
-
-                            <Card>
-                                <CardContent className="p-5">
-                                    <p className="text-xs text-muted-foreground">Net Sales</p>
-                                    <p className="mt-2 text-2xl font-semibold tabular-nums">₱{netSales.toLocaleString()}</p>
-                                </CardContent>
-                            </Card>
-
-                            <Card>
-                                <CardContent className="p-5">
-                                    <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                                        <DollarSign className="h-3.5 w-3.5" /> Expenses
-                                    </p>
-                                    <p className="mt-2 text-2xl font-semibold text-destructive tabular-nums">
-                                        ₱{Number(dailySummary.total_expenses).toLocaleString()}
-                                    </p>
-                                </CardContent>
-                            </Card>
-
-                            <Card>
-                                <CardContent className="p-5">
-                                    <p className="text-xs text-muted-foreground">Transactions</p>
-                                    <p className="mt-2 text-2xl font-semibold tabular-nums">{dailySummary.total_transactions}</p>
-                                </CardContent>
-                            </Card>
+                            <Panel icon={CreditCard} title="Payments received">
+                                <div>
+                                    <Line label="Cash" value={peso(dailySummary.cash_sales)} />
+                                    <Line label="GCash" value={peso(dailySummary.gcash_sales)} />
+                                    <Line label="Card" value={peso(dailySummary.card_sales)} />
+                                    <Line label="Other" value={peso(dailySummary.other_sales)} />
+                                    <Line strong label="Gross sales" value={peso(dailySummary.gross_sales)} />
+                                </div>
+                            </Panel>
                         </div>
-
-                        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-                            {/* Cash Management */}
-                            <Card>
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="flex items-center gap-2 text-base">
-                                        <DollarSign className="h-4 w-4" /> Cash Management
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4 text-sm">
-                                    <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Opening Cash</span>
-                                        <span className="tabular-nums">₱{Number(dailySummary.opening_cash).toLocaleString()}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Expected Cash</span>
-                                        <span className="tabular-nums">₱{Number(dailySummary.expected_cash).toLocaleString()}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Counted Cash</span>
-                                        <span className="tabular-nums">
-                                            {dailySummary.counted_cash !== null ? `₱${Number(dailySummary.counted_cash).toLocaleString()}` : '—'}
-                                        </span>
-                                    </div>
-                                    <Separator />
-                                    <div className="flex items-center justify-between font-medium">
-                                        <span>Over / Short</span>
-                                        <Badge variant={dailySummary.over_short >= 0 ? 'default' : 'destructive'}>
-                                            {dailySummary.over_short >= 0 ? '+' : ''}₱{Math.abs(Number(dailySummary.over_short)).toLocaleString()}
-                                        </Badge>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            {/* Payment Breakdown */}
-                            <Card>
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="flex items-center gap-2 text-base">
-                                        <CreditCard className="h-4 w-4" /> Payment Breakdown
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4 text-sm">
-                                    <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Cash</span>
-                                        <span className="tabular-nums">₱{Number(dailySummary.cash_sales).toLocaleString()}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-muted-foreground">GCash</span>
-                                        <span className="tabular-nums">₱{Number(dailySummary.gcash_sales).toLocaleString()}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Card</span>
-                                        <span className="tabular-nums">₱{Number(dailySummary.card_sales).toLocaleString()}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Other</span>
-                                        <span className="tabular-nums">₱{Number(dailySummary.other_sales).toLocaleString()}</span>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
-                    </div>
+                    </>
                 ) : (
-                    <Card className="border-dashed p-12 text-center">
-                        <p className="text-muted-foreground">Select a branch and date to generate the daily summary</p>
-                    </Card>
+                    <div className="rounded-xl border border-dashed border-border bg-card py-14 text-center text-sm text-muted-foreground">
+                        <FileText className="mx-auto mb-2 h-8 w-8 opacity-20" />
+                        Pick a branch and date, then press <span className="font-semibold text-foreground">Show day</span>.
+                    </div>
                 )}
             </div>
         </AdminLayout>

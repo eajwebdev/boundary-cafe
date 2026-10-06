@@ -31,11 +31,12 @@ import {
     Gift,
     Armchair,
     Store,
+    IdCard,
+    Fingerprint,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import type { ReactNode} from 'react';
+import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-
 
 import FloatingChat from '@/components/FloatingChat';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -50,9 +51,6 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-
-
-
 
 import {
     Sidebar,
@@ -119,6 +117,8 @@ const MENU = {
     DINING_TABLES: '42',
     DELIVERY_ZONE: '43',
     LOYALTY_PROGRAM: '44',
+    EMPLOYEES: '45',
+    ATTENDANCE: '46',
 } as const;
 
 /** Polls the number of new (pending) online orders for the sidebar badge. */
@@ -315,7 +315,9 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
                                         </div>
                                         <div className="grid flex-1 text-left text-sm leading-tight">
                                             <span className="truncate font-semibold">{appName}</span>
-                                            <span className="truncate text-xs text-sidebar-foreground/60">{props.auth?.user?.supplier?.name ?? '—'}</span>
+                                            <span className="truncate text-xs text-sidebar-foreground/60">
+                                                {props.auth?.user?.supplier?.name ?? '—'}
+                                            </span>
                                         </div>
                                     </Link>
                                 </SidebarMenuButton>
@@ -353,7 +355,13 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
                                                 <NavItem href="/pos" icon={ShoppingCart} label="POS / Cashier" active={isActive('/pos')} />
                                             )}
                                             {has(MENU.ONLINE_ORDERS) && (
-                                                <NavItem href="/online-orders" icon={Bike} label="Online Orders" active={isActive('/online-orders')} badge={pendingOnline} />
+                                                <NavItem
+                                                    href="/online-orders"
+                                                    icon={Bike}
+                                                    label="Online Orders"
+                                                    active={isActive('/online-orders')}
+                                                    badge={pendingOnline}
+                                                />
                                             )}
                                             {has(MENU.TABLE_ORDERING) && (
                                                 <NavItem href="/tables" icon={Utensils} label="Table Ordering" active={isActive('/tables')} />
@@ -373,7 +381,12 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
                                                 <NavItem href="/customers" icon={Users} label="Customers" active={isActive('/customers')} />
                                             )}
                                             {has(MENU.LOYALTY_PROGRAM) && (
-                                                <NavItem href="/loyalty-program" icon={Gift} label="Loyalty Program" active={isActive('/loyalty-program')} />
+                                                <NavItem
+                                                    href="/loyalty-program"
+                                                    icon={Gift}
+                                                    label="Loyalty Program"
+                                                    active={isActive('/loyalty-program')}
+                                                />
                                             )}
                                         </>
                                     )}
@@ -499,6 +512,8 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
 
                                     {/* ── MANAGEMENT ────────────────────── */}
                                     {(has(MENU.USERS) ||
+                                        has(MENU.EMPLOYEES) ||
+                                        has(MENU.ATTENDANCE) ||
                                         has(MENU.SUPPLIERS) ||
                                         has(MENU.BRANCHES) ||
                                         has(MENU.EXPENSE_CATEGORIES) ||
@@ -509,6 +524,12 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
                                             <SidebarSectionLabel label="Management" />
 
                                             {has(MENU.USERS) && <NavItem href="/users" icon={Users} label="Users" active={isActive('/users')} />}
+                                            {has(MENU.EMPLOYEES) && (
+                                                <NavItem href="/employees" icon={IdCard} label="Employees" active={isActive('/employees')} />
+                                            )}
+                                            {has(MENU.ATTENDANCE) && (
+                                                <NavItem href="/attendance" icon={Fingerprint} label="Attendance" active={isActive('/attendance')} />
+                                            )}
                                             {has(MENU.SUPPLIERS) && (
                                                 <NavItem href="/suppliers" icon={Truck} label="Suppliers" active={isActive('/suppliers')} />
                                             )}
@@ -524,15 +545,31 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
                                                 />
                                             )}
                                             {has(MENU.DINING_TABLES) && (
-                                                <NavItem href="/dining-tables" icon={Armchair} label="Dining Tables" active={isActive('/dining-tables')} />
+                                                <NavItem
+                                                    href="/dining-tables"
+                                                    icon={Armchair}
+                                                    label="Dining Tables"
+                                                    active={isActive('/dining-tables')}
+                                                />
                                             )}
                                             {has(MENU.DELIVERY_ZONE) && (
-                                                <NavItem href="/delivery-zone" icon={MapPinned} label="Delivery Zone" active={isActive('/delivery-zone')} />
+                                                <NavItem
+                                                    href="/delivery-zone"
+                                                    icon={MapPinned}
+                                                    label="Delivery Zone"
+                                                    active={isActive('/delivery-zone')}
+                                                />
                                             )}
                                             {has(MENU.SYSTEM_SETTINGS) && (
                                                 <NavItem href="/settings" icon={Settings} label="System Settings" active={isActive('/settings')} />
                                             )}
-                                            <NavItem href="/" icon={Store} label="View storefront" active={false} tooltip="Open the customer ordering site" />
+                                            <NavItem
+                                                href="/"
+                                                icon={Store}
+                                                label="View storefront"
+                                                active={false}
+                                                tooltip="Open the customer ordering site"
+                                            />
                                         </>
                                     )}
                                 </SidebarMenu>

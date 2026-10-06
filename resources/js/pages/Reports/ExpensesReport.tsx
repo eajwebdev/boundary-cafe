@@ -1,18 +1,14 @@
 import { router } from '@inertiajs/react';
 import { Head } from '@inertiajs/react';
 import { format, parseISO } from 'date-fns';
-import { Calendar, Building2, Download, Receipt } from 'lucide-react';
+import { Download, Receipt, Tags, Wallet } from 'lucide-react';
 import { useState } from 'react';
 import { type DateRange } from 'react-day-picker';
-import { Badge } from '@/components/ui/badge';
+import { BranchSelect, EmptyRow, FilterBar, PageHeader, Pager, Panel, Stat, StatStrip, StatusPill, thCls } from '@/components/AdminKit';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
-
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AdminLayout from '@/layouts/AdminLayout';
+import { cn } from '@/lib/utils';
 import { reportRoutes, getReportTitle, openLivePdfPreview, type ReportFilters } from './Files';
 
 interface Props {
@@ -37,6 +33,8 @@ interface Props {
     filters: ReportFilters;
     total_amount: number;
 }
+
+const peso = (n: number) => '₱' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function ExpensesReport({ expenses, branches, filters: initialFilters, total_amount }: Props) {
     const today = new Date().toISOString().split('T')[0];
@@ -67,173 +65,88 @@ export default function ExpensesReport({ expenses, branches, filters: initialFil
         );
     };
 
-    const handleViewPdf = () => {
-        openLivePdfPreview('expenses', getParams());
-    };
+    const categoriesOnPage = new Set(expenses.data.map((e) => e.category?.name ?? 'Uncategorised')).size;
 
     return (
         <AdminLayout>
             <Head title={getReportTitle('expenses')} />
 
-            <div className="mx-auto max-w-6xl space-y-6 p-6">
-                {/* Header */}
-                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-                    <div className="flex items-center gap-3">
-                        <div className="rounded-lg bg-primary/10 p-2">
-                            <Receipt className="h-6 w-6 text-primary" />
-                        </div>
-                        <div>
-                            <h1 className="text-2xl font-semibold tracking-tight">{getReportTitle('expenses')}</h1>
-                            <p className="text-sm text-muted-foreground">Approved expense transactions by date range</p>
-                        </div>
+            <div className="space-y-4">
+                <PageHeader title={getReportTitle('expenses')} subtitle="Approved expenses in the period, by category and payment method.">
+                    <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => openLivePdfPreview('expenses', getParams())}>
+                        <Download className="h-4 w-4" /> PDF preview
+                    </Button>
+                </PageHeader>
+
+                <FilterBar onApply={handleGenerate} loading={loading} applyLabel="Show expenses">
+                    <BranchSelect branches={branches} value={branchId} onChange={(v) => setBranchId(v ? Number(v) : undefined)} />
+                    <div className="min-w-60">
+                        <DateRangePicker dateRange={dateRange} onDateRangeChange={setDateRange} />
                     </div>
+                </FilterBar>
 
-                    <div className="flex gap-3">
-                        <Button onClick={handleViewPdf} variant="outline" className="gap-2">
-                            <Download className="h-4 w-4" />
-                            PDF Preview
-                        </Button>
+                <StatStrip count={3}>
+                    <Stat
+                        icon={Wallet}
+                        label="Total spent"
+                        value={peso(Number(total_amount))}
+                        tone={Number(total_amount) > 0 ? 'warning' : undefined}
+                    />
+                    <Stat icon={Receipt} label="Expenses" value={expenses.total.toLocaleString()} />
+                    <Stat icon={Tags} label="Categories · this page" value={categoriesOnPage.toLocaleString()} />
+                </StatStrip>
+
+                <Panel flush icon={Receipt} title="Expense transactions">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead className="border-b border-border">
+                                <tr>
+                                    <th className={thCls}>Date</th>
+                                    <th className={thCls}>Category</th>
+                                    <th className={cn(thCls, 'hidden md:table-cell')}>Description</th>
+                                    <th className={cn(thCls, 'text-right')}>Amount</th>
+                                    <th className={thCls}>Payment</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                                {expenses.data.length === 0 ? (
+                                    <EmptyRow colSpan={5} icon={Receipt}>
+                                        No expenses in this period.
+                                    </EmptyRow>
+                                ) : (
+                                    expenses.data.map((expense) => (
+                                        <tr key={expense.id} className="hover:bg-muted/30">
+                                            <td className="px-4 py-2 text-xs whitespace-nowrap">
+                                                {new Date(expense.expense_date).toLocaleDateString('en-US', {
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    year: 'numeric',
+                                                })}
+                                            </td>
+                                            <td className="px-4 py-2 font-semibold">{expense.category?.name || '—'}</td>
+                                            <td className="hidden max-w-80 truncate px-4 py-2 text-muted-foreground md:table-cell">
+                                                {expense.description || '—'}
+                                            </td>
+                                            <td className="px-4 py-2 text-right font-bold tabular-nums">{peso(Number(expense.amount))}</td>
+                                            <td className="px-4 py-2">
+                                                <StatusPill tone="muted">{expense.payment_method.replace('_', ' ')}</StatusPill>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
                     </div>
-                </div>
-
-                {/* Filters */}
-                <Card>
-                    <CardHeader className="pb-4">
-                        <CardTitle className="flex items-center gap-2 text-base">
-                            <Calendar className="h-4 w-4" /> Filters
-                        </CardTitle>
-                        <CardDescription>Select branch and date range</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
-                            {branches && (
-                                <div className="md:col-span-4">
-                                    <Label className="flex items-center gap-1.5 text-xs font-medium">
-                                        <Building2 className="h-3.5 w-3.5" /> Branch
-                                    </Label>
-                                    <Select
-                                        value={branchId?.toString() || 'all'}
-                                        onValueChange={(v) => setBranchId(v === 'all' ? undefined : Number(v))}
-                                    >
-                                        <SelectTrigger className="mt-1.5 h-10">
-                                            <SelectValue placeholder="All Branches" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Branches</SelectItem>
-                                            {branches.map((branch) => (
-                                                <SelectItem key={branch.id} value={branch.id.toString()}>
-                                                    {branch.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            )}
-
-                            <div className="md:col-span-6">
-                                <Label className="text-xs font-medium">Date Range</Label>
-                                <div className="mt-1.5">
-                                    <DateRangePicker dateRange={dateRange} onDateRangeChange={setDateRange} />
-                                </div>
-                            </div>
-
-                            <div className="flex items-end md:col-span-2">
-                                <Button onClick={handleGenerate} disabled={loading} className="h-10 w-full">
-                                    {loading ? 'Generating...' : 'Show Expenses'}
-                                </Button>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Expenses Table */}
-                {expenses.data.length > 0 ? (
-                    <>
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between">
-                                <CardTitle className="text-base">Expense Transactions</CardTitle>
-                                <div className="text-sm text-muted-foreground">
-                                    Total:{' '}
-                                    <span className="font-semibold text-destructive tabular-nums">
-                                        ₱{Number(total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                    </span>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="p-0">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Date</TableHead>
-                                            <TableHead>Category</TableHead>
-                                            <TableHead>Description</TableHead>
-                                            <TableHead className="text-right">Amount</TableHead>
-                                            <TableHead className="text-center">Payment</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {expenses.data.map((expense) => (
-                                            <TableRow key={expense.id}>
-                                                <TableCell>
-                                                    {new Date(expense.expense_date).toLocaleDateString('en-US', {
-                                                        month: 'short',
-                                                        day: 'numeric',
-                                                        year: 'numeric',
-                                                    })}
-                                                </TableCell>
-                                                <TableCell className="font-medium">{expense.category?.name || '—'}</TableCell>
-                                                <TableCell className="text-muted-foreground">{expense.description || '—'}</TableCell>
-                                                <TableCell className="text-right font-semibold text-destructive tabular-nums">
-                                                    ₱{Number(expense.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                                </TableCell>
-                                                <TableCell className="text-center">
-                                                    <Badge variant="secondary">{expense.payment_method.toUpperCase()}</Badge>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </CardContent>
-                        </Card>
-
-                        {/* Pagination */}
-                        {expenses.last_page > 1 && (
-                            <div className="flex items-center justify-between pt-4 text-sm">
-                                <p className="text-muted-foreground">
-                                    Showing {expenses.from} to {expenses.to} of {expenses.total} expenses (10 per page)
-                                </p>
-                                <div className="flex gap-1">
-                                    {expenses.links.map((link, i) => (
-                                        <button
-                                            key={i}
-                                            onClick={() =>
-                                                link.url &&
-                                                router.get(
-                                                    link.url,
-                                                    {},
-                                                    {
-                                                        preserveState: true,
-                                                        preserveScroll: true,
-                                                    },
-                                                )
-                                            }
-                                            disabled={!link.url}
-                                            className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all ${
-                                                link.active
-                                                    ? 'border-primary bg-primary text-primary-foreground'
-                                                    : 'border-border hover:bg-muted disabled:opacity-50'
-                                            }`}
-                                            dangerouslySetInnerHTML={{ __html: link.label }}
-                                        />
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </>
-                ) : (
-                    <Card className="border-dashed p-12 text-center">
-                        <p className="text-muted-foreground">No expenses found for the selected period</p>
-                    </Card>
-                )}
+                    {expenses.last_page > 1 && (
+                        <Pager
+                            from={expenses.from}
+                            to={expenses.to}
+                            total={expenses.total}
+                            links={expenses.links}
+                            onVisit={(url) => router.get(url, {}, { preserveState: true, preserveScroll: true })}
+                        />
+                    )}
+                </Panel>
             </div>
         </AdminLayout>
     );

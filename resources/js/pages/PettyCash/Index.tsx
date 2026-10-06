@@ -1,18 +1,16 @@
 'use client';
 
 import { Head, router, usePage } from '@inertiajs/react';
-import { Wallet, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Wallet, CheckCircle, XCircle, AlertCircle, PenLine, Ticket } from 'lucide-react';
 import { useState } from 'react';
 
-import { Badge } from '@/components/ui/badge';
+import { controlCls, FormField, PageHeader, Panel, Stat, StatStrip, StatusPill, useFlashToasts } from '@/components/AdminKit';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import AdminLayout from '@/layouts/AdminLayout';
+import { cn } from '@/lib/utils';
 
 import { routes } from '@/routes';
 
@@ -40,8 +38,11 @@ interface PageProps {
     [key: string]: unknown;
 }
 
+const peso = (n: number) => '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 export default function PettyCashIndex() {
-    const { active_fund, vouchers, categories, is_manager, current_user } = usePage<PageProps>().props;
+    const { active_fund, vouchers, categories, is_manager } = usePage<PageProps>().props;
+    useFlashToasts();
 
     // Voucher form
     const [voucherType, setVoucherType] = useState<'withdrawal' | 'replenishment'>('withdrawal');
@@ -142,177 +143,155 @@ export default function PettyCashIndex() {
         );
     };
 
+    const pending = vouchers.data.filter((v) => v.status === 'pending');
+    const approvedTotal = vouchers.data.filter((v) => v.status === 'approved').reduce((sum, v) => sum + Number(v.amount), 0);
+    const canSubmit = !!amount && !!payee.trim() && !!purpose.trim() && (voucherType !== 'withdrawal' || !!categoryId);
+
     return (
         <AdminLayout>
             <Head title="Petty Cash" />
 
-            <div className="mx-auto max-w-7xl space-y-8">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-3xl font-bold tracking-tight">Petty Cash</h1>
-                        <p className="text-muted-foreground">Fund management and small cash expenses</p>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                        Logged in as: <span className="font-medium">{current_user?.name}</span>({current_user?.role}) — Manager:{' '}
-                        {is_manager ? 'YES' : 'NO'}
-                    </div>
-                </div>
+            <div className="space-y-4">
+                <PageHeader title="Petty Cash" subtitle="Small cash payouts from the drawer fund, with manager approval." />
 
-                <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
-                    {/* LEFT: New Voucher */}
-                    <div className="lg:col-span-3">
-                        <Card className="shadow-lg">
-                            <CardHeader>
-                                <div className="flex items-center gap-3">
-                                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10">
-                                        <Wallet className="h-5 w-5 text-amber-500" />
-                                    </div>
-                                    <div>
-                                        <CardTitle>New Petty Cash Voucher</CardTitle>
-                                        <CardDescription>Request withdrawal or replenishment</CardDescription>
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="space-y-6">
-                                {active_fund && (
-                                    <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 p-4 dark:bg-amber-950">
-                                        <div>
-                                            <div className="text-sm text-amber-600">Current Balance</div>
-                                            <div className="font-mono text-3xl font-bold">
-                                                ₱{active_fund.current_balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                                            </div>
-                                        </div>
-                                        <div className="text-sm font-medium">{active_fund.fund_name}</div>
-                                    </div>
-                                )}
+                <StatStrip count={4}>
+                    <Stat
+                        icon={Wallet}
+                        label={active_fund ? `Balance · ${active_fund.fund_name}` : 'Fund balance'}
+                        value={active_fund ? peso(active_fund.current_balance) : 'No open fund'}
+                        tone={active_fund ? 'success' : 'muted'}
+                    />
+                    <Stat
+                        icon={AlertCircle}
+                        label="Waiting for approval"
+                        value={pending.length.toLocaleString()}
+                        tone={pending.length > 0 ? 'warning' : undefined}
+                    />
+                    <Stat icon={CheckCircle} label="Approved · recent" value={peso(approvedTotal)} />
+                    <Stat icon={Ticket} label="Recent vouchers" value={vouchers.data.length.toLocaleString()} />
+                </StatStrip>
 
-                                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                                    <div>
-                                        <Label>Voucher Type</Label>
-                                        <Select value={voucherType} onValueChange={(v: 'withdrawal' | 'replenishment') => setVoucherType(v)}>
-                                            <SelectTrigger>
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="withdrawal">Withdrawal (Expense)</SelectItem>
-                                                <SelectItem value="replenishment">Replenishment (Add Funds)</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div>
-                                        <Label>Amount (₱)</Label>
-                                        <Input
-                                            type="number"
-                                            step="0.01"
-                                            value={amount}
-                                            onChange={(e) => setAmount(e.target.value)}
-                                            placeholder="0.00"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <Label>Payee / Recipient</Label>
-                                    <Input value={payee} onChange={(e) => setPayee(e.target.value)} placeholder="Who receives this?" />
-                                </div>
-
-                                <div>
-                                    <Label>Purpose</Label>
-                                    <Input value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="What is this payment for?" />
-                                </div>
-
-                                {voucherType === 'withdrawal' && (
-                                    <div>
-                                        <Label>Expense Category</Label>
-                                        <Select value={categoryId} onValueChange={setCategoryId}>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select category" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {categories.map((cat) => (
-                                                    <SelectItem key={cat.id} value={cat.id.toString()}>
-                                                        {cat.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                )}
-
-                                <Button
-                                    onClick={handleVoucherSubmit}
-                                    className="h-12 w-full text-lg"
-                                    disabled={!amount || !payee || !purpose || (voucherType === 'withdrawal' && !categoryId)}
+                <div className="grid gap-4 xl:grid-cols-[400px_1fr]">
+                    <Panel icon={PenLine} title="New voucher" className="self-start">
+                        {!active_fund && (
+                            <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                                There is no open petty cash fund for this branch yet.
+                            </p>
+                        )}
+                        <form
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                handleVoucherSubmit();
+                            }}
+                            className="grid grid-cols-2 gap-x-3 gap-y-2.5"
+                        >
+                            <FormField label="Type">
+                                <select
+                                    value={voucherType}
+                                    onChange={(e) => setVoucherType(e.target.value as 'withdrawal' | 'replenishment')}
+                                    className={cn(controlCls, 'h-9 w-full')}
                                 >
-                                    Submit Voucher
-                                </Button>
-                            </CardContent>
-                        </Card>
-                    </div>
+                                    <option value="withdrawal">Withdrawal (expense)</option>
+                                    <option value="replenishment">Replenishment (add funds)</option>
+                                </select>
+                            </FormField>
+                            <FormField label="Amount (₱)">
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0.01"
+                                    value={amount}
+                                    onChange={(e) => setAmount(e.target.value)}
+                                    placeholder="0.00"
+                                    className={cn(controlCls, 'h-9 w-full tabular-nums')}
+                                />
+                            </FormField>
+                            <FormField label="Paid to" className="col-span-2">
+                                <input
+                                    value={payee}
+                                    onChange={(e) => setPayee(e.target.value)}
+                                    placeholder="Who receives the cash?"
+                                    className={cn(controlCls, 'h-9 w-full')}
+                                />
+                            </FormField>
+                            <FormField label="Purpose" className="col-span-2">
+                                <input
+                                    value={purpose}
+                                    onChange={(e) => setPurpose(e.target.value)}
+                                    placeholder="What is it for?"
+                                    className={cn(controlCls, 'h-9 w-full')}
+                                />
+                            </FormField>
+                            {voucherType === 'withdrawal' && (
+                                <FormField label="Expense category" className="col-span-2">
+                                    <select
+                                        value={categoryId}
+                                        onChange={(e) => setCategoryId(e.target.value)}
+                                        className={cn(controlCls, 'h-9 w-full')}
+                                    >
+                                        <option value="">Select…</option>
+                                        {categories.map((cat) => (
+                                            <option key={cat.id} value={cat.id}>
+                                                {cat.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </FormField>
+                            )}
+                            <Button type="submit" className="col-span-2 h-9" disabled={!canSubmit || !active_fund}>
+                                Submit voucher
+                            </Button>
+                            <p className="col-span-2 text-[11px] text-muted-foreground">
+                                {is_manager
+                                    ? 'Vouchers you submit are approved straight away.'
+                                    : 'A manager approves your voucher before the cash is released.'}
+                            </p>
+                        </form>
+                    </Panel>
 
-                    {/* RIGHT: Recent Vouchers */}
-                    <div className="lg:col-span-2">
-                        <Card className="h-full shadow-lg">
-                            <CardHeader>
-                                <CardTitle>Recent Vouchers</CardTitle>
-                                <CardDescription>Cashier requests = Pending • Manager/Admin = Auto Approved</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="max-h-[700px] space-y-4 overflow-y-auto pr-2">
-                                    {vouchers.data.length === 0 ? (
-                                        <p className="py-12 text-center text-muted-foreground">No vouchers recorded yet.</p>
-                                    ) : (
-                                        vouchers.data.map((v) => (
-                                            <div key={v.id} className="rounded-2xl border p-5 transition-all hover:bg-muted/50">
-                                                <div className="flex items-start justify-between">
-                                                    <div className="flex-1">
-                                                        <div className="flex items-center gap-2 font-medium">
-                                                            #{v.voucher_number}
-                                                            {v.status === 'pending' && <AlertCircle className="h-4 w-4 text-amber-500" />}
-                                                        </div>
-                                                        <div className="mt-1 text-sm text-muted-foreground">{v.purpose}</div>
-                                                        <div className="text-xs text-muted-foreground">
-                                                            Requested by: {v.requested_by?.fname} {v.requested_by?.lname}
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="text-right">
-                                                        <div className="font-mono text-lg">
-                                                            ₱{v.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                                                        </div>
-                                                        <Badge
-                                                            variant={
-                                                                (v.status === 'approved'
-                                                                    ? 'success'
-                                                                    : v.status === 'rejected'
-                                                                      ? 'destructive'
-                                                                      : 'warning') as React.ComponentProps<typeof Badge>['variant']
-                                                            }
-                                                        >
-                                                            {v.status.toUpperCase()}
-                                                        </Badge>
-                                                    </div>
-                                                </div>
-
-                                                {is_manager && v.status === 'pending' && (
-                                                    <div className="mt-4 flex gap-3">
-                                                        <Button onClick={() => openApproveDialog(v.id)} className="flex-1" variant="default">
-                                                            <CheckCircle className="mr-2 h-4 w-4" />
-                                                            Approve
-                                                        </Button>
-                                                        <Button onClick={() => openRejectDialog(v.id)} className="flex-1" variant="destructive">
-                                                            <XCircle className="mr-2 h-4 w-4" />
-                                                            Reject
-                                                        </Button>
-                                                    </div>
-                                                )}
+                    <Panel
+                        flush
+                        icon={Ticket}
+                        title="Recent vouchers"
+                        actions={pending.length > 0 && <StatusPill tone="warning">{pending.length} pending</StatusPill>}
+                    >
+                        {vouchers.data.length === 0 ? (
+                            <p className="py-12 text-center text-sm text-muted-foreground">No vouchers recorded yet.</p>
+                        ) : (
+                            <ul className="max-h-160 divide-y divide-border overflow-y-auto">
+                                {vouchers.data.map((v) => (
+                                    <li key={v.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5 text-sm">
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate font-semibold">{v.purpose}</p>
+                                            <p className="text-[11px] text-muted-foreground">
+                                                <span className="font-mono">#{v.voucher_number}</span> ·{' '}
+                                                {v.requested_by ? `${v.requested_by.fname} ${v.requested_by.lname}` : '—'}
+                                            </p>
+                                        </div>
+                                        <StatusPill tone={v.status === 'approved' ? 'success' : v.status === 'rejected' ? 'danger' : 'warning'}>
+                                            {v.status}
+                                        </StatusPill>
+                                        <span className="w-24 text-right font-bold tabular-nums">{peso(Number(v.amount))}</span>
+                                        {is_manager && v.status === 'pending' && (
+                                            <div className="flex gap-1">
+                                                <Button size="sm" className="h-7 gap-1 px-2.5 text-xs" onClick={() => openApproveDialog(v.id)}>
+                                                    <CheckCircle className="h-3.5 w-3.5" /> Approve
+                                                </Button>
+                                                <button
+                                                    onClick={() => openRejectDialog(v.id)}
+                                                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                                    aria-label={`Reject voucher ${v.voucher_number}`}
+                                                    title="Reject"
+                                                >
+                                                    <XCircle className="h-3.5 w-3.5" />
+                                                </button>
                                             </div>
-                                        ))
-                                    )}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
+                                        )}
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </Panel>
                 </div>
             </div>
 

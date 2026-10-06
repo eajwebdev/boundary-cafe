@@ -1,6 +1,5 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
-    Armchair,
     ArrowLeft,
     ArrowRight,
     Check,
@@ -17,7 +16,6 @@ import {
     Star,
     Users,
     UtensilsCrossed,
-    Wallet,
     X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -73,8 +71,8 @@ interface PageProps {
 
 type State = 'available' | 'occupied' | 'reserved' | 'cleaning';
 
-/** Visual language per table state — shared by the tile, its chairs, the filter and the occupancy bar. */
-const STATE: Record<State, { label: string; dot: string; table: string; chair: string; pill: string; glow: string; bar: string }> = {
+/** Visual language shared by each table tile and its chairs. */
+const STATE: Record<State, { label: string; dot: string; table: string; chair: string; pill: string; glow: string }> = {
     available: {
         label: 'Free',
         dot: 'bg-shop-success',
@@ -82,7 +80,6 @@ const STATE: Record<State, { label: string; dot: string; table: string; chair: s
         chair: 'bg-shop-success/35',
         pill: 'bg-shop-success-soft text-shop-success',
         glow: 'from-shop-success-soft',
-        bar: 'bg-emerald-400',
     },
     occupied: {
         label: 'Seated',
@@ -91,7 +88,6 @@ const STATE: Record<State, { label: string; dot: string; table: string; chair: s
         chair: 'bg-shop-accent/70',
         pill: 'bg-shop-accent-soft text-shop-accent-ink',
         glow: 'from-shop-accent-soft',
-        bar: 'bg-shop-accent',
     },
     reserved: {
         label: 'Reserved',
@@ -100,7 +96,6 @@ const STATE: Record<State, { label: string; dot: string; table: string; chair: s
         chair: 'bg-shop-warning/40',
         pill: 'bg-shop-warning-soft text-shop-warning',
         glow: 'from-shop-warning-soft',
-        bar: 'bg-amber-300',
     },
     cleaning: {
         label: 'Cleaning',
@@ -109,7 +104,6 @@ const STATE: Record<State, { label: string; dot: string; table: string; chair: s
         chair: 'bg-shop-line',
         pill: 'bg-shop-sunken text-shop-muted',
         glow: 'from-shop-sunken',
-        bar: 'bg-white/30',
     },
 };
 
@@ -127,23 +121,14 @@ function since(mins: number | null) {
     return `${Math.floor(mins / 60)} h ${String(mins % 60).padStart(2, '0')}`;
 }
 
-function greeting() {
-    const h = new Date().getHours();
-    return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-}
-
-const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-
 export default function Waiter() {
     const { props } = usePage<PageProps>();
     const [tables, setTables] = useState(props.tables);
     const [table, setTable] = useState<Table | null>(null);
     const [count, setCount] = useState(0);
-    const [syncedAt, setSyncedAt] = useState(() => Date.now());
 
     useEffect(() => {
         setTables(props.tables);
-        setSyncedAt(Date.now());
     }, [props.tables]);
 
     useEffect(() => {
@@ -159,7 +144,6 @@ export default function Waiter() {
             // A slower, older response must not overwrite a newer one.
             if (mine !== latestRefresh.current) return;
             setTables(fresh);
-            setSyncedAt(Date.now());
         } catch {
             /* ignore transient errors */
         }
@@ -268,7 +252,7 @@ export default function Waiter() {
                     onSent={() => setTable(null)}
                 />
             ) : (
-                <FloorPlan tables={tables} firstName={user.fname} syncedAt={syncedAt} live={live} onPick={setTable} />
+                <FloorPlan tables={tables} onPick={setTable} />
             )}
         </div>
     );
@@ -276,21 +260,7 @@ export default function Waiter() {
 
 // ─── Floor plan ───────────────────────────────────────────────────────────────
 
-function FloorPlan({
-    tables,
-    firstName,
-    syncedAt,
-    live,
-    onPick,
-}: {
-    tables: Table[];
-    firstName: string;
-    syncedAt: number;
-    live: boolean;
-    onPick: (t: Table) => void;
-}) {
-    const [filter, setFilter] = useState<State | 'all'>('all');
-    const [query, setQuery] = useState('');
+function FloorPlan({ tables, onPick }: { tables: Table[]; onPick: (t: Table) => void }) {
     const [now, setNow] = useState(() => Date.now());
 
     useEffect(() => {
@@ -298,28 +268,14 @@ function FloorPlan({
         return () => window.clearInterval(t);
     }, []);
 
-    const counts = useMemo(() => {
-        const c: Record<State, number> = { available: 0, occupied: 0, reserved: 0, cleaning: 0 };
-        tables.forEach((t) => c[stateOf(t)]++);
-        return c;
-    }, [tables]);
-
-    const open = tables.filter((t) => t.open_order);
-    const openTotal = open.reduce((s, t) => s + (t.open_order?.total ?? 0), 0);
-    const atCashier = open.filter((t) => (t.open_order?.pending_items ?? 0) > 0).length;
-
     const sections = useMemo(() => {
-        const q = query.trim().toLowerCase();
         const map = new Map<string, Table[]>();
-        tables
-            .filter((t) => filter === 'all' || stateOf(t) === filter)
-            .filter((t) => !q || t.table_number.toLowerCase().includes(q) || (t.section ?? '').toLowerCase().includes(q))
-            .forEach((t) => {
-                const key = t.section || 'Dining area';
-                map.set(key, [...(map.get(key) ?? []), t]);
-            });
+        tables.forEach((t) => {
+            const key = t.section || 'Dining area';
+            map.set(key, [...(map.get(key) ?? []), t]);
+        });
         return Array.from(map.entries());
-    }, [tables, filter, query]);
+    }, [tables]);
 
     const markAvailable = async (t: Table) => {
         const confirmed = await confirmDialog({
@@ -343,139 +299,10 @@ function FloorPlan({
         );
     }
 
-    const filters: { key: State | 'all'; label: string; n: number }[] = [
-        { key: 'all', label: 'All', n: tables.length },
-        { key: 'available', label: STATE.available.label, n: counts.available },
-        { key: 'occupied', label: STATE.occupied.label, n: counts.occupied },
-        ...(counts.reserved ? [{ key: 'reserved' as const, label: STATE.reserved.label, n: counts.reserved }] : []),
-        { key: 'cleaning', label: STATE.cleaning.label, n: counts.cleaning },
-    ];
-
-    const occupancy = Math.round((counts.occupied / tables.length) * 100);
     let tileIndex = 0;
 
     return (
-        <main className="mx-auto max-w-7xl px-4 pt-5 pb-[calc(2rem+env(safe-area-inset-bottom))] sm:px-5">
-            {/* Hero: greeting, occupancy and live numbers */}
-            <section className="bc-rise shadow-shop-lg relative isolate overflow-hidden rounded-3xl bg-shop-navy p-4 text-shop-navy-ink sm:rounded-[28px] sm:p-7">
-                <div aria-hidden className="pointer-events-none absolute -top-28 -right-20 -z-10 h-72 w-72 rounded-full bg-shop-accent/45 blur-3xl" />
-                <div aria-hidden className="pointer-events-none absolute -bottom-36 left-1/4 -z-10 h-72 w-72 rounded-full bg-sky-400/20 blur-3xl" />
-                <div
-                    aria-hidden
-                    className="pointer-events-none absolute inset-0 -z-10 [background-image:radial-gradient(currentColor_1px,transparent_1px)] [background-size:18px_18px] opacity-[0.08]"
-                />
-
-                <div className="grid gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_460px] lg:items-end">
-                    <div>
-                        <p className="flex items-center gap-2 text-sm font-medium text-white/75">
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold tracking-wide text-white uppercase ring-1 ring-white/15">
-                                <span className="bc-pulse relative h-1.5 w-1.5 rounded-full bg-emerald-400 text-emerald-400" />
-                                Live
-                            </span>
-                            <span className="truncate">
-                                {greeting()}, {firstName}
-                            </span>
-                        </p>
-                        <h1 className="mt-2.5 font-display text-2xl leading-[1.05] font-bold tracking-tight text-balance sm:mt-3 sm:text-[40px]">
-                            Pick a table to <span className="text-shop-accent">take an order</span>
-                        </h1>
-
-                        <div className="mt-4 max-w-md sm:mt-5">
-                            <div className="flex items-baseline justify-between text-xs font-semibold text-white/70">
-                                <span>Floor occupancy</span>
-                                <span className="text-sm text-white tabular-nums">{occupancy}%</span>
-                            </div>
-                            <div
-                                className="mt-2 flex h-2.5 gap-1 overflow-hidden rounded-full bg-white/10"
-                                role="img"
-                                aria-label={`${counts.occupied} of ${tables.length} tables seated`}
-                            >
-                                {(['occupied', 'reserved', 'cleaning', 'available'] as State[]).map((k) =>
-                                    counts[k] ? (
-                                        <span
-                                            key={k}
-                                            className={cn('h-full rounded-full transition-[flex-grow] duration-700 ease-shop', STATE[k].bar)}
-                                            style={{ flexGrow: counts[k] }}
-                                        />
-                                    ) : null,
-                                )}
-                            </div>
-                            <p className="mt-2 text-[11px] text-white/60">
-                                Synced {clock(syncedAt)} · {live ? 'updates instantly' : 'refreshes every 15 s'}
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Phones: one joined strip; the free count already sits in the filter below, and the
-                        money column sizes to its amount so it is never cut off. Tablets up: three cards. */}
-                    <dl className="flex divide-x divide-white/10 rounded-2xl bg-white/[0.08] ring-1 ring-white/15 sm:grid sm:grid-cols-3 sm:gap-3 sm:divide-x-0 sm:rounded-none sm:bg-transparent sm:ring-0">
-                        <Stat icon={Armchair} label="Free now" value={String(counts.available)} className="hidden sm:block" />
-                        <Stat
-                            icon={Receipt}
-                            label="Open tickets"
-                            value={String(open.length)}
-                            hint={atCashier ? `${atCashier} at cashier` : undefined}
-                            className="flex flex-1"
-                        />
-                        <Stat icon={Wallet} label="On the floor" value={<Price value={openTotal} />} className="flex min-w-[45%] shrink-0" />
-                    </dl>
-                </div>
-            </section>
-
-            {/* Phones: quick find scrolls away so only the filter stays pinned */}
-            <FindField value={query} onChange={setQuery} className="mt-4 sm:hidden" />
-
-            {/* Toolbar: segmented filter (doubles as the legend) + quick find */}
-            <div className="sticky top-16 z-20 -mx-4 mt-1 flex flex-col gap-3 bg-shop-bg/85 px-4 py-2 backdrop-blur-xl sm:-mx-5 sm:mt-4 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-3">
-                {/* Phones: equal columns with the count over the label, so every state fits. Tablets up: pills. */}
-                <div
-                    className="bc-rail grid auto-cols-fr grid-flow-col gap-0.5 rounded-2xl bg-shop-sunken p-1 ring-1 ring-shop-line/60 sm:flex sm:gap-1 sm:self-start sm:overflow-x-auto sm:rounded-full"
-                    role="tablist"
-                    aria-label="Filter tables"
-                >
-                    {filters.map((f) => {
-                        const active = filter === f.key;
-                        return (
-                            <button
-                                key={f.key}
-                                type="button"
-                                role="tab"
-                                aria-selected={active}
-                                onClick={() => setFilter(f.key)}
-                                className={cn(
-                                    'bc-press flex h-12 min-w-0 cursor-pointer flex-wrap content-center items-center justify-center gap-x-1.5 gap-y-1 rounded-xl px-0.5 font-semibold sm:h-9 sm:shrink-0 sm:flex-nowrap sm:gap-2 sm:rounded-full sm:px-3.5 sm:whitespace-nowrap',
-                                    active ? 'shadow-shop-sm bg-shop-surface text-shop-ink' : 'text-shop-muted hover:text-shop-ink',
-                                )}
-                            >
-                                {f.key !== 'all' && <span className={cn('order-1 h-1.5 w-1.5 rounded-full sm:h-2 sm:w-2', STATE[f.key].dot)} />}
-                                <span className="order-3 basis-full truncate text-center text-[11px] leading-none tracking-tight sm:order-2 sm:basis-auto sm:text-sm sm:leading-normal sm:tracking-normal">
-                                    {f.label}
-                                </span>
-                                <span
-                                    className={cn(
-                                        'order-2 text-base leading-none font-bold tabular-nums sm:order-3 sm:min-w-5 sm:rounded-full sm:px-1.5 sm:text-[11px] sm:leading-5 sm:font-semibold',
-                                        active ? 'sm:bg-shop-ink sm:text-shop-bg' : 'sm:bg-shop-surface/70',
-                                    )}
-                                >
-                                    {f.n}
-                                </span>
-                            </button>
-                        );
-                    })}
-                </div>
-                <FindField value={query} onChange={setQuery} className="hidden sm:block sm:w-64" />
-            </div>
-
-            {sections.length === 0 && (
-                <div className="flex flex-col items-center py-16 text-center">
-                    <span className="flex h-14 w-14 items-center justify-center rounded-3xl bg-shop-sunken text-shop-muted">
-                        <Search className="h-6 w-6" />
-                    </span>
-                    <p className="mt-4 font-semibold">No tables in this view</p>
-                    <p className="mt-1 text-sm text-shop-muted">Try another filter or clear the search.</p>
-                </div>
-            )}
-
+        <main className="mx-auto max-w-7xl px-4 pt-2 pb-[calc(2rem+env(safe-area-inset-bottom))] sm:px-5">
             {sections.map(([section, list]) => {
                 const free = list.filter((t) => stateOf(t) === 'available').length;
                 return (
@@ -503,61 +330,6 @@ function FloorPlan({
                 );
             })}
         </main>
-    );
-}
-
-function FindField({ value, onChange, className }: { value: string; onChange: (value: string) => void; className?: string }) {
-    return (
-        <div className={cn('relative', className)}>
-            <Search className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-shop-muted" />
-            <input
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                placeholder="Find a table or section"
-                type="search"
-                aria-label="Find a table or section"
-                className="shadow-shop-sm h-11 w-full rounded-full border-0 bg-shop-surface pr-10 pl-10 text-base ring-1 ring-shop-line outline-none placeholder:text-shop-muted focus:ring-2 focus:ring-shop-accent sm:text-sm"
-            />
-            {value && (
-                <button
-                    type="button"
-                    onClick={() => onChange('')}
-                    className="absolute top-1/2 right-1.5 flex h-8 w-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-shop-muted hover:bg-shop-sunken"
-                    aria-label="Clear search"
-                >
-                    <X className="h-4 w-4" />
-                </button>
-            )}
-        </div>
-    );
-}
-
-function Stat({
-    icon: Icon,
-    label,
-    value,
-    hint,
-    className,
-}: {
-    icon: React.ComponentType<{ className?: string }>;
-    label: string;
-    value: React.ReactNode;
-    hint?: string;
-    className?: string;
-}) {
-    return (
-        <div className={cn('min-w-0 flex-col px-3.5 py-2.5 sm:block sm:rounded-2xl sm:bg-white/[0.08] sm:p-4 sm:ring-1 sm:ring-white/15 sm:backdrop-blur-sm', className)}>
-            <span className="hidden h-8 w-8 items-center justify-center rounded-xl bg-white/12 text-white sm:flex">
-                <Icon className="h-4 w-4" />
-            </span>
-            <dt className="order-2 mt-0.5 text-[11px] leading-tight font-semibold text-white/65 sm:mt-3 sm:truncate sm:tracking-wide sm:uppercase">{label}</dt>
-            <dd className="order-1 truncate font-display text-xl font-bold tabular-nums sm:mt-0.5 sm:text-2xl">{value}</dd>
-            {hint && (
-                <dd className="order-3 mt-1 inline-flex max-w-full self-start truncate rounded-full bg-shop-accent px-2 py-0.5 text-[10px] font-bold text-shop-on-accent">
-                    {hint}
-                </dd>
-            )}
-        </div>
     );
 }
 

@@ -20,6 +20,9 @@ import {
     ChevronsRight,
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { toast } from 'sonner';
+import { Chip, controlCls, EmptyRow, PageHeader, Panel, Stat, StatStrip, StatusPill, thCls } from '@/components/AdminKit';
+import type { Tone } from '@/components/AdminKit';
 import { noticeDialog } from '@/components/ConfirmDialog';
 import ProductThumbnail from '@/components/ProductThumbnail';
 import { Button } from '@/components/ui/button';
@@ -29,7 +32,7 @@ import { routes } from '@/routes';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ProductType = 'standard' | 'made_to_order' | 'bundle' | 'service';
+type ProductType = 'standard' | 'made_to_order' | 'bundle' | 'service' | 'ingredient';
 
 interface StockRecord {
     branch_id: number;
@@ -188,7 +191,7 @@ interface PageProps {
     products: Product[];
     pagination: Pagination;
     filters: { search: string; category_id: number | null; type: string; status: string; per_page: number; branch_id: number | null };
-    stats: { total_products: number; total_units: number; low_stock: number; out_of_stock: number };
+    stats: { total_products: number; total_units: number; ingredients: number; made_to_order: number; low_stock: number; out_of_stock: number };
     variantProducts: VariantProduct[];
     bundleProducts: BundleProduct[];
     recipeProducts: RecipeProduct[];
@@ -209,25 +212,20 @@ interface PageProps {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const statusBadge = (s: string) =>
-    ({
-        'In Stock': 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25',
-        'Low Stock': 'bg-amber-500/15 text-amber-400 border border-amber-500/25',
-        'Near Expiry': 'bg-orange-500/15 text-orange-400 border border-orange-500/25',
-        Expired: 'bg-red-500/15 text-red-400 border border-red-500/25',
-        'Out of Stock': 'bg-red-500/15 text-red-400 border border-red-500/25',
-        Bundle: 'bg-purple-500/15 text-purple-400 border border-purple-500/25',
-    })[s] ?? 'bg-muted text-muted-foreground border border-border';
+const STATUS_TONE: Record<string, Tone> = {
+    'In Stock': 'success',
+    'Low Stock': 'warning',
+    'Near Expiry': 'warning',
+    Expired: 'danger',
+    'Out of Stock': 'danger',
+    Bundle: 'primary',
+};
+const statusTone = (status: string): Tone => STATUS_TONE[status] ?? 'muted';
 
-const typeBadge = (t: ProductType) =>
-    ({
-        bundle: 'bg-purple-500/15 text-purple-400 border border-purple-500/20',
-        made_to_order: 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20',
-        service: 'bg-blue-500/15 text-blue-400 border border-blue-500/20',
-        standard: 'bg-slate-500/15 text-slate-400 border border-slate-500/20',
-    })[t];
+const TYPE_TONE: Record<ProductType, Tone> = { bundle: 'primary', made_to_order: 'info', service: 'info', standard: 'muted', ingredient: 'warning' };
 
-const typeLabel = (t: ProductType) => ({ bundle: 'Bundle', made_to_order: 'MTO', standard: 'Standard', service: 'Service' })[t];
+const typeLabel = (t: ProductType) =>
+    ({ bundle: 'Bundle', made_to_order: 'Made to order', standard: 'Stocked', service: 'Service', ingredient: 'Ingredient' })[t] ?? t;
 
 const inp =
     'w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/20 transition-all';
@@ -236,7 +234,7 @@ const sel = inp;
 // ─── Debounce hook ────────────────────────────────────────────────────────────
 
 function useDebounce<A extends unknown[]>(fn: (...args: A) => void, delay: number) {
-    const timer = useRef<ReturnType<typeof setTimeout>>();
+    const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
     return useCallback(
         (...args: A) => {
             clearTimeout(timer.current);
@@ -247,23 +245,6 @@ function useDebounce<A extends unknown[]>(fn: (...args: A) => void, delay: numbe
 }
 
 // ─── Shared UI ────────────────────────────────────────────────────────────────
-
-function Toast({ msg, onClose }: { msg: { type: string; text: string }; onClose: () => void }) {
-    return (
-        <div
-            className={cn(
-                'fixed top-4 right-4 z-[9999] flex items-center gap-3 rounded-xl border px-5 py-3.5 text-sm font-medium shadow-2xl',
-                msg.type === 'success' ? 'border-emerald-500/40 bg-[#0b1a10] text-emerald-300' : 'border-red-500/40 bg-[#1a0b0b] text-red-300',
-            )}
-        >
-            <span>{msg.type === 'success' ? '✓' : '✕'}</span>
-            <span>{msg.text}</span>
-            <button onClick={onClose} className="ml-1 opacity-50 hover:opacity-100">
-                ✕
-            </button>
-        </div>
-    );
-}
 
 function Modal({
     open,
@@ -376,7 +357,7 @@ function PaginationBar({
     }
 
     return (
-        <div className="flex flex-wrap items-center justify-between gap-4 pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-2.5">
             {/* Left: count + per-page */}
             <div className="flex items-center gap-3">
                 <p className="text-xs text-muted-foreground tabular-nums">
@@ -385,7 +366,8 @@ function PaginationBar({
                 <select
                     value={per_page}
                     onChange={(e) => onPerPageChange(Number(e.target.value))}
-                    className="h-7 rounded-lg border border-border bg-background px-2 text-xs text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
+                    className="h-7 rounded-lg border border-input bg-background px-2 text-xs text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
+                    aria-label="Rows per page"
                 >
                     {perPageOptions.map((n) => (
                         <option key={n} value={n}>
@@ -614,6 +596,7 @@ function ProductFormModal({
                             <option value="made_to_order">Made-to-Order</option>
                             <option value="bundle">Bundle</option>
                             <option value="service">Service</option>
+                            <option value="ingredient">Ingredient (raw material, not sold)</option>
                         </select>
                     </Field>
                 </div>
@@ -808,7 +791,7 @@ function StockDetailModal({ product, onClose }: { product: Product | null; onClo
                         <div key={i} className="rounded-xl border border-border bg-muted/20 p-4">
                             <div className="mb-3 flex items-center justify-between">
                                 <span className="text-sm font-medium text-foreground">{s.branch_name}</span>
-                                <span className={cn('rounded-full px-2.5 py-0.5 text-xs', statusBadge(s.status))}>{s.status}</span>
+                                <StatusPill tone={statusTone(s.status)}>{s.status}</StatusPill>
                             </div>
                             <div className="grid grid-cols-3 gap-2 text-center">
                                 <div>
@@ -980,7 +963,6 @@ function AllProductsTab({
     products,
     pagination,
     filters,
-    stats,
     categories,
     branches,
     isAdmin,
@@ -988,7 +970,6 @@ function AllProductsTab({
     products: Product[];
     pagination: Pagination;
     filters: PageProps['filters'];
-    stats: PageProps['stats'];
     categories: Category[];
     branches: Branch[];
     isAdmin: boolean;
@@ -1085,40 +1066,32 @@ function AllProductsTab({
     };
 
     return (
-        <div className="space-y-5">
-            {/* Stats */}
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                {[
-                    { label: 'Total Products', value: stats.total_products.toLocaleString(), color: 'text-foreground' },
-                    { label: 'Total Units', value: stats.total_units.toLocaleString(), color: 'text-foreground' },
-                    { label: 'Low Stock', value: stats.low_stock, color: 'text-amber-400' },
-                    { label: 'Out of Stock', value: stats.out_of_stock, color: 'text-red-400' },
-                ].map((s) => (
-                    <div key={s.label} className="rounded-xl border border-border bg-card p-4">
-                        <div className="mb-1.5 text-xs text-muted-foreground">{s.label}</div>
-                        <div className={cn('text-2xl font-bold tabular-nums', s.color)}>{s.value}</div>
-                    </div>
-                ))}
-            </div>
-
-            {/* Toolbar */}
-            <div className="rounded-xl border border-border bg-card p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative min-w-[200px] flex-1">
-                        <Search className="absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <div>
+            <Panel
+                flush
+                icon={Package}
+                title="Product list"
+                className={cn(loading && 'opacity-70')}
+                actions={
+                    <Button size="sm" className="h-8 gap-1.5" onClick={() => setAddOpen(true)}>
+                        <Plus className="h-3.5 w-3.5" /> Add product
+                    </Button>
+                }
+            >
+                <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/20 px-4 py-2">
+                    <div className="relative min-w-48 flex-1">
+                        <Search className="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                         <input
-                            className={cn(
-                                'h-9 w-full rounded-lg border border-border bg-background pr-9 pl-9 text-sm text-foreground placeholder:text-muted-foreground focus:ring-1 focus:ring-primary focus:outline-none',
-                                loading && 'opacity-60',
-                            )}
-                            placeholder="Search name or barcode…"
+                            className={cn(controlCls, 'w-full pr-8 pl-8')}
+                            placeholder="Search name or barcode"
                             value={search}
                             onChange={(e) => handleSearch(e.target.value)}
                         />
                         {search && (
                             <button
                                 onClick={() => handleSearch('')}
-                                className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                className="absolute top-1/2 right-2.5 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                aria-label="Clear search"
                             >
                                 <X className="h-3.5 w-3.5" />
                             </button>
@@ -1127,40 +1100,40 @@ function AllProductsTab({
                     <select
                         value={filterCat}
                         onChange={(e) => handleFilter('category_id', e.target.value)}
-                        className="h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
+                        className={controlCls}
+                        aria-label="Category"
                     >
-                        <option value="">All Categories</option>
+                        <option value="">All categories</option>
                         {categories.map((c) => (
                             <option key={c.id} value={c.id}>
                                 {c.name}
                             </option>
                         ))}
                     </select>
-                    <select
-                        value={filterType}
-                        onChange={(e) => handleFilter('type', e.target.value)}
-                        className="h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
-                    >
-                        <option value="">All Types</option>
+                    <select value={filterType} onChange={(e) => handleFilter('type', e.target.value)} className={controlCls} aria-label="Type">
+                        <option value="">All types</option>
                         <option value="standard">Standard</option>
-                        <option value="made_to_order">Made-to-Order</option>
+                        <option value="made_to_order">Made to order</option>
                         <option value="bundle">Bundle</option>
+                        <option value="ingredient">Ingredient</option>
                     </select>
                     <select
                         value={filterStatus}
                         onChange={(e) => handleFilter('status', e.target.value)}
-                        className="h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
+                        className={controlCls}
+                        aria-label="Stock status"
                     >
-                        <option value="">All Status</option>
-                        <option value="in_stock">In Stock</option>
-                        <option value="low_stock">Low Stock</option>
-                        <option value="out_of_stock">Out of Stock</option>
+                        <option value="">Any stock</option>
+                        <option value="in_stock">In stock</option>
+                        <option value="low_stock">Low stock</option>
+                        <option value="out_of_stock">Out of stock</option>
                     </select>
                     {isAdmin && branches.length > 0 && (
                         <select
                             value={filterBranch}
                             onChange={(e) => handleFilter('branch_id', e.target.value)}
-                            className="h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
+                            className={controlCls}
+                            aria-label="Branch"
                         >
                             {branches.map((b) => (
                                 <option key={b.id} value={b.id}>
@@ -1172,99 +1145,105 @@ function AllProductsTab({
                     {hasFilters && (
                         <button
                             onClick={clearFilters}
-                            className="flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
+                            className="flex h-8 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
                         >
-                            <X className="h-3.5 w-3.5" /> Clear
+                            <X className="h-3 w-3" /> Clear
                         </button>
                     )}
-                    <Button size="sm" className="h-9 gap-1.5 font-semibold" onClick={() => setAddOpen(true)}>
-                        <Plus className="h-3.5 w-3.5" /> Add Product
-                    </Button>
                 </div>
-            </div>
 
-            {/* Loading bar */}
-            {loading && (
-                <div className="h-0.5 w-full overflow-hidden rounded-full bg-border">
-                    <div className="h-full animate-pulse rounded-full bg-primary" />
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead className="border-b border-border">
+                            <tr>
+                                <th className={thCls}>Product</th>
+                                <th className={cn(thCls, 'hidden md:table-cell')}>Type</th>
+                                <th className={cn(thCls, 'text-right')}>Price</th>
+                                <th className={cn(thCls, 'text-right')}>Stock</th>
+                                <th className={cn(thCls, 'hidden sm:table-cell')}>Status</th>
+                                <th className="w-28" />
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                            {products.length === 0 ? (
+                                <EmptyRow colSpan={6} icon={Package}>
+                                    {hasFilters ? 'No products match these filters.' : 'No products yet.'}
+                                </EmptyRow>
+                            ) : (
+                                products.map((p) => (
+                                    <tr key={p.id} className="hover:bg-muted/30">
+                                        <td className="px-4 py-2">
+                                            <div className="flex items-center gap-2.5">
+                                                <ProductThumbnail
+                                                    src={p.product_img}
+                                                    name={p.name}
+                                                    categoryName={p.category?.name}
+                                                    unit={p.unit}
+                                                    aspect="w-10 h-10 rounded-lg shrink-0 border border-border"
+                                                    padding="p-0.5"
+                                                />
+                                                <div className="min-w-0">
+                                                    <button
+                                                        onClick={() => setEditProd(p)}
+                                                        className="block max-w-72 truncate text-left font-semibold hover:text-primary"
+                                                    >
+                                                        {p.name}
+                                                    </button>
+                                                    <p className="truncate text-[11px] text-muted-foreground">
+                                                        {p.category?.name ?? 'Uncategorised'}
+                                                        {p.barcode && <span className="font-mono"> · {p.barcode}</span>}
+                                                        {!p.is_taxable && (
+                                                            <span className="font-semibold text-amber-700 dark:text-amber-400"> · No VAT</span>
+                                                        )}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="hidden px-4 py-2 md:table-cell">
+                                            <StatusPill tone={TYPE_TONE[p.product_type] ?? 'muted'}>{typeLabel(p.product_type)}</StatusPill>
+                                        </td>
+                                        <td className="px-4 py-2 text-right font-bold tabular-nums">₱{p.branch_price.toFixed(2)}</td>
+                                        <td className="px-4 py-2 text-right text-muted-foreground tabular-nums">{p.global_stock_formatted}</td>
+                                        <td className="hidden px-4 py-2 sm:table-cell">
+                                            <StatusPill tone={statusTone(p.global_stock_status)}>{p.global_stock_status}</StatusPill>
+                                        </td>
+                                        <td className="px-2 py-2">
+                                            <div className="flex justify-end gap-0.5">
+                                                <button
+                                                    onClick={() => setStockProd(p)}
+                                                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                                                    aria-label={`Stock for ${p.name}`}
+                                                    title="Stock by branch"
+                                                >
+                                                    <Eye className="h-3.5 w-3.5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => setEditProd(p)}
+                                                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                                                    aria-label={`Edit ${p.name}`}
+                                                    title="Edit"
+                                                >
+                                                    <Edit2 className="h-3.5 w-3.5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => setDeleteProd(p)}
+                                                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                                    aria-label={`Delete ${p.name}`}
+                                                    title="Delete"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
                 </div>
-            )}
 
-            {/* Grid */}
-            {products.length === 0 ? (
-                <div className="rounded-xl border border-border bg-card py-20 text-center text-muted-foreground">
-                    <Package className="mx-auto mb-3 h-10 w-10 opacity-20" />
-                    <p>No products found{hasFilters ? ' — try adjusting your filters' : ''}</p>
-                </div>
-            ) : (
-                <div
-                    className={cn('grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4', loading && 'pointer-events-none opacity-60')}
-                >
-                    {products.map((p) => (
-                        <div
-                            key={p.id}
-                            className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card transition-all hover:border-primary/30 hover:shadow-md"
-                        >
-                            <div className="relative aspect-[4/3] overflow-hidden border-b border-border/50 bg-muted/30">
-                                <ProductThumbnail src={p.product_img} name={p.name} categoryName={p.category?.name} unit={p.unit} />
-                                <div className="absolute top-2 left-2 flex flex-col gap-1">
-                                    <span className={cn('rounded-full px-2 py-0.5 text-xs', typeBadge(p.product_type))}>
-                                        {typeLabel(p.product_type)}
-                                    </span>
-                                    {!p.is_taxable && (
-                                        <span className="rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs font-medium text-yellow-400">No VAT</span>
-                                    )}
-                                </div>
-                                <div className="absolute top-2 right-2">
-                                    <span className={cn('rounded-full px-2 py-0.5 text-xs', statusBadge(p.global_stock_status))}>
-                                        {p.global_stock_status}
-                                    </span>
-                                </div>
-                                <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/55 opacity-0 transition-opacity group-hover:opacity-100">
-                                    <button
-                                        onClick={() => setStockProd(p)}
-                                        className="flex items-center gap-1.5 rounded-lg bg-black/40 px-3 py-1.5 text-xs font-medium text-white hover:bg-black/60"
-                                    >
-                                        <Eye className="h-3.5 w-3.5" /> Stock
-                                    </button>
-                                    <button
-                                        onClick={() => setEditProd(p)}
-                                        className="flex items-center gap-1.5 rounded-lg bg-primary/80 px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary"
-                                    >
-                                        <Edit2 className="h-3.5 w-3.5" /> Edit
-                                    </button>
-                                    <button
-                                        onClick={() => setDeleteProd(p)}
-                                        className="flex items-center gap-1.5 rounded-lg bg-destructive/80 px-3 py-1.5 text-xs font-medium text-destructive-foreground hover:bg-destructive"
-                                    >
-                                        <Trash2 className="h-3.5 w-3.5" /> Del
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="flex flex-1 flex-col gap-2 p-4">
-                                <div>
-                                    <h3 className="line-clamp-2 text-sm leading-snug font-semibold text-foreground">{p.name}</h3>
-                                    {p.category && <p className="mt-0.5 text-xs text-muted-foreground">{p.category.name}</p>}
-                                </div>
-                                <div className="mt-auto flex items-center justify-between border-t border-border pt-2">
-                                    <div>
-                                        <div className="text-xs text-muted-foreground">Price</div>
-                                        <div className="text-sm font-bold text-emerald-500 dark:text-emerald-400">₱{p.branch_price.toFixed(2)}</div>
-                                    </div>
-                                    <div className="text-right">
-                                        <div className="text-xs text-muted-foreground">Stock</div>
-                                        <div className="text-sm font-bold text-foreground">{p.global_stock_formatted}</div>
-                                    </div>
-                                </div>
-                                {p.barcode && <p className="truncate font-mono text-xs text-muted-foreground/50">{p.barcode}</p>}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {/* Pagination */}
-            <PaginationBar pagination={pagination} onPageChange={handlePageChange} onPerPageChange={handlePerPage} loading={loading} />
+                <PaginationBar pagination={pagination} onPageChange={handlePageChange} onPerPageChange={handlePerPage} loading={loading} />
+            </Panel>
 
             <ProductFormModal
                 open={addOpen}
@@ -1289,7 +1268,7 @@ function AllProductsTab({
                 title="Delete Product"
                 message={
                     <>
-                        Delete <strong className="text-white">"{deleteProd?.name}"</strong>? This cannot be undone.
+                        Delete <strong className="text-foreground">"{deleteProd?.name}"</strong>? This cannot be undone.
                     </>
                 }
                 onConfirm={handleDelete}
@@ -2517,7 +2496,7 @@ function RecipesTab({ recipeProducts, allProducts }: { recipeProducts: RecipePro
         reset,
     } = useForm({ product_id: '', ingredient_id: '', quantity: '', unit: 'pcs', notes: '' });
 
-    const ingredients = allProducts.filter((p) => p.product_type === 'standard');
+    const ingredients = allProducts.filter((p) => p.product_type === 'ingredient' || p.product_type === 'standard');
     const filtered = recipeProducts.filter((p) => !search || p.name.toLowerCase().includes(search.toLowerCase()));
 
     const openAdd = (p: RecipeProduct) => {
@@ -2617,7 +2596,7 @@ function RecipesTab({ recipeProducts, allProducts }: { recipeProducts: RecipePro
             )}
             <Modal open={addModal} onClose={() => setAddModal(false)} title={`Add Ingredient — ${selected?.name}`} size="sm">
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <Field label="Ingredient (Standard Product)" error={errors.ingredient_id}>
+                    <Field label="Ingredient" error={errors.ingredient_id}>
                         <select className={sel} value={data.ingredient_id} onChange={(e) => setData('ingredient_id', e.target.value)}>
                             <option value="">Select ingredient…</option>
                             {ingredients
@@ -2762,15 +2741,20 @@ function StockManagementTab({
         navigate({ stock_search: search, stock_branch: filterBranch, stock_status: filterStatus, stock_per_page: pp, stock_page: 1 });
 
     return (
-        <div className="space-y-5">
-            {/* Filters */}
-            <div className="rounded-xl border border-border bg-card p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative min-w-[200px] flex-1">
-                        <Search className="absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <div>
+            <Panel
+                flush
+                icon={Boxes}
+                title="Stock by branch"
+                className={cn(loading && 'opacity-70')}
+                actions={<span className="text-[11px] font-semibold text-muted-foreground">{stockPagination.total.toLocaleString()} records</span>}
+            >
+                <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/20 px-4 py-2">
+                    <div className="relative min-w-48 flex-1">
+                        <Search className="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                         <input
-                            className="h-9 w-full rounded-lg border border-border bg-background pr-3 pl-9 text-sm text-foreground placeholder:text-muted-foreground focus:ring-1 focus:ring-primary focus:outline-none"
-                            placeholder="Search product…"
+                            className={cn(controlCls, 'w-full pl-8')}
+                            placeholder="Search product"
                             value={search}
                             onChange={(e) => handleSearch(e.target.value)}
                         />
@@ -2779,9 +2763,10 @@ function StockManagementTab({
                         <select
                             value={filterBranch}
                             onChange={(e) => handleFilter('stock_branch', e.target.value)}
-                            className="h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
+                            className={controlCls}
+                            aria-label="Branch"
                         >
-                            <option value="">All Branches</option>
+                            <option value="">All branches</option>
                             {branches.map((b) => (
                                 <option key={b.id} value={b.id}>
                                     {b.name}
@@ -2789,109 +2774,95 @@ function StockManagementTab({
                             ))}
                         </select>
                     )}
-                    <select
-                        value={filterStatus}
-                        onChange={(e) => handleFilter('stock_status', e.target.value)}
-                        className="h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
-                    >
-                        <option value="">All Status</option>
-                        <option value="in_stock">In Stock</option>
-                        <option value="low_stock">Low Stock</option>
-                        <option value="near_expiry">Near Expiry</option>
-                        <option value="out_of_stock">Out of Stock</option>
-                        <option value="expired">Expired</option>
-                    </select>
-                    <span className="ml-auto text-xs text-muted-foreground tabular-nums">{stockPagination.total.toLocaleString()} records</span>
+                    <div className="flex flex-wrap gap-1">
+                        {[
+                            { value: '', label: 'All' },
+                            { value: 'in_stock', label: 'In stock' },
+                            { value: 'low_stock', label: 'Low' },
+                            { value: 'out_of_stock', label: 'Out' },
+                            { value: 'near_expiry', label: 'Near expiry' },
+                            { value: 'expired', label: 'Expired' },
+                        ].map((option) => (
+                            <Chip
+                                key={option.value}
+                                active={filterStatus === option.value}
+                                onClick={() => handleFilter('stock_status', option.value)}
+                            >
+                                {option.label}
+                            </Chip>
+                        ))}
+                    </div>
                 </div>
-            </div>
 
-            {loading && (
-                <div className="h-0.5 w-full overflow-hidden rounded-full bg-border">
-                    <div className="h-full animate-pulse rounded-full bg-primary" />
-                </div>
-            )}
-
-            {/* Table */}
-            <div className={cn('overflow-hidden rounded-xl border border-border bg-card', loading && 'opacity-60')}>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
-                        <thead>
-                            <tr className="border-b border-border bg-muted/30">
-                                {['Product', 'Branch', 'Stock', 'Capital', 'Price', 'Status', 'Expiry', ''].map((h, i) => (
-                                    <th
-                                        key={i}
-                                        className={cn(
-                                            'px-4 py-3 text-[10px] font-bold tracking-widest whitespace-nowrap text-muted-foreground uppercase',
-                                            i >= 2 && i <= 4 ? 'text-right' : i === 5 ? 'text-center' : i === 6 ? 'text-right' : 'text-left',
-                                            i === 1 ? 'hidden md:table-cell' : '',
-                                            i === 3 ? 'hidden lg:table-cell' : '',
-                                            i === 6 ? 'hidden lg:table-cell' : '',
-                                        )}
-                                    >
-                                        {h}
-                                    </th>
-                                ))}
+                        <thead className="border-b border-border">
+                            <tr>
+                                <th className={thCls}>Product</th>
+                                <th className={cn(thCls, 'hidden md:table-cell')}>Branch</th>
+                                <th className={cn(thCls, 'text-right')}>Stock</th>
+                                <th className={cn(thCls, 'hidden text-right lg:table-cell')}>Capital</th>
+                                <th className={cn(thCls, 'text-right')}>Price</th>
+                                <th className={thCls}>Status</th>
+                                <th className={cn(thCls, 'hidden lg:table-cell')}>Expiry</th>
+                                <th className="w-24" />
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
                             {stockRows.length === 0 ? (
-                                <tr>
-                                    <td colSpan={8} className="px-4 py-12 text-center text-sm text-muted-foreground">
-                                        No stock records found
-                                    </td>
-                                </tr>
+                                <EmptyRow colSpan={8} icon={Boxes}>
+                                    No stock records found.
+                                </EmptyRow>
                             ) : (
                                 stockRows.map((s, i) => (
-                                    <tr key={i} className="group transition-colors hover:bg-muted/20">
-                                        <td className="px-4 py-3">
-                                            <div className="flex items-center gap-3">
+                                    <tr key={i} className="hover:bg-muted/30">
+                                        <td className="px-4 py-2">
+                                            <div className="flex items-center gap-2.5">
                                                 <ProductThumbnail
                                                     src={s.product_img}
                                                     name={s.product_name}
-                                                    aspect="w-9 h-9 rounded-lg shrink-0 border border-border"
+                                                    aspect="w-8 h-8 rounded-lg shrink-0 border border-border"
                                                     padding="p-0.5"
                                                 />
-                                                <div>
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className="text-sm font-semibold text-foreground">{s.product_name}</span>
-                                                        {s.product_type === 'bundle' && (
-                                                            <span className="rounded-full bg-purple-500/15 px-1.5 py-0.5 text-[9px] font-bold text-purple-400">
-                                                                Bundle
-                                                            </span>
-                                                        )}
-                                                    </div>
+                                                <div className="min-w-0">
+                                                    <p className="flex items-center gap-1.5 font-semibold">
+                                                        <span className="truncate">{s.product_name}</span>
+                                                        {s.product_type === 'bundle' && <StatusPill tone="primary">Bundle</StatusPill>}
+                                                    </p>
                                                     {s.product_barcode && (
-                                                        <div className="font-mono text-xs text-muted-foreground">{s.product_barcode}</div>
+                                                        <p className="font-mono text-[11px] text-muted-foreground">{s.product_barcode}</p>
                                                     )}
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="hidden px-4 py-3 text-sm text-muted-foreground md:table-cell">{s.branch_name}</td>
-                                        <td className="px-4 py-3 text-right font-bold text-foreground">{s.stock.toLocaleString()}</td>
-                                        <td className="hidden px-4 py-3 text-right text-muted-foreground lg:table-cell">₱{s.capital.toFixed(2)}</td>
-                                        <td className="px-4 py-3 text-right font-semibold text-emerald-500 dark:text-emerald-400">
-                                            {s.formatted_price}
+                                        <td className="hidden px-4 py-2 text-xs text-muted-foreground md:table-cell">{s.branch_name}</td>
+                                        <td
+                                            className={cn(
+                                                'px-4 py-2 text-right font-bold tabular-nums',
+                                                s.stock <= 0 && 'text-red-700 dark:text-red-400',
+                                            )}
+                                        >
+                                            {s.stock.toLocaleString()}
                                         </td>
-                                        <td className="px-4 py-3 text-center">
-                                            <span className={cn('rounded-full px-2.5 py-1 text-xs', statusBadge(s.status))}>{s.status}</span>
+                                        <td className="hidden px-4 py-2 text-right text-muted-foreground tabular-nums lg:table-cell">
+                                            ₱{s.capital.toFixed(2)}
                                         </td>
-                                        <td className="hidden px-4 py-3 text-right text-xs text-muted-foreground lg:table-cell">
+                                        <td className="px-4 py-2 text-right font-semibold tabular-nums">{s.formatted_price}</td>
+                                        <td className="px-4 py-2">
+                                            <StatusPill tone={statusTone(s.status)}>{s.status}</StatusPill>
+                                        </td>
+                                        <td className="hidden px-4 py-2 text-xs text-muted-foreground tabular-nums lg:table-cell">
                                             {s.expiry_date ?? '—'}
                                         </td>
-                                        <td className="px-4 py-3 text-right">
+                                        <td className="px-2 py-2 text-right">
                                             {s.product_type !== 'made_to_order' && (
                                                 <button
                                                     onClick={() =>
                                                         setAdjustItem({ product_id: s.product_id, product_name: s.product_name, stock: s })
                                                     }
-                                                    className={cn(
-                                                        'h-7 rounded-lg border px-3 text-xs font-medium opacity-0 transition-all group-hover:opacity-100',
-                                                        s.product_type === 'bundle'
-                                                            ? 'border-purple-500/30 text-purple-400 hover:bg-purple-500/10'
-                                                            : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground',
-                                                    )}
+                                                    className="h-7 rounded-md border border-border px-2.5 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
                                                 >
-                                                    {s.product_type === 'bundle' ? 'Set Qty' : 'Adjust'}
+                                                    {s.product_type === 'bundle' ? 'Set qty' : 'Adjust'}
                                                 </button>
                                             )}
                                         </td>
@@ -2901,16 +2872,15 @@ function StockManagementTab({
                         </tbody>
                     </table>
                 </div>
-            </div>
 
-            {/* Stock pagination */}
-            <PaginationBar
-                pagination={stockPagination}
-                onPageChange={handlePageChange}
-                onPerPageChange={handlePerPage}
-                perPageOptions={[10, 25, 50, 100]}
-                loading={loading}
-            />
+                <PaginationBar
+                    pagination={stockPagination}
+                    onPageChange={handlePageChange}
+                    onPerPageChange={handlePerPage}
+                    perPageOptions={[10, 25, 50, 100]}
+                    loading={loading}
+                />
+            </Panel>
 
             <StockAdjustModal item={adjustItem} onClose={() => setAdjustItem(null)} />
         </div>
@@ -2951,7 +2921,13 @@ export default function ProductsIndex() {
     } = usePage<PageProps>().props;
 
     const [activeTab, setActiveTab] = useState(initialTab ?? 'products');
-    const [toast, setToast] = useState<{ type: string; text: string } | null>(flash?.message ?? null);
+
+    useEffect(() => {
+        const message = flash?.message;
+        if (!message) return;
+        if (message.type === 'success') toast.success(message.text);
+        else toast.error(message.text);
+    }, [flash]);
 
     const tabCount = (key: string) => {
         if (key === 'products') return stats.total_products;
@@ -2966,47 +2942,54 @@ export default function ProductsIndex() {
     return (
         <AdminLayout>
             <Head title="Products" />
-            {toast && <Toast msg={toast} onClose={() => setToast(null)} />}
 
-            <div className="mx-auto max-w-[1400px] space-y-5">
-                {/* Page header */}
-                <div className="flex items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-xl font-bold text-foreground">Products</h1>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                            {stats.total_products.toLocaleString()} product{stats.total_products !== 1 ? 's' : ''} ·{' '}
-                            {stats.total_units.toLocaleString()} units across {branches.length} branch{branches.length !== 1 ? 'es' : ''}
-                        </p>
-                    </div>
-                </div>
+            <div className="space-y-4">
+                <PageHeader
+                    title="Products"
+                    subtitle={`Menu items, bundles and recipes, with stock across ${branches.length} branch${branches.length !== 1 ? 'es' : ''}.`}
+                />
 
-                {/* Tabs */}
-                <div className="flex gap-0 overflow-x-auto border-b border-border" style={{ scrollbarWidth: 'none' }}>
+                <StatStrip count={6}>
+                    <Stat icon={Package} label="Menu items" value={stats.total_products.toLocaleString()} />
+                    <Stat icon={ChefHat} label="Made to order" value={stats.made_to_order.toLocaleString()} />
+                    <Stat icon={Boxes} label="Ingredients" value={stats.ingredients.toLocaleString()} />
+                    <Stat
+                        icon={AlertTriangle}
+                        label="Low stock"
+                        value={stats.low_stock.toLocaleString()}
+                        tone={stats.low_stock > 0 ? 'warning' : undefined}
+                    />
+                    <Stat
+                        icon={AlertTriangle}
+                        label="Out of stock"
+                        value={stats.out_of_stock.toLocaleString()}
+                        tone={stats.out_of_stock > 0 ? 'warning' : undefined}
+                    />
+                    <Stat icon={Tag} label="Categories" value={categories.length.toLocaleString()} />
+                </StatStrip>
+
+                <div className="flex flex-wrap gap-1.5" role="tablist">
                     {TABS.map((t) => {
                         const count = tabCount(t.key);
                         const Icon = t.icon;
+                        const active = activeTab === t.key;
                         return (
                             <button
                                 key={t.key}
+                                role="tab"
+                                aria-selected={active}
                                 onClick={() => setActiveTab(t.key)}
                                 className={cn(
-                                    'flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold whitespace-nowrap transition-colors',
-                                    activeTab === t.key
-                                        ? 'border-primary text-primary'
-                                        : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground',
+                                    'flex h-8 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold whitespace-nowrap transition-colors',
+                                    active
+                                        ? 'border-primary bg-primary text-primary-foreground'
+                                        : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground',
                                 )}
                             >
                                 <Icon className="h-3.5 w-3.5 shrink-0" />
                                 {t.label}
                                 {count !== null && (
-                                    <span
-                                        className={cn(
-                                            'rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums',
-                                            activeTab === t.key ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
-                                        )}
-                                    >
-                                        {count.toLocaleString()}
-                                    </span>
+                                    <span className={cn('text-xs tabular-nums', active ? 'opacity-80' : 'opacity-60')}>{count.toLocaleString()}</span>
                                 )}
                             </button>
                         );
@@ -3019,7 +3002,6 @@ export default function ProductsIndex() {
                         products={products}
                         pagination={pagination}
                         filters={filters}
-                        stats={stats}
                         categories={categories}
                         branches={branches}
                         isAdmin={isAdmin}

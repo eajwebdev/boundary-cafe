@@ -1922,8 +1922,15 @@ html {
     }
 
     /* ── Ghost / Minimal Select ─────────────────────────────────────────── */
+    /* No vertical padding: the height (h-10 by default, or a page's own h-*) sets the size and
+       the text stays centred, so compact h-7 / h-8 selects never clip their label. */
     select {
-        @apply appearance-none rounded-lg border border-transparent bg-card px-3 py-2.5 text-foreground transition-all duration-200 focus:outline-none;
+        @apply h-10 appearance-none rounded-lg border border-transparent bg-card px-3 py-0 text-foreground transition-all duration-200 focus:outline-none;
+    }
+
+    select[multiple],
+    select[size]:not([size='1']) {
+        @apply h-auto py-2;
     }
 
     select:hover {
@@ -1944,6 +1951,14 @@ html {
     .dark select {
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
     }
+}
+
+/* ── Select chevron room ───────────────────────────────────────────────────────
+   Every select draws its chevron at the right edge (see the components layer above).
+   Kept outside the layers on purpose so a page's px-* utility can never hide the
+   label under the arrow. */
+select:not([multiple]) {
+    padding-right: 2rem;
 }
 
 /* ── Thin scrollbar ─────────────────────────────────────────────────────────── */

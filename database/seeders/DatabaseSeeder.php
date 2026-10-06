@@ -29,9 +29,10 @@ class DatabaseSeeder extends Seeder
             CustomerSeeder::class,
 
             // ── 6. Cafe products — COOP Main Campus (CMC) ─────────
-            //    Ingredients must exist before products (no FK dep,
-            //    but recipes reference both)
+            //    Most of the menu is made to order: the recipe seeder adds
+            //    raw ingredients and the recipe for each made-to-order item.
             BoundaryCafeProductSeeder::class,
+            BoundaryCafeRecipeSeeder::class,
             DiningTableSeeder::class,
 
             // ── 7. Customer ordering app demo data ────────────────
