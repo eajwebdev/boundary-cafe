@@ -2,9 +2,11 @@
 
 namespace App\Http\Middleware;
 
+use App\Events\TableFloorChanged;
 use App\Helpers\MenuHelper;
 use App\Models\Promo;
 use App\Models\SystemSetting;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -176,6 +178,10 @@ class HandleInertiaRequests extends Middleware
 
             ] : null,
 
+            // ── Realtime (Pusher) — staff screens only ────────────
+            // The key and cluster are public by design; the secret never leaves the server.
+            'realtime' => fn () => $this->realtime($user),
+
             // ── Signed-in online customer (separate "customer" guard) ──
             // Only the fields the customer app needs — never staff data.
             'customer' => fn () => ($c = Auth::guard('customer')->user()) ? [
@@ -210,5 +216,28 @@ class HandleInertiaRequests extends Middleware
             ],
 
         ]);
+    }
+
+    /**
+     * What the browser needs to open a Pusher connection, or null when realtime is off.
+     *
+     * @return array{key: string, cluster: string, floor_channel: string|null}|null
+     */
+    private function realtime(?User $user): ?array
+    {
+        $pusher = config('broadcasting.connections.pusher');
+
+        if (! $user || config('broadcasting.default') !== 'pusher' || empty($pusher['key'])) {
+            return null;
+        }
+
+        $branchId = $user->workingBranchId();
+        $seesFloor = $branchId && ($user->hasAccess(41) || $user->hasAccess(2));
+
+        return [
+            'key'           => $pusher['key'],
+            'cluster'       => $pusher['options']['cluster'],
+            'floor_channel' => $seesFloor ? 'private-'.TableFloorChanged::channelFor($branchId) : null,
+        ];
     }
 }

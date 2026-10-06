@@ -1,28 +1,29 @@
-import { Copy, Sparkles } from 'lucide-react';
+import { Copy, Sparkles, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 
 import type { StorefrontPromo } from '@/lib/customer';
-import { cn } from '@/lib/utils';
 
-/** Coupon-style deals. Coded promos copy their code; codeless ones apply themselves. */
+import ScrollRail from './ScrollRail';
+
+/** Banner-style deals. Coded promos copy their code; codeless ones apply themselves. */
 export default function PromoRail({ promos, className }: { promos: StorefrontPromo[]; className?: string }) {
     if (!promos.length) return null;
 
     return (
         <section aria-labelledby="deals-title" className={className}>
-            <h2 id="deals-title" className="font-display px-4 text-xl font-bold lg:px-0">
+            <h2 id="deals-title" className="font-display px-4 text-2xl font-semibold tracking-tight lg:px-0 lg:text-[28px]">
                 Deals for you
             </h2>
-            <div className="bc-rail mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 lg:px-0">
+            <ScrollRail className="mt-4 gap-3 pb-1 lg:gap-4">
                 {promos.map((p) => (
-                    <Coupon key={p.id} promo={p} />
+                    <Deal key={p.id} promo={p} />
                 ))}
-            </div>
+            </ScrollRail>
         </section>
     );
 }
 
-function Coupon({ promo: p }: { promo: StorefrontPromo }) {
+function Deal({ promo: p }: { promo: StorefrontPromo }) {
     const value = p.discount_type === 'percent' ? `${p.discount_value}%` : `₱${p.discount_value}`;
     const copy = async () => {
         if (!p.code) return;
@@ -35,27 +36,12 @@ function Coupon({ promo: p }: { promo: StorefrontPromo }) {
     };
 
     return (
-        <article
-            className="bc-ticket relative flex h-[132px] w-[86%] max-w-[360px] shrink-0 snap-start overflow-hidden rounded-[22px] bg-shop-surface ring-1 ring-shop-line sm:w-[340px]"
-            style={{ ['--ticket-cut' as string]: '50%' }}
-        >
-            {/* Stub */}
-            <div className={cn('relative flex w-[38%] shrink-0 flex-col justify-center overflow-hidden px-4', p.banner ? 'text-white' : 'bg-shop-accent text-shop-on-accent')}>
-                {p.banner && (
-                    <>
-                        <img src={p.banner} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-black/20" />
-                    </>
-                )}
-                <p className="font-display relative text-[34px] leading-none font-extrabold tracking-tight">{value}</p>
-                <p className="relative mt-1 text-xs font-semibold tracking-[0.12em] uppercase opacity-90">off</p>
-            </div>
-            <div className="w-0 border-l-2 border-dashed border-shop-line" aria-hidden />
-            {/* Body */}
-            <div className="flex min-w-0 flex-1 flex-col justify-between p-4">
+        <article className="relative flex h-30 w-[300px] max-w-[84vw] shrink-0 snap-start overflow-hidden rounded-xl bg-shop-accent text-shop-on-accent shadow-shop-sm">
+            <div className="relative z-10 flex min-w-0 flex-1 flex-col justify-between py-3 pr-1 pl-4">
                 <div className="min-w-0">
-                    <p className="font-display truncate text-base font-semibold">{p.name}</p>
-                    <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-shop-muted">
+                    <p className="font-display text-2xl leading-none font-extrabold tracking-tight">{value} off</p>
+                    <p className="mt-1.5 truncate text-sm leading-tight font-semibold">{p.name}</p>
+                    <p className="truncate text-xs opacity-80">
                         {p.minimum_purchase ? `Min. order ₱${p.minimum_purchase.toLocaleString()}` : 'No minimum'}
                         {p.expires_at ? ` · until ${new Date(p.expires_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}` : ''}
                     </p>
@@ -64,15 +50,23 @@ function Coupon({ promo: p }: { promo: StorefrontPromo }) {
                     <button
                         type="button"
                         onClick={copy}
-                        className="bc-press flex h-9 w-fit cursor-pointer items-center gap-1.5 rounded-xl border border-dashed border-shop-accent bg-shop-accent-soft px-3 font-mono text-sm font-bold text-shop-accent-ink"
+                        className="bc-press flex h-7 w-fit cursor-pointer items-center gap-1.5 rounded-full bg-shop-surface px-2.5 font-mono text-xs font-bold text-shop-ink"
                         aria-label={`Copy promo code ${p.code}`}
                     >
-                        {p.code} <Copy className="h-3.5 w-3.5" />
+                        {p.code} <Copy className="h-3 w-3" />
                     </button>
                 ) : (
-                    <span className="flex w-fit items-center gap-1 rounded-xl bg-shop-success-soft px-2.5 py-1.5 text-xs font-semibold text-shop-success">
-                        <Sparkles className="h-3.5 w-3.5" /> Applied at checkout
+                    <span className="flex h-7 w-fit items-center gap-1 rounded-full bg-shop-surface px-2.5 text-xs font-semibold text-shop-ink">
+                        <Sparkles className="h-3 w-3" /> Applied at checkout
                     </span>
+                )}
+            </div>
+            {/* Photo side, cut on a slant like a printed promo banner */}
+            <div className="relative w-[42%] shrink-0 bg-shop-accent-soft [clip-path:polygon(22%_0,100%_0,100%_100%,0_100%)]">
+                {p.banner ? (
+                    <img src={p.banner} alt="" loading="lazy" className="h-full w-full object-cover" />
+                ) : (
+                    <Tag className="absolute top-1/2 left-[58%] h-10 w-10 -translate-x-1/2 -translate-y-1/2 text-shop-accent-ink opacity-70" aria-hidden />
                 )}
             </div>
         </article>

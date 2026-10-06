@@ -29,7 +29,7 @@ function ProductCardBase({ product: p, baseQty, totalQty, disabled, onOpen, onQu
     return (
         <article
             className={cn(
-                'group relative flex h-full cursor-pointer gap-3 rounded-[22px] bg-shop-surface p-3 shadow-shop-sm ring-1 ring-shop-line transition-[box-shadow,transform] duration-300 ease-shop sm:flex-col-reverse sm:gap-0 sm:p-0',
+                'group relative flex h-full cursor-pointer gap-3 rounded-2xl bg-shop-surface p-3 shadow-shop-sm ring-1 ring-shop-line transition-[box-shadow,transform] duration-300 ease-shop sm:flex-col-reverse sm:gap-0 sm:p-0',
                 !soldOut && 'hover:-translate-y-0.5 hover:shadow-shop-md',
                 soldOut && 'cursor-not-allowed',
                 totalQty > 0 && 'ring-2 ring-shop-accent/60',
@@ -40,7 +40,7 @@ function ProductCardBase({ product: p, baseQty, totalQty, disabled, onOpen, onQu
                 <h3 className={cn('font-display text-[17px] leading-snug font-semibold text-shop-ink', soldOut && 'text-shop-muted')}>
                     <button
                         type="button"
-                        className="cursor-pointer text-left after:absolute after:inset-0 after:rounded-[22px] focus-visible:outline-none"
+                        className="cursor-pointer text-left after:absolute after:inset-0 after:rounded-2xl focus-visible:outline-none"
                         onClick={(e) => {
                             e.stopPropagation();
                             if (!soldOut) onOpen();
@@ -67,7 +67,7 @@ function ProductCardBase({ product: p, baseQty, totalQty, disabled, onOpen, onQu
                     src={p.image}
                     alt={p.name}
                     className={cn(
-                        'h-full w-full rounded-2xl sm:aspect-[4/3] sm:rounded-b-none sm:rounded-t-[22px] [&_img]:group-hover:scale-[1.03]',
+                        'h-full w-full rounded-xl sm:aspect-[4/3] sm:rounded-b-none sm:rounded-t-2xl [&_img]:group-hover:scale-[1.03]',
                         soldOut && 'opacity-60 grayscale',
                     )}
                 />

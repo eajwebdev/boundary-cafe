@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Events\TableFloorChanged;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -38,6 +39,24 @@ class DiningTable extends Model
     const STATUS_OCCUPIED  = 'occupied';
     const STATUS_RESERVED  = 'reserved';
     const STATUS_CLEANING  = 'cleaning';
+
+    // ── Boot ───────────────────────────────────────────────────────
+
+    protected static function booted(): void
+    {
+        // Tell the waiter and POS screens when a table is added, edited, removed or changes status.
+        static::saved(function (DiningTable $table) {
+            if (! $table->wasRecentlyCreated && ! $table->wasChanged()) {
+                return;
+            }
+            TableFloorChanged::signal($table->branch_id);
+            if ($table->wasChanged('branch_id')) {
+                TableFloorChanged::signal($table->getOriginal('branch_id'));
+            }
+        });
+
+        static::deleted(fn (DiningTable $table) => TableFloorChanged::signal($table->branch_id));
+    }
 
     // ── Relationships ──────────────────────────────────────────────
 

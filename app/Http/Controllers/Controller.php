@@ -22,16 +22,13 @@ abstract class Controller
      */
     protected function workingBranchId(): int
     {
-        $user = auth()->user();
-        $branchId = $user->branch_id
-            ?? app(\App\Services\OnlineOrderService::class)->branch()?->id
-            ?? \App\Models\Branch::where('is_active', true)->value('id');
+        $branchId = auth()->user()->workingBranchId();
 
         if (! $branchId) {
             abort(403, 'No branch assigned.');
         }
 
-        return (int) $branchId;
+        return $branchId;
     }
 
     /**

@@ -20,12 +20,13 @@ import {
     Wallet,
     X,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Price, ProductImage, QtyControl, ShopButton, useIsDesktop } from '@/components/storefront/ui';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { jsonRequest } from '@/lib/customer';
+import { useFloorUpdates } from '@/lib/realtime';
 import { cn } from '@/lib/utils';
 
 interface Table {
@@ -149,20 +150,43 @@ export default function Waiter() {
         if (props.flash?.error) toast.error(props.flash.error);
     }, [props.flash]);
 
-    // Keep table colours fresh while on the floor plan.
+    const latestRefresh = useRef(0);
+    const refreshTables = useCallback(async () => {
+        const mine = ++latestRefresh.current;
+        try {
+            const fresh = (await jsonRequest<{ tables: Table[] }>('/tables/status')).tables;
+            // A slower, older response must not overwrite a newer one.
+            if (mine !== latestRefresh.current) return;
+            setTables(fresh);
+            setSyncedAt(Date.now());
+        } catch {
+            /* ignore transient errors */
+        }
+    }, []);
+
+    // Pusher says the moment anything on the floor changes (another waiter, the cashier, table setup).
+    const live = useFloorUpdates(refreshTables);
+
+    // A slow poll stays as a safety net — and is the only source of updates when realtime is off.
     useEffect(() => {
         if (table) return;
-        const t = window.setInterval(async () => {
-            if (document.visibilityState !== 'visible') return;
-            try {
-                setTables((await jsonRequest<{ tables: Table[] }>('/tables/status')).tables);
-                setSyncedAt(Date.now());
-            } catch {
-                /* ignore transient errors */
-            }
-        }, 15000);
+        const t = window.setInterval(
+            () => {
+                if (document.visibilityState === 'visible') refreshTables();
+            },
+            live ? 60000 : 15000,
+        );
         return () => window.clearInterval(t);
-    }, [table]);
+    }, [table, live, refreshTables]);
+
+    // A phone waking up may have missed events while its socket was asleep.
+    useEffect(() => {
+        const onVisible = () => {
+            if (document.visibilityState === 'visible') refreshTables();
+        };
+        document.addEventListener('visibilitychange', onVisible);
+        return () => document.removeEventListener('visibilitychange', onVisible);
+    }, [refreshTables]);
 
     const user = props.auth.user;
     const canPos = user.access?.includes('2');
@@ -243,7 +267,7 @@ export default function Waiter() {
                     onSent={() => setTable(null)}
                 />
             ) : (
-                <FloorPlan tables={tables} firstName={user.fname} syncedAt={syncedAt} onPick={setTable} />
+                <FloorPlan tables={tables} firstName={user.fname} syncedAt={syncedAt} live={live} onPick={setTable} />
             )}
         </div>
     );
@@ -251,7 +275,19 @@ export default function Waiter() {
 
 // ─── Floor plan ───────────────────────────────────────────────────────────────
 
-function FloorPlan({ tables, firstName, syncedAt, onPick }: { tables: Table[]; firstName: string; syncedAt: number; onPick: (t: Table) => void }) {
+function FloorPlan({
+    tables,
+    firstName,
+    syncedAt,
+    live,
+    onPick,
+}: {
+    tables: Table[];
+    firstName: string;
+    syncedAt: number;
+    live: boolean;
+    onPick: (t: Table) => void;
+}) {
     const [filter, setFilter] = useState<State | 'all'>('all');
     const [query, setQuery] = useState('');
     const [now, setNow] = useState(() => Date.now());
@@ -315,7 +351,7 @@ function FloorPlan({ tables, firstName, syncedAt, onPick }: { tables: Table[]; f
     return (
         <main className="mx-auto max-w-7xl px-4 pt-5 pb-[calc(2rem+env(safe-area-inset-bottom))] sm:px-5">
             {/* Hero: greeting, occupancy and live numbers */}
-            <section className="bc-rise shadow-shop-lg relative isolate overflow-hidden rounded-[28px] bg-shop-navy p-5 text-shop-navy-ink sm:p-7">
+            <section className="bc-rise shadow-shop-lg relative isolate overflow-hidden rounded-3xl bg-shop-navy p-4 text-shop-navy-ink sm:rounded-[28px] sm:p-7">
                 <div aria-hidden className="pointer-events-none absolute -top-28 -right-20 -z-10 h-72 w-72 rounded-full bg-shop-accent/45 blur-3xl" />
                 <div aria-hidden className="pointer-events-none absolute -bottom-36 left-1/4 -z-10 h-72 w-72 rounded-full bg-sky-400/20 blur-3xl" />
                 <div
@@ -323,7 +359,7 @@ function FloorPlan({ tables, firstName, syncedAt, onPick }: { tables: Table[]; f
                     className="pointer-events-none absolute inset-0 -z-10 [background-image:radial-gradient(currentColor_1px,transparent_1px)] [background-size:18px_18px] opacity-[0.08]"
                 />
 
-                <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_460px] lg:items-end">
+                <div className="grid gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_460px] lg:items-end">
                     <div>
                         <p className="flex items-center gap-2 text-sm font-medium text-white/75">
                             <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold tracking-wide text-white uppercase ring-1 ring-white/15">
@@ -334,11 +370,11 @@ function FloorPlan({ tables, firstName, syncedAt, onPick }: { tables: Table[]; f
                                 {greeting()}, {firstName}
                             </span>
                         </p>
-                        <h1 className="mt-3 font-display text-[30px] leading-[1.05] font-bold tracking-tight sm:text-[40px]">
+                        <h1 className="mt-2.5 font-display text-2xl leading-[1.05] font-bold tracking-tight text-balance sm:mt-3 sm:text-[40px]">
                             Pick a table to <span className="text-shop-accent">take an order</span>
                         </h1>
 
-                        <div className="mt-5 max-w-md">
+                        <div className="mt-4 max-w-md sm:mt-5">
                             <div className="flex items-baseline justify-between text-xs font-semibold text-white/70">
                                 <span>Floor occupancy</span>
                                 <span className="text-sm text-white tabular-nums">{occupancy}%</span>
@@ -358,27 +394,36 @@ function FloorPlan({ tables, firstName, syncedAt, onPick }: { tables: Table[]; f
                                     ) : null,
                                 )}
                             </div>
-                            <p className="mt-2 text-[11px] text-white/60">Synced {clock(syncedAt)} · refreshes every 15 s</p>
+                            <p className="mt-2 text-[11px] text-white/60">
+                                Synced {clock(syncedAt)} · {live ? 'updates instantly' : 'refreshes every 15 s'}
+                            </p>
                         </div>
                     </div>
 
-                    <dl className="grid grid-cols-3 gap-2 sm:gap-3">
-                        <Stat icon={Armchair} label="Free now" value={String(counts.available)} />
+                    {/* Phones: one joined strip; the free count already sits in the filter below, and the
+                        money column sizes to its amount so it is never cut off. Tablets up: three cards. */}
+                    <dl className="flex divide-x divide-white/10 rounded-2xl bg-white/[0.08] ring-1 ring-white/15 sm:grid sm:grid-cols-3 sm:gap-3 sm:divide-x-0 sm:rounded-none sm:bg-transparent sm:ring-0">
+                        <Stat icon={Armchair} label="Free now" value={String(counts.available)} className="hidden sm:block" />
                         <Stat
                             icon={Receipt}
                             label="Open tickets"
                             value={String(open.length)}
                             hint={atCashier ? `${atCashier} at cashier` : undefined}
+                            className="flex flex-1"
                         />
-                        <Stat icon={Wallet} label="On the floor" value={<Price value={openTotal} />} />
+                        <Stat icon={Wallet} label="On the floor" value={<Price value={openTotal} />} className="flex min-w-[45%] shrink-0" />
                     </dl>
                 </div>
             </section>
 
+            {/* Phones: quick find scrolls away so only the filter stays pinned */}
+            <FindField value={query} onChange={setQuery} className="mt-4 sm:hidden" />
+
             {/* Toolbar: segmented filter (doubles as the legend) + quick find */}
-            <div className="sticky top-16 z-20 -mx-4 mt-4 flex flex-col gap-3 bg-shop-bg/85 px-4 py-3 backdrop-blur-xl sm:-mx-5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div className="sticky top-16 z-20 -mx-4 mt-1 flex flex-col gap-3 bg-shop-bg/85 px-4 py-2 backdrop-blur-xl sm:-mx-5 sm:mt-4 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-3">
+                {/* Phones: equal columns with the count over the label, so every state fits. Tablets up: pills. */}
                 <div
-                    className="bc-rail flex gap-1 overflow-x-auto rounded-full bg-shop-sunken p-1 ring-1 ring-shop-line/60 sm:self-start"
+                    className="bc-rail grid auto-cols-fr grid-flow-col gap-0.5 rounded-2xl bg-shop-sunken p-1 ring-1 ring-shop-line/60 sm:flex sm:gap-1 sm:self-start sm:overflow-x-auto sm:rounded-full"
                     role="tablist"
                     aria-label="Filter tables"
                 >
@@ -392,16 +437,18 @@ function FloorPlan({ tables, firstName, syncedAt, onPick }: { tables: Table[]; f
                                 aria-selected={active}
                                 onClick={() => setFilter(f.key)}
                                 className={cn(
-                                    'bc-press flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-full px-3.5 text-sm font-semibold whitespace-nowrap',
+                                    'bc-press flex h-12 min-w-0 cursor-pointer flex-wrap content-center items-center justify-center gap-x-1.5 gap-y-1 rounded-xl px-0.5 font-semibold sm:h-9 sm:shrink-0 sm:flex-nowrap sm:gap-2 sm:rounded-full sm:px-3.5 sm:whitespace-nowrap',
                                     active ? 'shadow-shop-sm bg-shop-surface text-shop-ink' : 'text-shop-muted hover:text-shop-ink',
                                 )}
                             >
-                                {f.key !== 'all' && <span className={cn('h-2 w-2 rounded-full', STATE[f.key].dot)} />}
-                                {f.label}
+                                {f.key !== 'all' && <span className={cn('order-1 h-1.5 w-1.5 rounded-full sm:h-2 sm:w-2', STATE[f.key].dot)} />}
+                                <span className="order-3 basis-full truncate text-center text-[11px] leading-none tracking-tight sm:order-2 sm:basis-auto sm:text-sm sm:leading-normal sm:tracking-normal">
+                                    {f.label}
+                                </span>
                                 <span
                                     className={cn(
-                                        'min-w-5 rounded-full px-1.5 text-[11px] leading-5 tabular-nums',
-                                        active ? 'bg-shop-ink text-shop-bg' : 'bg-shop-surface/70',
+                                        'order-2 text-base leading-none font-bold tabular-nums sm:order-3 sm:min-w-5 sm:rounded-full sm:px-1.5 sm:text-[11px] sm:leading-5 sm:font-semibold',
+                                        active ? 'sm:bg-shop-ink sm:text-shop-bg' : 'sm:bg-shop-surface/70',
                                     )}
                                 >
                                     {f.n}
@@ -410,27 +457,7 @@ function FloorPlan({ tables, firstName, syncedAt, onPick }: { tables: Table[]; f
                         );
                     })}
                 </div>
-                <div className="relative sm:w-64">
-                    <Search className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-shop-muted" />
-                    <input
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Find a table or section"
-                        type="search"
-                        aria-label="Find a table or section"
-                        className="shadow-shop-sm h-11 w-full rounded-full border-0 bg-shop-surface pr-10 pl-10 text-sm ring-1 ring-shop-line outline-none placeholder:text-shop-muted focus:ring-2 focus:ring-shop-accent"
-                    />
-                    {query && (
-                        <button
-                            type="button"
-                            onClick={() => setQuery('')}
-                            className="absolute top-1/2 right-1.5 flex h-8 w-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-shop-muted hover:bg-shop-sunken"
-                            aria-label="Clear search"
-                        >
-                            <X className="h-4 w-4" />
-                        </button>
-                    )}
-                </div>
+                <FindField value={query} onChange={setQuery} className="hidden sm:block sm:w-64" />
             </div>
 
             {sections.length === 0 && (
@@ -473,26 +500,54 @@ function FloorPlan({ tables, firstName, syncedAt, onPick }: { tables: Table[]; f
     );
 }
 
+function FindField({ value, onChange, className }: { value: string; onChange: (value: string) => void; className?: string }) {
+    return (
+        <div className={cn('relative', className)}>
+            <Search className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-shop-muted" />
+            <input
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                placeholder="Find a table or section"
+                type="search"
+                aria-label="Find a table or section"
+                className="shadow-shop-sm h-11 w-full rounded-full border-0 bg-shop-surface pr-10 pl-10 text-base ring-1 ring-shop-line outline-none placeholder:text-shop-muted focus:ring-2 focus:ring-shop-accent sm:text-sm"
+            />
+            {value && (
+                <button
+                    type="button"
+                    onClick={() => onChange('')}
+                    className="absolute top-1/2 right-1.5 flex h-8 w-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-shop-muted hover:bg-shop-sunken"
+                    aria-label="Clear search"
+                >
+                    <X className="h-4 w-4" />
+                </button>
+            )}
+        </div>
+    );
+}
+
 function Stat({
     icon: Icon,
     label,
     value,
     hint,
+    className,
 }: {
     icon: React.ComponentType<{ className?: string }>;
     label: string;
     value: React.ReactNode;
     hint?: string;
+    className?: string;
 }) {
     return (
-        <div className="rounded-2xl bg-white/[0.08] p-3 ring-1 ring-white/15 backdrop-blur-sm sm:p-4">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/12 text-white">
+        <div className={cn('min-w-0 flex-col px-3.5 py-2.5 sm:block sm:rounded-2xl sm:bg-white/[0.08] sm:p-4 sm:ring-1 sm:ring-white/15 sm:backdrop-blur-sm', className)}>
+            <span className="hidden h-8 w-8 items-center justify-center rounded-xl bg-white/12 text-white sm:flex">
                 <Icon className="h-4 w-4" />
             </span>
-            <dt className="mt-3 truncate text-[11px] font-semibold tracking-wide text-white/65 uppercase">{label}</dt>
-            <dd className="mt-0.5 truncate font-display text-xl font-bold tabular-nums sm:text-2xl">{value}</dd>
+            <dt className="order-2 mt-0.5 text-[11px] leading-tight font-semibold text-white/65 sm:mt-3 sm:truncate sm:tracking-wide sm:uppercase">{label}</dt>
+            <dd className="order-1 truncate font-display text-xl font-bold tabular-nums sm:mt-0.5 sm:text-2xl">{value}</dd>
             {hint && (
-                <dd className="mt-1 inline-flex max-w-full truncate rounded-full bg-shop-accent px-2 py-0.5 text-[10px] font-bold text-shop-on-accent">
+                <dd className="order-3 mt-1 inline-flex max-w-full self-start truncate rounded-full bg-shop-accent px-2 py-0.5 text-[10px] font-bold text-shop-on-accent">
                     {hint}
                 </dd>
             )}
@@ -514,7 +569,7 @@ function TableTile({ table, now, delay, onClick }: { table: Table; now: number; 
             style={{ animationDelay: `${delay}ms` }}
             aria-label={`Table ${table.table_number}, ${s.label}, ${table.capacity} seats`}
             className={cn(
-                'bc-rise group shadow-shop-sm relative isolate flex cursor-pointer flex-col overflow-hidden rounded-[26px] bg-shop-surface p-3.5 text-left ring-1 ring-shop-line',
+                'bc-rise group shadow-shop-sm relative isolate flex cursor-pointer flex-col overflow-hidden rounded-3xl bg-shop-surface p-3 text-left ring-1 ring-shop-line sm:rounded-[26px] sm:p-3.5',
                 'hover:shadow-shop-md transition-[translate,scale,box-shadow] duration-300 ease-shop hover:-translate-y-1 active:scale-[0.98]',
                 state === 'occupied' && 'ring-2 ring-shop-accent/40',
                 state === 'cleaning' && 'bg-shop-raised',
@@ -528,7 +583,7 @@ function TableTile({ table, now, delay, onClick }: { table: Table; now: number; 
                 )}
             />
 
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
                 <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold', s.pill)}>
                     <span className={cn('h-1.5 w-1.5 rounded-full', s.dot)} />
                     {s.label}
@@ -549,7 +604,7 @@ function TableTile({ table, now, delay, onClick }: { table: Table; now: number; 
 
             <TableGlyph number={table.table_number} capacity={table.capacity} state={state} />
 
-            <div className="mt-auto flex min-h-10 items-end justify-between gap-2 border-t border-dashed border-shop-line pt-2.5">
+            <div className="mt-auto flex min-h-10 flex-wrap items-end justify-between gap-x-2 gap-y-1 border-t border-dashed border-shop-line pt-2.5">
                 {table.open_order ? (
                     <>
                         <span className="min-w-0">
@@ -596,13 +651,13 @@ function TableGlyph({ number, capacity, state }: { number: string; capacity: num
     const row = (n: number) => (
         <div className="flex justify-center gap-1.5">
             {Array.from({ length: n }).map((_, i) => (
-                <span key={i} className={cn('h-2 w-5 rounded-full', s.chair)} />
+                <span key={i} className={cn('h-2 w-4 rounded-full sm:w-5', s.chair)} />
             ))}
         </div>
     );
 
     return (
-        <div className="my-4 grid grid-cols-[auto_1fr_auto] grid-rows-[auto_auto_auto] items-center gap-1.5 self-center" aria-hidden>
+        <div className="my-3 grid grid-cols-[auto_1fr_auto] grid-rows-[auto_auto_auto] items-center gap-1.5 self-center sm:my-4" aria-hidden>
             <span />
             {row(top)}
             <span />
@@ -610,7 +665,7 @@ function TableGlyph({ number, capacity, state }: { number: string; capacity: num
             <span
                 className={cn(
                     'mx-auto flex items-center justify-center font-display text-2xl font-bold ring-1 transition-transform duration-300 ease-shop ring-inset group-hover:scale-[1.05]',
-                    round ? 'h-14 w-14 rounded-full' : cap > 6 ? 'h-14 w-28 rounded-2xl' : 'h-14 w-20 rounded-2xl',
+                    round ? 'h-14 w-14 rounded-full' : cap > 6 ? 'h-14 w-20 rounded-2xl sm:w-28' : 'h-14 w-20 rounded-2xl',
                     s.table,
                 )}
             >
@@ -816,7 +871,7 @@ function OrderTaker({
                                         ×{q}
                                     </span>
                                 )}
-                                <div className="mt-auto flex items-center justify-between gap-2 px-2 pt-1 pb-1.5">
+                                <div className="mt-auto flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-2 pt-1 pb-1.5">
                                     <div className="min-w-0">
                                         <Price value={p.price} className="font-display text-base font-bold" />
                                         {hasOptions && <p className="text-[11px] font-medium text-shop-muted">{p.variants.length} options</p>}
@@ -827,6 +882,7 @@ function OrderTaker({
                                         label={p.name}
                                         onAdd={() => (hasOptions ? setVariantFor(p) : add(p))}
                                         onRemove={hasOptions ? undefined : () => removeOne(baseKey)}
+                                        className="ml-auto"
                                     />
                                 </div>
                             </li>

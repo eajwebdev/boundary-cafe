@@ -27,6 +27,12 @@ interface Props {
     title?: string;
     /** Extra content in the sticky header (e.g. the delivery address chip). */
     headerSlot?: ReactNode;
+    /** Trailing header action, after the account buttons (e.g. the cart button). */
+    headerEnd?: ReactNode;
+    /** Second header row (e.g. delivery / pickup tabs and the menu search). */
+    subHeader?: ReactNode;
+    /** Full-width announcement above the header; scrolls away with the page. */
+    topStrip?: ReactNode;
     /** Hide the phone bottom navigation (checkout/auth have their own bottom bars). */
     hideBottomNav?: boolean;
     /** Wider max width for the three-column ordering workspace. */
@@ -41,7 +47,7 @@ const NAV = [
     { href: '/account', label: 'Account', icon: User, auth: true },
 ] as const;
 
-export default function CustomerLayout({ children, title, headerSlot, hideBottomNav, wide, barangays }: Props) {
+export default function CustomerLayout({ children, title, headerSlot, headerEnd, subHeader, topStrip, hideBottomNav, wide, barangays }: Props) {
     const page = usePage<{
         customer: CustomerSession | null;
         flash?: { success?: string | null; error?: string | null };
@@ -101,25 +107,27 @@ export default function CustomerLayout({ children, title, headerSlot, hideBottom
     return (
         <AuthSheetContext.Provider value={{ requireAuth, customer }}>
             <Head title={title}>
-                <meta name="theme-color" content="#fff9f2" media="(prefers-color-scheme: light)" />
-                <meta name="theme-color" content="#0a1230" media="(prefers-color-scheme: dark)" />
+                <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+                <meta name="theme-color" content="#111b40" media="(prefers-color-scheme: dark)" />
             </Head>
             <div className="bc-shop min-h-dvh bg-shop-bg">
                 <a href="#shop-main" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-xl focus:bg-shop-surface focus:px-4 focus:py-2">
                     Skip to content
                 </a>
 
+                {topStrip}
+
                 {/* ── Header ─────────────────────────────────────────── */}
-                <header className="sticky top-0 z-40 border-b border-shop-line bg-shop-bg pt-[env(safe-area-inset-top)]">
+                <header id="shop-header" className="sticky top-0 z-40 border-b border-shop-line bg-shop-surface pt-[env(safe-area-inset-top)] shadow-shop-sm">
                     <div className={cn('mx-auto flex h-14 items-center gap-2 px-4 lg:h-16 lg:gap-4 lg:px-6', maxW)}>
-                        <Link href="/" className="bc-press flex shrink-0 items-center gap-2.5 rounded-full" aria-label="Boundary Café — menu">
-                            <img src="/uploads/optimized/logo.webp" alt="" width={40} height={40} className="h-9 w-9 rounded-full ring-1 ring-shop-line lg:h-10 lg:w-10" />
-                            <span className="font-display hidden text-lg leading-none font-bold sm:block">
+                        <Link href="/" className="bc-press flex min-w-0 items-center gap-2.5 rounded-full" aria-label="Boundary Café — menu">
+                            <img src="/uploads/optimized/logo.webp" alt="" width={40} height={40} className="h-9 w-9 shrink-0 rounded-full ring-1 ring-shop-line lg:h-10 lg:w-10" />
+                            <span className="font-display truncate text-lg leading-none font-bold">
                                 Boundary <span className="text-shop-accent-ink">Café</span>
                             </span>
                         </Link>
 
-                        <div className="min-w-0 flex-1">{headerSlot}</div>
+                        <div className="flex min-w-0 flex-1 lg:justify-center">{headerSlot}</div>
 
                         <nav className="hidden items-center gap-1 lg:flex" aria-label="Account">
                             {NAV.slice(1, 3).map((n) =>
@@ -174,21 +182,23 @@ export default function CustomerLayout({ children, title, headerSlot, hideBottom
                             <div className="flex shrink-0 items-center gap-2">
                                 <button
                                     type="button"
-                                    onClick={() => requireAuth('register')}
-                                    className="bc-press hidden h-10 cursor-pointer rounded-full px-4 text-sm font-semibold text-shop-ink hover:bg-shop-sunken lg:block"
-                                >
-                                    Create account
-                                </button>
-                                <button
-                                    type="button"
                                     onClick={() => requireAuth('login')}
-                                    className="bc-press h-10 cursor-pointer rounded-full bg-shop-ink px-4 text-sm font-semibold text-shop-bg"
+                                    className="bc-press h-9 cursor-pointer rounded-lg border border-shop-ink px-3.5 text-sm font-semibold text-shop-ink hover:bg-shop-sunken"
                                 >
                                     Log in
                                 </button>
+                                <button
+                                    type="button"
+                                    onClick={() => requireAuth('register')}
+                                    className="bc-press hidden h-9 cursor-pointer rounded-lg bg-shop-accent px-3.5 text-sm font-semibold text-shop-on-accent hover:brightness-[1.04] lg:block"
+                                >
+                                    Sign up
+                                </button>
                             </div>
                         )}
+                        {headerEnd}
                     </div>
+                    {subHeader && <div className={cn('mx-auto px-4 lg:px-6', maxW)}>{subHeader}</div>}
                 </header>
 
                 <main id="shop-main" className={cn('mx-auto w-full', maxW, !hideBottomNav && 'pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-12')}>

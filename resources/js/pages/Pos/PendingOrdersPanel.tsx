@@ -2,6 +2,7 @@ import { Bike, CheckCircle2, ClipboardList, Loader2, RefreshCw, ShoppingBag, Ute
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { jsonRequest } from '@/lib/customer';
+import { useFloorUpdates } from '@/lib/realtime';
 import { cn } from '@/lib/utils';
 
 import { fmtMoney } from './ReceiptTemplate';
@@ -54,7 +55,10 @@ interface PendingData {
     count: number;
 }
 
-/** Polls the cashier's pending queue every 10s (paused while the tab is hidden). */
+/**
+ * The cashier's pending queue. Table tickets arrive the moment a waiter sends them (Pusher);
+ * a 10s poll (paused while the tab is hidden) covers online pickups and realtime being off.
+ */
 export function usePendingOrders(enabled = true) {
     const [data, setData] = useState<PendingData>({ table_orders: [], online_pickups: [], count: 0 });
     const [loading, setLoading] = useState(false);
@@ -82,6 +86,10 @@ export function usePendingOrders(enabled = true) {
         loop();
         return () => window.clearTimeout(timer.current);
     }, [enabled, refresh]);
+
+    useFloorUpdates(() => {
+        if (enabled) refresh();
+    });
 
     return { data, loading, error, refresh };
 }

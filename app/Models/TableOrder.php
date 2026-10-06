@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Events\TableFloorChanged;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -72,6 +73,10 @@ class TableOrder extends Model
                 DiningTable::find($order->table_id)?->markCleaning();
             }
         });
+
+        // A ticket opened, changed (items recalculate it), was charged, voided or removed.
+        static::saved(fn (TableOrder $order) => TableFloorChanged::signal($order->branch_id));
+        static::deleted(fn (TableOrder $order) => TableFloorChanged::signal($order->branch_id));
     }
 
     public static function generateOrderNumber(): string

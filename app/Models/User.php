@@ -101,6 +101,19 @@ class User extends Authenticatable
     public function isCashier(): bool      { return $this->role === self::ROLE_CASHIER; }
     public function isWaiter(): bool       { return $this->role === self::ROLE_WAITER; }
 
+    /**
+     * The branch this staff member works in. Branchless super admins operate
+     * on the online-ordering branch (Mabinay) so restaurant screens still work.
+     */
+    public function workingBranchId(): ?int
+    {
+        $branchId = $this->branch_id
+            ?? app(\App\Services\OnlineOrderService::class)->branch()?->id
+            ?? Branch::where('is_active', true)->value('id');
+
+        return $branchId ? (int) $branchId : null;
+    }
+
     /** Super Admin OR Administrator */
     public function isAdmin(): bool
     {
