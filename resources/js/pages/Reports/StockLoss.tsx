@@ -1,13 +1,13 @@
-import { useState } from 'react';
-import { fmtDate, toDateStr } from '@/lib/date';
 import { Head, router } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-import { cn } from '@/lib/utils';
 import { AlertTriangle, TrendingDown, Clock, ShieldAlert, RefreshCw, MoreHorizontal, PackageX, Download } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { routes } from '@/routes';
+import { useState } from 'react';
 import { type DateRange } from 'react-day-picker';
+import { Button } from '@/components/ui/button';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
+import AdminLayout from '@/layouts/AdminLayout';
+import { fmtDate, toDateStr } from '@/lib/date';
+import { cn } from '@/lib/utils';
+import { routes } from '@/routes';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Adjustment {

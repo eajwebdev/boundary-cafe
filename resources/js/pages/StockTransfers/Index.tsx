@@ -1,12 +1,12 @@
 'use client';
-import { useState } from 'react';
 import { Head, router } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-import { routes } from '@/routes';
-import { cn } from '@/lib/utils';
+import { ArrowLeftRight, Plus, CheckCircle2, XCircle, Clock, Warehouse, Building2, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { ArrowLeftRight, Plus, CheckCircle2, XCircle, Clock, Warehouse, Building2, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
+import AdminLayout from '@/layouts/AdminLayout';
+import { cn } from '@/lib/utils';
+import { routes } from '@/routes';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Transfer {
@@ -303,7 +303,7 @@ function CreateTransferModal({
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
-export default function StockTransfersIndex({ transfers, pagination, branches, warehouses, products, filters, is_admin, message }: PageProps) {
+export default function StockTransfersIndex({ transfers, pagination, branches, warehouses, products, filters, message }: PageProps) {
     const [createOpen, setCreateOpen] = useState(false);
     const [search, setSearch] = useState(filters.search || '');
     const [statusFilter, setStatus] = useState(filters.status || '');

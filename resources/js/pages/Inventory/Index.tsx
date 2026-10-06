@@ -1,12 +1,12 @@
 'use client';
-import { useState, useCallback } from 'react';
 import { Head, router } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-import { routes } from '@/routes';
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 import { Package, Warehouse, ArrowLeftRight, AlertTriangle, TrendingDown, Search, X, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { useState, useCallback } from 'react';
 import ProductThumbnail from '@/components/ProductThumbnail';
+import { Button } from '@/components/ui/button';
+import AdminLayout from '@/layouts/AdminLayout';
+import { cn } from '@/lib/utils';
+import { routes } from '@/routes';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface StockRow {

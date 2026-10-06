@@ -1,16 +1,16 @@
-import { useState } from 'react';
 import { router } from '@inertiajs/react';
 import { Head } from '@inertiajs/react';
-import { reportRoutes, getReportTitle, openLivePdfPreview } from './Files';
 
-import AdminLayout from '@/layouts/AdminLayout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { Package, AlertTriangle, Clock, Download } from 'lucide-react';
+import { useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import AdminLayout from '@/layouts/AdminLayout';
+import { reportRoutes, getReportTitle, openLivePdfPreview } from './Files';
 
 interface Props {
     stocks: {
@@ -30,7 +30,7 @@ interface Props {
         total: number;
         from: number | null;
         to: number | null;
-        links: Array<any>;
+        links: Array<{ url: string | null; label: string; active: boolean }>;
     };
     branches: Array<{ id: number; name: string }> | null;
     currentBranchId?: number;
@@ -68,8 +68,8 @@ export default function InventoryReport({ stocks, branches, currentBranchId }: P
         openLivePdfPreview('inventory', filters);
     };
 
-    const lowStockCount = stocks.data.filter((s: any) => s.is_low_stock).length;
-    const nearExpiryCount = stocks.data.filter((s: any) => s.is_near_expiry).length;
+    const lowStockCount = stocks.data.filter((s) => s.is_low_stock).length;
+    const nearExpiryCount = stocks.data.filter((s) => s.is_near_expiry).length;
 
     return (
         <AdminLayout>
@@ -196,7 +196,7 @@ export default function InventoryReport({ stocks, branches, currentBranchId }: P
                             </TableHeader>
                             <TableBody>
                                 {stocks.data.length > 0 ? (
-                                    stocks.data.map((item: any) => (
+                                    stocks.data.map((item) => (
                                         <TableRow key={item.id}>
                                             <TableCell className="font-medium">{item.name}</TableCell>
                                             <TableCell>{item.category_name || '—'}</TableCell>
@@ -253,7 +253,7 @@ export default function InventoryReport({ stocks, branches, currentBranchId }: P
                             Showing {stocks.from} to {stocks.to} of {stocks.total} items (15 per page)
                         </p>
                         <div className="flex gap-1">
-                            {stocks.links.map((link: any, i: number) => (
+                            {stocks.links.map((link, i) => (
                                 <button
                                     key={i}
                                     onClick={() =>

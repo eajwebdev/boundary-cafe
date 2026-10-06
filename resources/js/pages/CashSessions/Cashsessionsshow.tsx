@@ -1,7 +1,5 @@
 import { Head, usePage, Link } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-import { routes } from '@/routes';
-import { cn } from '@/lib/utils';
+import { formatDistanceStrict } from 'date-fns';
 import {
     ArrowLeft,
     Banknote,
@@ -11,14 +9,14 @@ import {
     CheckCircle2,
     XCircle,
     AlertTriangle,
-    Clock,
     Receipt,
     CalendarClock,
-    TrendingUp,
     Building2,
 } from 'lucide-react';
-import { formatDistanceStrict } from 'date-fns';
+import AdminLayout from '@/layouts/AdminLayout';
 import { fmtDate } from '@/lib/date';
+import { cn } from '@/lib/utils';
+import { routes } from '@/routes';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

@@ -1,20 +1,20 @@
 'use client';
 
-import { useState, useRef, useMemo } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-import { routes } from '@/routes';
-
+import { Trash2, Plus, Search, PackageCheck, ArrowLeft, ScanLine, Building2, Warehouse } from 'lucide-react';
+import { useState, useRef, useMemo } from 'react';
+import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Trash2, Plus, Search, PackageCheck, ArrowLeft, ScanLine, Building2, Warehouse } from 'lucide-react';
-import { toast } from 'sonner';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import AdminLayout from '@/layouts/AdminLayout';
+import { routes } from '@/routes';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Supplier {

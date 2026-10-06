@@ -1,8 +1,8 @@
 import { Head, Link } from '@inertiajs/react';
+import { Ban } from 'lucide-react'; // Ban icon for "not allowed"
 import AdminLayout from '@/layouts/AdminLayout';
-import { Ban, AlertTriangle } from 'lucide-react'; // Ban icon for "not allowed"
 
-export default function Error405({ status, message }: { status?: number; message?: string }) {
+export default function Error405({ message }: { message?: string }) {
     return (
         <AdminLayout>
             <Head title="405 - Method Not Allowed" />

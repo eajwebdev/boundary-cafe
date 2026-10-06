@@ -6,7 +6,8 @@ import { ArrowLeft, Crosshair, Loader2, LocateFixed, MapPin, Navigation } from '
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Circle, MapContainer, Polygon, TileLayer, useMapEvents } from 'react-leaflet';
 
-import { DeliveryZone, jsonRequest, SavedAddress } from '@/lib/customer';
+import type { DeliveryZone, SavedAddress } from '@/lib/customer';
+import { jsonRequest } from '@/lib/customer';
 import { cn } from '@/lib/utils';
 
 // ─── Zone geometry (mirrors DeliveryZoneService on the server) ────────────────

@@ -1,33 +1,34 @@
 'use client';
 
 import { usePage, useForm, Head } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-import { useMemo, useState } from 'react';
-import {
+import { Link } from '@inertiajs/react';
+import type {
     ColumnDef,
+    SortingState,
+    PaginationState,
+    FilterFn,
+    Row} from '@tanstack/react-table';
+import {
     flexRender,
     getCoreRowModel,
     getSortedRowModel,
     getPaginationRowModel,
     getFilteredRowModel,
-    SortingState,
-    PaginationState,
-    useReactTable,
-    FilterFn,
-    Row,
+    useReactTable
 } from '@tanstack/react-table';
-
+import { Trash2, Pencil, Plus, AlertTriangle, Search, X, ClipboardList } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { route } from 'ziggy-js';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Trash2, Pencil, Plus, AlertTriangle, Search, X, ClipboardList } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import AdminLayout from '@/layouts/AdminLayout';
+
 import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
-import { route } from 'ziggy-js';
-import { Link } from '@inertiajs/react';
 
 // ──────────────────────────────────────────────── Types
 interface Supplier {
@@ -119,7 +120,11 @@ export default function SupplierIndex() {
                     description: `${name} saved successfully.`,
                 });
                 form.reset();
-                isEdit ? setEditOpen(false) : setCreateOpen(false);
+                if (isEdit) {
+                    setEditOpen(false);
+                } else {
+                    setCreateOpen(false);
+                }
                 setSelected(null);
             },
             onError: (errors) => {

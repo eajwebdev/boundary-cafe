@@ -1,13 +1,10 @@
-import { useState } from 'react';
-import type React from 'react';
-import { Head, Link, router, usePage } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { routes } from '@/routes';
-import { cn } from '@/lib/utils';
-import { ArrowLeft, Calendar, CreditCard, Download, History, Receipt, User, Wallet } from 'lucide-react';
+import { Head, Link, usePage } from '@inertiajs/react';
+import { ArrowLeft, Calendar, Download, History, Receipt, User } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import type React from 'react';
+import AdminLayout from '@/layouts/AdminLayout';
+import { cn } from '@/lib/utils';
+import { routes } from '@/routes';
 
 interface Customer {
     id: number;

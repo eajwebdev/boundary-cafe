@@ -1,7 +1,7 @@
 import { Link } from '@inertiajs/react';
+import { format } from 'date-fns';
 import { ArrowDownRight, ArrowUpRight, Building2, Calendar as CalendarIcon, ChevronDown, ExternalLink, Inbox, LayoutGrid } from 'lucide-react';
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { format } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 
 import { Button } from '@/components/ui/button';

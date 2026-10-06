@@ -1,8 +1,6 @@
 'use client';
 
 import { Head, Link, usePage } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-import { cn } from '@/lib/utils';
 import {
     Calculator,
     CheckCircle2,
@@ -17,6 +15,8 @@ import {
     Printer,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import AdminLayout from '@/layouts/AdminLayout';
+import { cn } from '@/lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

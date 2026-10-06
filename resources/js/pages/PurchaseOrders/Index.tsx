@@ -1,20 +1,19 @@
 'use client';
 
-import { useState, useMemo } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
+import { Plus, Search, ChevronDown, ChevronRight, PackageCheck, AlertCircle, CheckCircle2, Eye } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { useEffect } from 'react';
+import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AdminLayout from '@/layouts/AdminLayout';
 import { routes } from '@/routes';
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Plus, Search, ChevronDown, ChevronRight, PackageCheck, AlertCircle, CheckCircle2, Eye } from 'lucide-react';
-import { toast } from 'sonner';
-import { useEffect } from 'react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface PurchaseItem {
@@ -112,7 +111,11 @@ export default function PurchaseOrdersIndex() {
     const toggleRow = (id: number) => {
         setExpandedRows((prev) => {
             const next = new Set(prev);
-            next.has(id) ? next.delete(id) : next.add(id);
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+            }
             return next;
         });
     };

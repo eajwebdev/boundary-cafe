@@ -1,21 +1,22 @@
 'use client';
 
 import { Head, router, usePage } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-import { useMemo, useState, useCallback, useEffect } from 'react';
-import { ColumnDef, flexRender, getCoreRowModel, getSortedRowModel, SortingState, PaginationState, useReactTable } from '@tanstack/react-table';
-
-import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import type { ColumnDef, SortingState, PaginationState} from '@tanstack/react-table';
+import { flexRender, getCoreRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table';
+import { subDays, startOfDay, endOfDay, startOfMonth } from 'date-fns';
 import { Clock, User, Info, Filter, Loader2 } from 'lucide-react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
+
+import type { DateRange } from 'react-day-picker';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { DateRangePicker } from '@/components/ui/date-range-picker';
-import { DateRange } from 'react-day-picker';
-import { subDays, startOfDay, endOfDay, startOfMonth } from 'date-fns';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import AdminLayout from '@/layouts/AdminLayout';
 import { fmtDate, manilaNow } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
@@ -26,7 +27,7 @@ interface ActivityLog {
     action: string;
     subject_type: string | null;
     subject_id: number | null;
-    properties: Record<string, any>;
+    properties: Record<string, unknown>;
     ip_address: string | null;
     user_agent: string | null;
     method: string | null;
@@ -55,7 +56,7 @@ interface PageProps {
     users: Record<number, ActivityLog['user']>;
     usersForFilter: FilterOption[];
     actions: FilterOption[];
-    filters: Record<string, any>;
+    filters: Record<string, string | undefined>;
 }
 
 // ──────────────────────────────────────────────── Component
@@ -213,7 +214,7 @@ export default function LogsIndex() {
         setIsLoading(true);
         const state = table.getState();
 
-        const params: Record<string, any> = {
+        const params: Record<string, string | number | undefined> = {
             page: state.pagination.pageIndex + 1,
             per_page: state.pagination.pageSize,
             user_id: selectedUser !== 'all' ? selectedUser : undefined,
@@ -263,10 +264,11 @@ export default function LogsIndex() {
             case 'today':
                 range = { from: today, to: endOfDay(today) };
                 break;
-            case 'yesterday':
+            case 'yesterday': {
                 const yesterday = subDays(today, 1);
                 range = { from: startOfDay(yesterday), to: endOfDay(yesterday) };
                 break;
+            }
             case 'last7':
                 range = { from: subDays(today, 7), to: today };
                 break;

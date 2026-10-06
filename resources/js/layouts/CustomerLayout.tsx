@@ -1,6 +1,7 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Gift, Home, LogOut, ReceiptText, User } from 'lucide-react';
-import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
+import type { ReactNode} from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { AuthTabs, LoginForm, RegisterForm } from '@/components/storefront/AuthForms';

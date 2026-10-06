@@ -1,22 +1,22 @@
 'use client';
 
-import { useState } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-import { routes } from '@/routes';
+import { format } from 'date-fns';
+import { ClipboardCheck, Plus, CheckCircle2, Clock, XCircle, ChevronRight, Package, LayoutList, FlaskConical } from 'lucide-react';
+import { useState } from 'react';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ClipboardCheck, Plus, CheckCircle2, Clock, XCircle, ChevronRight, Package, LayoutList, FlaskConical } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import AdminLayout from '@/layouts/AdminLayout';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { routes } from '@/routes';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -294,7 +294,6 @@ export default function StockCountIndex() {
 
     const draft = sessions.filter((s) => s.status === 'draft');
     const committed = sessions.filter((s) => s.status === 'committed');
-    const cancelled = sessions.filter((s) => s.status === 'cancelled');
 
     function handleBranchChange(val: string) {
         router.get(routes.stockCount.index(), { branch_id: val }, { preserveState: false });

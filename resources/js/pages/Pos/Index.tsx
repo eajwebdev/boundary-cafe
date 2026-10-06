@@ -1,10 +1,5 @@
 'use client';
-import { lazy, Suspense, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { usePage, router } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-import ReceiptTemplate, { fmtMoney, fmtQty, ReceiptData } from './ReceiptTemplate';
-import { routes } from '@/routes';
-import { cn } from '@/lib/utils';
 import {
     Search,
     X,
@@ -18,7 +13,6 @@ import {
     Smartphone,
     CheckCircle2,
     AlertTriangle,
-    Package,
     History,
     ScanLine,
     RefreshCw,
@@ -27,18 +21,24 @@ import {
     ChevronDown,
     Wallet,
     Rows3,
-    Calendar,
     Check,
     Scale,
     LayoutGrid,
     Clock,
     Calculator,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import type { Product, CartItem, Category, ActivePromo, CustomerOption } from './posTypes';
-import ProductThumbnail, { getDefaultProductIcon } from '@/components/ProductThumbnail';
-import PendingOrdersPanel, { PendingTicket, usePendingOrders } from './PendingOrdersPanel';
 import { ClipboardList as PendingIcon } from 'lucide-react';
+import { lazy, Suspense, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import ProductThumbnail, { getDefaultProductIcon } from '@/components/ProductThumbnail';
+import { Button } from '@/components/ui/button';
+import AdminLayout from '@/layouts/AdminLayout';
+import { cn } from '@/lib/utils';
+import { routes } from '@/routes';
+import type { PendingTicket} from './PendingOrdersPanel';
+import PendingOrdersPanel, { usePendingOrders } from './PendingOrdersPanel';
+import type { Product, CartItem, Category, ActivePromo, CustomerOption } from './posTypes';
+import ReceiptTemplate, { fmtMoney, fmtQty } from './ReceiptTemplate';
+import type { ReceiptData } from './ReceiptTemplate';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Session {
@@ -81,6 +81,25 @@ interface PageProps {
 }
 type PayMethod = 'cash' | 'gcash' | 'card' | 'others' | 'credit' | 'mixed';
 type LayoutMode = 'grid' | 'tablet' | 'cafe' | 'mobile';
+/** The legacy `onhelp` hook some kiosk browsers still fire for F1. */
+type HelpKeyWindow = { onhelp: ((e: Event) => boolean | void) | null };
+
+/** What SaleService::checkout() flashes back after a successful charge. */
+interface PosResult {
+    receipt_number?: string;
+    total: number;
+    change?: number;
+    amount_paid?: number;
+    balance_due?: number;
+    payment_status?: string;
+    due_date?: string | null;
+    customer_name?: string | null;
+    discount_amount?: number;
+    promo_discount?: number;
+    promo_name?: string | null;
+    service_charge_amount: number;
+    table_label?: string | null;
+}
 const LAYOUTS: LayoutMode[] = ['grid', 'tablet', 'cafe', 'mobile'];
 
 const METHODS: { value: PayMethod; label: string; icon: React.ElementType; desc: string }[] = [
@@ -380,10 +399,13 @@ function PaymentModal({
     const [dueDate, setDueDate] = useState('');
     const [creditNotes, setCreditNotes] = useState('');
     const [discPct, setDiscPct] = useState('');
+    // Promo-code entry has no controls in this dialog yet. Its state and helpers are kept, unused, until it is wired in.
+    /* eslint-disable @typescript-eslint/no-unused-vars */
     const [promoCode, setPromoCode] = useState('');
     const [appliedPromo, setAppliedPromo] = useState<ActivePromo | null>(null);
     const [promoError, setPromoError] = useState('');
     const [showPromos, setShowPromos] = useState(false);
+    /* eslint-enable @typescript-eslint/no-unused-vars */
     const [loyaltyPoints, setLoyaltyPoints] = useState('0');
 
     const isCredit = method === 'credit';
@@ -438,6 +460,8 @@ function PaymentModal({
     const append = (v: string) => setTender((p) => (p === '0' || p === '' ? v : p + v));
     const backspace = () => setTender((p) => p.slice(0, -1));
 
+    // Not wired to any control yet — see the promo-code note on the state above.
+    /* eslint-disable @typescript-eslint/no-unused-vars */
     const eligiblePromos = promos.filter(promoAppliesToCart);
 
     const applyPromoCode = () => {
@@ -465,6 +489,7 @@ function PaymentModal({
         setPromoError('');
         setShowPromos(false);
     };
+    /* eslint-enable @typescript-eslint/no-unused-vars */
 
     useEffect(() => {
         if (selectedCustomer) setCustomer(selectedCustomer.name);
@@ -1904,7 +1929,7 @@ export default function PosIndex() {
             {
                 preserveScroll: true,
                 onSuccess: (page) => {
-                    const flash = (page.props as any).flash ?? {};
+                    const flash = (page.props as { flash?: { pos_result?: PosResult | null; errors?: { error?: string } } }).flash ?? {};
                     if (!flash.pos_result) {
                         setError(flash.errors?.error ?? 'Checkout failed — please verify customer or items.');
                         setLoading(false);
@@ -2118,13 +2143,13 @@ export default function PosIndex() {
         window.addEventListener('keydown', handleKeyDown, { capture: true, passive: false });
         window.addEventListener('keyup', handleKeyUp, { capture: true, passive: false });
         window.addEventListener('help', handleHelp, { capture: true, passive: false });
-        (window as any).onhelp = handleHelp;
+        (window as unknown as HelpKeyWindow).onhelp = handleHelp;
 
         return () => {
             window.removeEventListener('keydown', handleKeyDown, { capture: true });
             window.removeEventListener('keyup', handleKeyUp, { capture: true });
             window.removeEventListener('help', handleHelp, { capture: true });
-            (window as any).onhelp = null;
+            (window as unknown as HelpKeyWindow).onhelp = null;
         };
     }, [cart, clearCart, showPayment, refocus]);
 

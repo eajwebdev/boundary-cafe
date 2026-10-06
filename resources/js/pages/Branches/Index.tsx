@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
 import { usePage, router } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-import { routes } from '@/routes';
-import { cn } from '@/lib/utils';
-import { Plus, Search, X, Edit2, Trash2, AlertTriangle, Building2, CircleDot, Users, Phone, MapPin, User } from 'lucide-react';
+import { Plus, Search, X, Edit2, Trash2, AlertTriangle, CircleDot, Users, Phone, MapPin, User } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import AdminLayout from '@/layouts/AdminLayout';
+import { cn } from '@/lib/utils';
+import { routes } from '@/routes';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -215,13 +215,11 @@ function BranchDrawer({
         setErrors({});
     }, [mode, branch]);
 
-    const set = (k: keyof BranchForm, v: any) => {
+    const set = <K extends keyof BranchForm>(k: K, v: BranchForm[K]) => {
         setForm((f) => {
             const next = { ...f, [k]: v };
-            if (k === 'business_type' && defaultFlags[v]) {
-                return { ...next, ...defaultFlags[v] };
-            }
-            return next;
+            const flags = k === 'business_type' ? defaultFlags[String(v)] : undefined;
+            return flags ? { ...next, ...flags } : next;
         });
         setErrors((e) => ({ ...e, [k]: '' }));
     };
@@ -240,7 +238,7 @@ function BranchDrawer({
                     setLoading(false);
                     onClose();
                 },
-                onError: (e: any) => {
+                onError: (e) => {
                     setErrors(e);
                     setLoading(false);
                     setTab('info');
@@ -253,7 +251,7 @@ function BranchDrawer({
                     setLoading(false);
                     onClose();
                 },
-                onError: (e: any) => {
+                onError: (e) => {
                     setErrors(e);
                     setLoading(false);
                     setTab('info');

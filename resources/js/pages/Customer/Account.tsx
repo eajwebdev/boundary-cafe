@@ -4,7 +4,7 @@ import { lazy, Suspense, useState } from 'react';
 
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import CustomerLayout from '@/layouts/CustomerLayout';
-import { DeliveryZone, SavedAddress } from '@/lib/customer';
+import type { DeliveryZone, SavedAddress } from '@/lib/customer';
 
 const AddressPicker = lazy(() => import('@/components/storefront/AddressPicker'));
 

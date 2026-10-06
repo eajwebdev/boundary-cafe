@@ -1,23 +1,47 @@
 'use client';
 
-import { useState } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
+import { Wallet, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { useState } from 'react';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import AdminLayout from '@/layouts/AdminLayout';
 
-import { Plus, Wallet, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { routes } from '@/routes';
 
+interface PettyCashFund {
+    id: number;
+    fund_name: string;
+    current_balance: number;
+}
+
+interface PettyCashVoucher {
+    id: number;
+    voucher_number: string;
+    status: string;
+    purpose: string;
+    amount: number;
+    requested_by?: { fname: string; lname: string } | null;
+}
+
+interface PageProps {
+    active_fund: PettyCashFund | null;
+    vouchers: { data: PettyCashVoucher[] };
+    categories: { id: number; name: string }[];
+    is_manager: boolean;
+    current_user?: { name: string; role: string } | null;
+    [key: string]: unknown;
+}
+
 export default function PettyCashIndex() {
-    const { active_fund, vouchers, categories, is_manager, current_user } = usePage().props as any;
+    const { active_fund, vouchers, categories, is_manager, current_user } = usePage<PageProps>().props;
 
     // Voucher form
     const [voucherType, setVoucherType] = useState<'withdrawal' | 'replenishment'>('withdrawal');
@@ -26,10 +50,31 @@ export default function PettyCashIndex() {
     const [purpose, setPurpose] = useState('');
     const [categoryId, setCategoryId] = useState('');
 
-    // New Fund dialog
+    // The "new fund" dialog is not built yet. Its state and submit handler are kept, unused, until it is.
+    /* eslint-disable @typescript-eslint/no-unused-vars */
     const [showNewFund, setShowNewFund] = useState(false);
     const [fundName, setFundName] = useState('');
     const [initialAmount, setInitialAmount] = useState('');
+
+    const handleCreateFund = () => {
+        if (!fundName || !initialAmount) return;
+
+        router.post(
+            routes.pettyCash.funds.store(),
+            {
+                fund_name: fundName.trim(),
+                fund_amount: parseFloat(initialAmount),
+            },
+            {
+                onSuccess: () => {
+                    setShowNewFund(false);
+                    setFundName('');
+                    setInitialAmount('');
+                },
+            },
+        );
+    };
+    /* eslint-enable @typescript-eslint/no-unused-vars */
 
     // Approval dialog
     const [showApproveDialog, setShowApproveDialog] = useState(false);
@@ -92,25 +137,6 @@ export default function PettyCashIndex() {
                     setShowRejectDialog(false);
                     setSelectedRejectId(null);
                     setRejectionReason('');
-                },
-            },
-        );
-    };
-
-    const handleCreateFund = () => {
-        if (!fundName || !initialAmount) return;
-
-        router.post(
-            routes.pettyCash.funds.store(),
-            {
-                fund_name: fundName.trim(),
-                fund_amount: parseFloat(initialAmount),
-            },
-            {
-                onSuccess: () => {
-                    setShowNewFund(false);
-                    setFundName('');
-                    setInitialAmount('');
                 },
             },
         );
@@ -203,7 +229,7 @@ export default function PettyCashIndex() {
                                                 <SelectValue placeholder="Select category" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {categories.map((cat: any) => (
+                                                {categories.map((cat) => (
                                                     <SelectItem key={cat.id} value={cat.id.toString()}>
                                                         {cat.name}
                                                     </SelectItem>
@@ -236,7 +262,7 @@ export default function PettyCashIndex() {
                                     {vouchers.data.length === 0 ? (
                                         <p className="py-12 text-center text-muted-foreground">No vouchers recorded yet.</p>
                                     ) : (
-                                        vouchers.data.map((v: any) => (
+                                        vouchers.data.map((v) => (
                                             <div key={v.id} className="rounded-2xl border p-5 transition-all hover:bg-muted/50">
                                                 <div className="flex items-start justify-between">
                                                     <div className="flex-1">
@@ -260,7 +286,7 @@ export default function PettyCashIndex() {
                                                                     ? 'success'
                                                                     : v.status === 'rejected'
                                                                       ? 'destructive'
-                                                                      : 'warning') as any
+                                                                      : 'warning') as React.ComponentProps<typeof Badge>['variant']
                                                             }
                                                         >
                                                             {v.status.toUpperCase()}

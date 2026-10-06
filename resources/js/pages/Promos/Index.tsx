@@ -1,10 +1,7 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
 import { Head, usePage, router } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-import { routes } from '@/routes';
-import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
 import {
     Plus,
     Search,
@@ -15,17 +12,17 @@ import {
     Tag,
     Percent,
     DollarSign,
-    Calendar,
     Users,
     CheckCircle,
     XCircle,
     Clock,
-    ChevronDown,
-    Package,
 } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { format } from 'date-fns';
+import AdminLayout from '@/layouts/AdminLayout';
+import { cn } from '@/lib/utils';
+import { routes } from '@/routes';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -203,7 +200,7 @@ function PromoDrawer({
         setProdSearch('');
     }, [promo, mode]);
 
-    const set = (k: keyof PromoForm, v: any) => {
+    const set = <K extends keyof PromoForm>(k: K, v: PromoForm[K]) => {
         setForm((f) => ({ ...f, [k]: v }));
         setErrors((e) => ({ ...e, [k]: '' }));
     };
@@ -235,7 +232,7 @@ function PromoDrawer({
                 setLoading(false);
                 onClose();
             },
-            onError: (e: any) => {
+            onError: (e: Record<string, string>) => {
                 setErrors(e);
                 setLoading(false);
                 setTab('details');

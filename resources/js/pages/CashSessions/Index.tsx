@@ -1,8 +1,5 @@
-import { useState } from 'react';
 import { Head, usePage, router, Link } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-import { routes } from '@/routes';
-import { cn } from '@/lib/utils';
+import { formatDistanceToNow } from 'date-fns';
 import {
     Plus,
     X,
@@ -14,7 +11,6 @@ import {
     Banknote,
     Smartphone,
     CreditCard,
-    Tag,
     TrendingUp,
     CheckCircle2,
     XCircle,
@@ -22,9 +18,12 @@ import {
     ChevronRight,
     CalendarClock,
 } from 'lucide-react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { formatDistanceToNow } from 'date-fns';
+import AdminLayout from '@/layouts/AdminLayout';
 import { fmtDate } from '@/lib/date';
+import { cn } from '@/lib/utils';
+import { routes } from '@/routes';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

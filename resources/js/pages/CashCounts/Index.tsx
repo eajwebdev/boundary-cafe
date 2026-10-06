@@ -1,10 +1,6 @@
 'use client';
 
-import { useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 import {
     Calculator,
     CheckCircle2,
@@ -18,6 +14,10 @@ import {
     TrendingUp,
     Building2,
 } from 'lucide-react';
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import AdminLayout from '@/layouts/AdminLayout';
+import { cn } from '@/lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -377,7 +377,7 @@ export default function CashCountsIndex() {
                                     </label>
                                     <select
                                         value={countType}
-                                        onChange={(e) => setCountType(e.target.value as any)}
+                                        onChange={(e) => setCountType(e.target.value as 'closing' | 'midshift')}
                                         className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
                                     >
                                         {open_sessions.find((s) => s.id === sessionId)?.is_mine === true && (

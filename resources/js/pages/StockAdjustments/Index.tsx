@@ -1,11 +1,5 @@
 'use client';
-import { useState, useCallback, useMemo } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-import { routes } from '@/routes';
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import {
     AlertTriangle,
     Trash2,
@@ -21,6 +15,12 @@ import {
     Check,
     ChevronsUpDown,
 } from 'lucide-react';
+import { useState, useCallback, useMemo } from 'react';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import AdminLayout from '@/layouts/AdminLayout';
+import { cn } from '@/lib/utils';
+import { routes } from '@/routes';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Product {

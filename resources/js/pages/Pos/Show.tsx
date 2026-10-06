@@ -1,14 +1,15 @@
 'use client';
 
 import { usePage, Link, router } from '@inertiajs/react';
+import { ArrowLeft, Edit2, XCircle, AlertTriangle, CheckCircle2, ShoppingCart, User, CreditCard } from 'lucide-react';
 import { useState } from 'react';
-import AdminLayout from '@/layouts/AdminLayout';
-import ReceiptTemplate, { ReceiptData } from './ReceiptTemplate';
-import { routes } from '@/routes';
-import { cn } from '@/lib/utils';
-import { ArrowLeft, Edit2, XCircle, AlertTriangle, CheckCircle2, ShoppingCart, Calendar, User, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import AdminLayout from '@/layouts/AdminLayout';
 import { fmtDate } from '@/lib/date';
+import { cn } from '@/lib/utils';
+import { routes } from '@/routes';
+import type { ReceiptData } from './ReceiptTemplate';
+import ReceiptTemplate from './ReceiptTemplate';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface PageProps {

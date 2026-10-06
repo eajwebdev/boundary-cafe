@@ -1,7 +1,58 @@
 'use client';
 
-import { ReactNode, useEffect, useState } from 'react';
 import { Link, Head, router, usePage } from '@inertiajs/react';
+import {
+    LayoutDashboard,
+    ShoppingCart,
+    History,
+    Package,
+    Tag,
+    PackageCheck,
+    Wallet,
+    BarChart2,
+    PackageX,
+    ScrollText,
+    Users,
+    Truck,
+    Building2,
+    FolderOpen,
+    Settings,
+    LogOut,
+    Bell,
+    Sun,
+    Moon,
+    ChevronDown,
+    LayoutList,
+    ArrowLeftRight,
+    ClipboardCheck,
+    Bike,
+    Utensils,
+    MapPinned,
+    Gift,
+    Armchair,
+    Store,
+} from 'lucide-react';
+import { useTheme } from 'next-themes';
+import type { ReactNode} from 'react';
+import { useEffect, useState } from 'react';
+
+
+import FloatingChat from '@/components/FloatingChat';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+
+import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+
+
+
 
 import {
     Sidebar,
@@ -17,71 +68,9 @@ import {
     SidebarRail,
     SidebarTrigger,
 } from '@/components/ui/sidebar';
-
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-
-import { Button } from '@/components/ui/button';
-
-import {
-    LayoutDashboard,
-    ShoppingCart,
-    History,
-    ShoppingBag,
-    Package,
-    Tag,
-    Layers,
-    GitMerge,
-    ChefHat,
-    Boxes,
-    ClipboardList,
-    PackageCheck,
-    Wallet,
-    Calculator,
-    PiggyBank,
-    Receipt,
-    BarChart2,
-    TrendingUp,
-    ArchiveX,
-    PackageX,
-    FileText,
-    ScrollText,
-    Users,
-    Truck,
-    Building2,
-    FolderOpen,
-    Settings,
-    LogOut,
-    Bell,
-    Sun,
-    Moon,
-    ChevronDown,
-    LayoutList,
-    ArrowLeftRight,
-    Warehouse,
-    ClipboardCheck,
-    Bike,
-    Utensils,
-    MapPinned,
-    Gift,
-    Armchair,
-    Store,
-} from 'lucide-react';
-
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-
-import { routes } from '@/routes';
 import { cn } from '@/lib/utils';
-import { useTheme } from 'next-themes';
-import FloatingChat from '@/components/FloatingChat';
+import { routes } from '@/routes';
+import type { SharedProps } from '@/types/shared';
 import CashierLayout from './CashierLayout';
 
 interface AdminLayoutProps {
@@ -250,7 +239,7 @@ function SubLink({ href, label, active }: { href: string; label: string; active:
 
 // ─── Main layout ──────────────────────────────────────────────────────────────
 export default function AdminLayout({ children, defaultSidebarOpen, sidebarCollapsible = 'icon', title }: AdminLayoutProps) {
-    const { props } = usePage<any>();
+    const { props } = usePage<SharedProps>();
     const { theme, setTheme } = useTheme();
     const appName = props.app?.name ?? 'POS System';
     const appLogo = props.app?.logo_url ?? null;
@@ -300,26 +289,10 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
         return role;
     };
 
-    // Inventory group active if any sub-path is active
-    const inventoryActive = [
-        '/products',
-        '/categories',
-        '/variants',
-        '/bundles',
-        '/recipes',
-        '/stock',
-        '/purchase-orders',
-        '/grn',
-        '/stock-adjustments',
-        '/inventory',
-        '/stock-transfers',
-    ].some(isActive);
     // Cash group active
     const cashActive = ['/cash-sessions', '/cash-counts', '/petty-cash', '/expenses'].some(isActive);
     // Reports group active
     const reportsActive = ['/reports', '/logs', '/stock-adjustments'].some(isActive);
-    // Management group active
-    const managementActive = ['/users', '/suppliers', '/branches', '/settings', '/dining-tables', '/delivery-zone'].some(isActive);
 
     return (
         <SidebarProvider key={isPosPage ? 'sidebar-pos' : 'sidebar-main'} defaultOpen={shouldOpen} forceDesktop={isPosPage}>

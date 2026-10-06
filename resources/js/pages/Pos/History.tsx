@@ -1,18 +1,12 @@
 'use client';
 
-import { useState } from 'react';
 import { usePage, router, Link } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-import ReceiptTemplate, { fmtMoney, ReceiptData } from './ReceiptTemplate';
-import { routes } from '@/routes';
-import { cn } from '@/lib/utils';
 import {
     Search,
     X,
     Filter,
     ChevronRight,
     Eye,
-    Receipt,
     TrendingUp,
     Banknote,
     Smartphone,
@@ -21,13 +15,18 @@ import {
     ArrowLeft,
     Table2,
     Calendar,
-    CalendarClock,
     Wallet,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { fmtDate, manilaNow, toDateStr, manilaRange } from '@/lib/date';
+import { useState } from 'react';
 import { type DateRange } from 'react-day-picker';
+import { Button } from '@/components/ui/button';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
+import AdminLayout from '@/layouts/AdminLayout';
+import { fmtDate, toDateStr, manilaRange } from '@/lib/date';
+import { cn } from '@/lib/utils';
+import { routes } from '@/routes';
+import ReceiptTemplate, { fmtMoney } from './ReceiptTemplate';
+import type { ReceiptData } from './ReceiptTemplate';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface SaleRow extends ReceiptData {

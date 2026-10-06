@@ -7,7 +7,8 @@ import MapThumb from '@/components/storefront/MapThumb';
 import { Price, RouteLine, ShopButton, Skeleton } from '@/components/storefront/ui';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import CustomerLayout from '@/layouts/CustomerLayout';
-import { CustomerSession, DeliveryZone, jsonRequest, SavedAddress, StoreStatus, useCart } from '@/lib/customer';
+import type { CustomerSession, DeliveryZone, SavedAddress, StoreStatus} from '@/lib/customer';
+import { jsonRequest, useCart } from '@/lib/customer';
 import { cn } from '@/lib/utils';
 
 const AddressPicker = lazy(() => import('@/components/storefront/AddressPicker'));

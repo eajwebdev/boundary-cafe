@@ -1,8 +1,8 @@
-import { Package, ChevronDown } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { fmtMoney } from '../ReceiptTemplate';
+import { ChevronDown } from 'lucide-react';
 import ProductThumbnail from '@/components/ProductThumbnail';
+import { cn } from '@/lib/utils';
 import type { Product, CartItem } from '../posTypes';
+import { fmtMoney } from '../ReceiptTemplate';
 
 export default function TabletLayout({
     filtered,

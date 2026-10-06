@@ -1,12 +1,12 @@
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Mail, MapPin, Pencil, Phone, Plus, Search, Trash2, User, X } from 'lucide-react';
 import { useState } from 'react';
 import type React from 'react';
-import { Head, Link, router, usePage } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { routes } from '@/routes';
+import AdminLayout from '@/layouts/AdminLayout';
 import { cn } from '@/lib/utils';
-import { Mail, MapPin, Pencil, Phone, Plus, Search, Trash2, User, X } from 'lucide-react';
+import { routes } from '@/routes';
 
 interface Customer {
     id: number;

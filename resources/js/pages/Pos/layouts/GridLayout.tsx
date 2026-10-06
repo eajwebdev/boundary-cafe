@@ -1,7 +1,7 @@
-import { cn } from '@/lib/utils';
-import { fmtMoney, fmtQty } from '../ReceiptTemplate';
-import type { Product, CartItem } from '../posTypes';
 import ProductThumbnail from '@/components/ProductThumbnail';
+import { cn } from '@/lib/utils';
+import type { Product, CartItem } from '../posTypes';
+import { fmtMoney, fmtQty } from '../ReceiptTemplate';
 
 export default function GridLayout({
     filtered,

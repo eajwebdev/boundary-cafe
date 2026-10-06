@@ -1,19 +1,19 @@
-import { useState } from 'react';
 import { router } from '@inertiajs/react';
 import { Head } from '@inertiajs/react';
-import { format, subDays, startOfMonth, endOfMonth, subMonths, parseISO } from 'date-fns';
+import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { FlaskConical, Building2, Calendar, Download, ChevronDown, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
 import { type DateRange } from 'react-day-picker';
-import { reportRoutes, getReportTitle, openLivePdfPreview } from './Files';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 
-import AdminLayout from '@/layouts/AdminLayout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { FlaskConical, Building2, Calendar, Download, ChevronDown, ChevronRight } from 'lucide-react';
+import AdminLayout from '@/layouts/AdminLayout';
+import { reportRoutes, getReportTitle, openLivePdfPreview } from './Files';
 
 interface UsageItem {
     ingredient_id: number;
@@ -72,7 +72,11 @@ export default function IngredientUsageReport({ usage, branches }: Props) {
     const toggleExpand = (id: number) => {
         setExpanded((prev) => {
             const next = new Set(prev);
-            next.has(id) ? next.delete(id) : next.add(id);
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+            }
             return next;
         });
     };
@@ -215,7 +219,7 @@ export default function IngredientUsageReport({ usage, branches }: Props) {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {usage.map((item, idx) => (
+                                    {usage.map((item) => (
                                         <>
                                             <TableRow
                                                 key={item.ingredient_id}

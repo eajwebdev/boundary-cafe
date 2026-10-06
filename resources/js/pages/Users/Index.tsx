@@ -1,26 +1,19 @@
 'use client';
 
-import { useState, useMemo } from 'react';
 import { usePage, router } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-import { routes } from '@/routes';
-import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
 import {
     Plus,
     Search,
     X,
     Edit2,
     Trash2,
-    Shield,
     ChevronDown,
     Eye,
     EyeOff,
-    Users,
-    Key,
     CheckSquare,
     Square,
     AlertTriangle,
-    User as UserIcon,
     CircleDot,
     LayoutGrid,
     Tablet,
@@ -31,9 +24,12 @@ import {
     Monitor,
     Smartphone,
 } from 'lucide-react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { format } from 'date-fns';
+import AdminLayout from '@/layouts/AdminLayout';
+import { cn } from '@/lib/utils';
+import { routes } from '@/routes';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -397,7 +393,6 @@ function UserDrawer({
     branches,
     roles,
     menus,
-    menuIds,
     onClose,
 }: {
     mode: FormMode;
@@ -427,7 +422,7 @@ function UserDrawer({
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [tab, setTab] = useState<'info' | 'access' | 'pos'>('info');
 
-    const set = (k: keyof UserForm, v: any) => {
+    const set = <K extends keyof UserForm>(k: K, v: UserForm[K]) => {
         setForm((f) => ({ ...f, [k]: v }));
         setErrors((e) => ({ ...e, [k]: '' }));
     };
@@ -444,16 +439,16 @@ function UserDrawer({
                 setLoading(false);
                 onClose();
             },
-            onError: (e: any) => {
+            onError: (e: Record<string, string>) => {
                 setErrors(e);
                 setLoading(false);
                 setTab('info');
             },
         };
         if (mode === 'create') {
-            router.post(routes.users.store(), form as any, opts);
+            router.post(routes.users.store(), { ...form }, opts);
         } else {
-            router.patch(routes.users.update(user!.id), form as any, opts);
+            router.patch(routes.users.update(user!.id), { ...form }, opts);
         }
     };
 

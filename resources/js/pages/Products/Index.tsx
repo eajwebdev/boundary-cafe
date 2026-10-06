@@ -1,8 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-import { routes } from '@/routes';
-import { cn } from '@/lib/utils';
 import {
     Plus,
     Search,
@@ -23,8 +19,12 @@ import {
     ChevronsLeft,
     ChevronsRight,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import ProductThumbnail from '@/components/ProductThumbnail';
+import { Button } from '@/components/ui/button';
+import AdminLayout from '@/layouts/AdminLayout';
+import { cn } from '@/lib/utils';
+import { routes } from '@/routes';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -234,10 +234,10 @@ const sel = inp;
 
 // ─── Debounce hook ────────────────────────────────────────────────────────────
 
-function useDebounce(fn: (...args: any[]) => void, delay: number) {
+function useDebounce<A extends unknown[]>(fn: (...args: A) => void, delay: number) {
     const timer = useRef<ReturnType<typeof setTimeout>>();
     return useCallback(
-        (...args: any[]) => {
+        (...args: A) => {
             clearTimeout(timer.current);
             timer.current = setTimeout(() => fn(...args), delay);
         },
@@ -537,7 +537,7 @@ function ProductFormModal({
 
         const url = isEdit ? routes.products.update(product!.id) : routes.products.store();
 
-        router.post(url, fd as any, {
+        router.post(url, fd, {
             forceFormData: true,
             preserveScroll: true,
             onSuccess: () => {
@@ -1006,7 +1006,7 @@ function AllProductsTab({
     const [filterStatus, setFilterStatus] = useState(filters.status);
     const [filterBranch, setFilterBranch] = useState(filters.branch_id?.toString() ?? '');
 
-    const navigate = useCallback((params: Record<string, any>) => {
+    const navigate = useCallback((params: Record<string, string | number | null | undefined>) => {
         setLoading(true);
         router.get(
             routes.products.index(),
@@ -1776,8 +1776,6 @@ function VariantsTab({ variantProducts, allProducts }: { variantProducts: Varian
 function BundlesTab({
     bundleProducts,
     allProducts,
-    branches,
-    isAdmin,
 }: {
     bundleProducts: BundleProduct[];
     allProducts: SelectProduct[];
@@ -1965,7 +1963,6 @@ function BundlesTab({
                     {bundleProducts.map((bp) => {
                         const isOpen = expanded === bp.id;
                         const price = computedPrice(bp);
-                        const adjAmt = bp.bundle?.price_adjustment ?? 0;
                         const hasItems = (bp.bundle?.items.length ?? 0) > 0;
 
                         return (
@@ -2701,7 +2698,7 @@ function StockManagementTab({
     const [filterBranch, setFilterBranch] = useState(stockFilters.branch_id?.toString() ?? '');
     const [filterStatus, setFilterStatus] = useState(stockFilters.status);
 
-    const navigate = useCallback((params: Record<string, any>) => {
+    const navigate = useCallback((params: Record<string, string | number | null | undefined>) => {
         setLoading(true);
         router.get(
             routes.products.index(),

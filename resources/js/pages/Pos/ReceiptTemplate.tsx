@@ -1,10 +1,10 @@
 'use client';
 
-import { useRef } from 'react';
 import { usePage } from '@inertiajs/react';
 import { Printer, Download } from 'lucide-react';
-import { fmtDate } from '@/lib/date';
+import { useRef } from 'react';
 import { Button } from '@/components/ui/button';
+import { fmtDate } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -88,7 +88,8 @@ const businessFooter: Record<string, string> = {
 // ─── ReceiptTemplate ─────────────────────────────────────────────────────────
 export default function ReceiptTemplate({ sale, currency = '₱', showActions = true, compact = false, className }: Props) {
     const printRef = useRef<HTMLDivElement>(null);
-    const settings = (usePage().props as any).settings ?? {};
+    const settings =
+        usePage<{ settings?: { receipt_footer?: string; receipt_header?: string; show_cashier_on_receipt?: boolean } | null }>().props.settings ?? {};
 
     const subtotal = sale.items.reduce((s, i) => s + i.price * i.quantity, 0);
     const isVoided = sale.status === 'voided';

@@ -1,24 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-import { routes } from '@/routes';
-
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import {
     ArrowLeft,
     Search,
     CheckCircle2,
-    AlertTriangle,
     Save,
     XCircle,
     Clock,
@@ -32,7 +18,20 @@ import {
     Package,
     FlaskConical,
 } from 'lucide-react';
+import { useState, useMemo } from 'react';
+
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
+import AdminLayout from '@/layouts/AdminLayout';
 import { cn } from '@/lib/utils';
+import { routes } from '@/routes';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -129,7 +128,6 @@ export default function StockCountShow() {
     }, [serverItems, counts]);
 
     // Current-page stats
-    const pageCounted = derivedItems.filter((i) => i.counted_qty !== null && !isNaN(i.counted_qty as number)).length;
     const pageVariance = derivedItems.filter((i) => i.delta !== null && i.delta !== 0).length;
     const pageShortages = derivedItems.filter((i) => i.delta !== null && i.delta < 0).length;
     const pageSurpluses = derivedItems.filter((i) => i.delta !== null && i.delta > 0).length;

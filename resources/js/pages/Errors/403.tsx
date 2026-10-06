@@ -1,6 +1,6 @@
-import { Head, Link } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
+import { Head } from '@inertiajs/react';
 import { ShieldAlert } from 'lucide-react';
+import AdminLayout from '@/layouts/AdminLayout';
 
 export default function Error403({ message }: { message?: string }) {
     return (

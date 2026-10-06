@@ -1,19 +1,19 @@
-import { useState } from 'react';
 import { router } from '@inertiajs/react';
 import { Head } from '@inertiajs/react';
 import { format, parseISO } from 'date-fns';
+import { Calendar, Building2, Download, Receipt } from 'lucide-react';
+import { useState } from 'react';
 import { type DateRange } from 'react-day-picker';
-import { reportRoutes, getReportTitle, openLivePdfPreview, type ReportFilters } from './Files';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 
-import AdminLayout from '@/layouts/AdminLayout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Calendar, Building2, Download, Receipt } from 'lucide-react';
+import AdminLayout from '@/layouts/AdminLayout';
+import { reportRoutes, getReportTitle, openLivePdfPreview, type ReportFilters } from './Files';
 
 interface Props {
     expenses: {
@@ -31,7 +31,7 @@ interface Props {
         total: number;
         from: number | null;
         to: number | null;
-        links: Array<any>;
+        links: Array<{ url: string | null; label: string; active: boolean }>;
     };
     branches: Array<{ id: number; name: string }> | null;
     filters: ReportFilters;
@@ -202,7 +202,7 @@ export default function ExpensesReport({ expenses, branches, filters: initialFil
                                     Showing {expenses.from} to {expenses.to} of {expenses.total} expenses (10 per page)
                                 </p>
                                 <div className="flex gap-1">
-                                    {expenses.links.map((link: any, i: number) => (
+                                    {expenses.links.map((link, i) => (
                                         <button
                                             key={i}
                                             onClick={() =>

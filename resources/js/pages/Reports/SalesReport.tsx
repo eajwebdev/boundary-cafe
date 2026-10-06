@@ -1,19 +1,19 @@
-import { useState } from 'react';
 import { router } from '@inertiajs/react';
 import { Head } from '@inertiajs/react';
-import { manilaTodayStr, toDateStr, fmtDate } from '@/lib/date';
-import { type DateRange } from 'react-day-picker';
-import { reportRoutes, getReportTitle, openLivePdfPreview, type ReportFilters } from './Files';
-import { DateRangePicker } from '@/components/ui/date-range-picker';
-
-import AdminLayout from '@/layouts/AdminLayout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Calendar, Building2, TrendingUp, Download, Receipt } from 'lucide-react';
+import { useState } from 'react';
+import { type DateRange } from 'react-day-picker';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import AdminLayout from '@/layouts/AdminLayout';
+import { manilaTodayStr, toDateStr, fmtDate } from '@/lib/date';
+import { reportRoutes, getReportTitle, openLivePdfPreview, type ReportFilters } from './Files';
+
 
 interface Props {
     sales: {
@@ -36,7 +36,7 @@ interface Props {
         total: number;
         from: number | null;
         to: number | null;
-        links: Array<any>;
+        links: Array<{ url: string | null; label: string; active: boolean }>;
     };
     branches: Array<{ id: number; name: string }> | null;
     filters: ReportFilters;
@@ -218,7 +218,7 @@ export default function SalesReport({ sales, branches, filters: initialFilters }
                                     Showing {sales.from} to {sales.to} of {sales.total} transactions (10 per page)
                                 </p>
                                 <div className="flex gap-1">
-                                    {sales.links.map((link: any, i: number) => (
+                                    {sales.links.map((link, i) => (
                                         <button
                                             key={i}
                                             onClick={() =>

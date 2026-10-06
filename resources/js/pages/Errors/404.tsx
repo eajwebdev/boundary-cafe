@@ -1,8 +1,7 @@
-import { Head, Link } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
+import { Head } from '@inertiajs/react';
 import { AlertTriangle } from 'lucide-react';
 
-export default function Error404({ status, message }: { status?: number; message?: string }) {
+export default function Error404() {
     return (
         <>
             <Head title="404 - Page Not Found" />

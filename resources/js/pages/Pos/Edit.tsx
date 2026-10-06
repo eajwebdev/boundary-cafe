@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
 import { usePage, router, Link } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-import { fmtMoney } from './ReceiptTemplate';
-import { routes } from '@/routes';
-import { cn } from '@/lib/utils';
-import { ArrowLeft, Plus, Minus, Trash2, Save, X, Package, AlertTriangle, ShoppingCart, Search } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ArrowLeft, Plus, Minus, Save, X, Package, AlertTriangle, ShoppingCart, Search } from 'lucide-react';
+import { useState, useMemo, useCallback } from 'react';
 import ProductThumbnail from '@/components/ProductThumbnail';
+import { Button } from '@/components/ui/button';
+import AdminLayout from '@/layouts/AdminLayout';
+import { cn } from '@/lib/utils';
+import { routes } from '@/routes';
+import { fmtMoney } from './ReceiptTemplate';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Variant {
@@ -71,7 +71,7 @@ interface CartItem {
 // ─── Edit page ────────────────────────────────────────────────────────────────
 export default function PosEdit() {
     const { props } = usePage<PageProps>();
-    const { sale, products, app, settings } = props;
+    const { sale, products, app } = props;
     const currency = app?.currency ?? '₱';
 
     // Initialise cart from existing sale items
@@ -166,7 +166,7 @@ export default function PosEdit() {
                     router.visit(routes.pos.show(sale.id));
                 },
                 onError: (e) => {
-                    setErrors(e as any);
+                    setErrors(e);
                     setLoading(false);
                 },
                 onFinish: () => setLoading(false),

@@ -7,7 +7,8 @@ import AdminLayout from '@/layouts/AdminLayout';
 import { manilaFmt, manilaNow, manilaRange, toDateStr } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
-import { BranchFilter, BranchOption, DateFilter } from './kit';
+import type { BranchOption} from './kit';
+import { BranchFilter, DateFilter } from './kit';
 import CashTab from './tabs/CashTab';
 import CustomersTab from './tabs/CustomersTab';
 import InventoryTab from './tabs/InventoryTab';

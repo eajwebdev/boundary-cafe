@@ -1,11 +1,13 @@
 'use client';
 
-import { ReactNode, useEffect } from 'react';
 import { Link, Head, router, usePage } from '@inertiajs/react';
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { useTheme } from 'next-themes';
 import { ShoppingCart, History, Wallet, Calculator, PiggyBank, LogOut, Sun, Moon, Users, Bike, Utensils } from 'lucide-react';
+import { useTheme } from 'next-themes';
+import type { ReactNode} from 'react';
+import { useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import type { SharedProps } from '@/types/shared';
 
 // ─── Menu IDs (must match MenuHelper.php) ─────────────────────────────────────
 const M = {
@@ -32,7 +34,7 @@ const NAV = [
 ] as const;
 
 export default function CashierLayout({ children }: { children: ReactNode }) {
-    const { props } = usePage<any>();
+    const { props } = usePage<SharedProps>();
     const { theme, setTheme } = useTheme();
     const currentPath = usePage().url.split('?')[0].replace(/\/$/, '');
 
@@ -40,8 +42,8 @@ export default function CashierLayout({ children }: { children: ReactNode }) {
     const has = (id: string) => access.includes(id);
 
     const user = props.auth?.user;
-    const branch = (props.branch as any) ?? user?.branch;
-    const session = props.session as any; // only present on POS page
+    const branch = (props.branch as { name?: string } | undefined) ?? user?.branch;
+    const session = props.session; // only present on POS page
     const appName = props.app?.name ?? 'POS System';
     const appLogo = props.app?.logo_url ?? null;
     const appIcon = props.app?.icon_url || appLogo || '/uploads/logo.png';
@@ -71,7 +73,7 @@ export default function CashierLayout({ children }: { children: ReactNode }) {
 
     return (
         <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
-            <Head title={(props as any).title ?? ''}>
+            <Head title={props.title ?? ''}>
                 <link rel="icon" href={appIcon} />
                 <link rel="apple-touch-icon" href={appIcon} />
             </Head>

@@ -1,8 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
 import { Head, usePage, router } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-import { routes } from '@/routes';
-import { cn } from '@/lib/utils';
 import {
     Settings,
     Globe,
@@ -25,7 +21,11 @@ import {
     Upload,
     ImageIcon,
 } from 'lucide-react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import AdminLayout from '@/layouts/AdminLayout';
+import { cn } from '@/lib/utils';
+import { routes } from '@/routes';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -480,10 +480,8 @@ function GroupSection({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function SettingsIndex() {
-    const { settings, module_settings, menu_groups, branches, active_branch_id, is_super_admin, is_administrator, app, flash } =
+    const { settings, module_settings, menu_groups, branches, active_branch_id, is_super_admin, is_administrator, flash } =
         usePage<PageProps>().props;
-
-    const currency = app?.currency ?? '₱';
 
     // ── Local state ───────────────────────────────────────────────────────────
     const [selectedBranch, setSelectedBranch] = useState<number | null>(active_branch_id);
@@ -569,14 +567,12 @@ export default function SettingsIndex() {
         if (Object.keys(dirty).length === 0 && !modulesDirty) return;
         setSaving(true);
         if (modulesDirty) setSavingModules(true);
-        const payload: Record<string, any> = {
+        const allMenuIds = Object.values(menu_groups).flatMap((g) => Object.keys(g));
+        const payload = {
             settings: dirty,
             branch_id: selectedBranch ?? undefined,
+            ...(modulesDirty ? { enabled_menus: allMenuIds.filter((id) => modules[id] !== false) } : {}),
         };
-        if (modulesDirty) {
-            const allMenuIds = Object.values(menu_groups).flatMap((g) => Object.keys(g));
-            payload.enabled_menus = allMenuIds.filter((id) => modules[id] !== false);
-        }
 
         router.post(routes.settings.save(), payload, {
             preserveScroll: true,
@@ -586,7 +582,7 @@ export default function SettingsIndex() {
                 setModulesDirty(false);
                 setSavingModules(false);
                 setActivePreset(null);
-                const fresh = (page.props as any)?.module_settings;
+                const fresh = (page.props as { module_settings?: Record<string, boolean> }).module_settings;
                 if (fresh) {
                     setModules(fresh);
                 }

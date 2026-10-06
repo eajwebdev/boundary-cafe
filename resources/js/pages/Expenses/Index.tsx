@@ -1,23 +1,39 @@
 'use client';
 
-import { useState } from 'react';
-import { manilaTodayStr } from '@/lib/date';
 import { Head, router, usePage } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
-
+import { DollarSign } from 'lucide-react';
+import { useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
+import AdminLayout from '@/layouts/AdminLayout';
+import { manilaTodayStr } from '@/lib/date';
 
-import { Plus, DollarSign } from 'lucide-react';
 import { routes } from '@/routes';
 
+interface Expense {
+    id: number;
+    description: string;
+    expense_date: string;
+    amount: number;
+    payment_method: string;
+    category?: { name: string } | null;
+}
+
+interface PageProps {
+    expenses: { data: Expense[] };
+    categories: { id: number; name: string }[];
+    total_this_month: number;
+    [key: string]: unknown;
+}
+
 export default function ExpensesIndex() {
-    const { expenses, categories, total_this_month, is_manager, current_user } = usePage().props as any;
+    const { expenses, categories, total_this_month } = usePage<PageProps>().props;
 
     const [categoryId, setCategoryId] = useState('');
     const [amount, setAmount] = useState('');
@@ -81,7 +97,7 @@ export default function ExpensesIndex() {
                                                 <SelectValue placeholder="Select category" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {categories.map((cat: any) => (
+                                                {categories.map((cat) => (
                                                     <SelectItem key={cat.id} value={cat.id.toString()}>
                                                         {cat.name}
                                                     </SelectItem>
@@ -153,7 +169,7 @@ export default function ExpensesIndex() {
                                     {expenses.data.length === 0 ? (
                                         <p className="py-12 text-center text-muted-foreground">No expenses recorded yet.</p>
                                     ) : (
-                                        expenses.data.map((exp: any) => (
+                                        expenses.data.map((exp) => (
                                             <div key={exp.id} className="rounded-2xl border p-5 transition-all hover:bg-muted/50">
                                                 <div className="flex justify-between">
                                                     <div>

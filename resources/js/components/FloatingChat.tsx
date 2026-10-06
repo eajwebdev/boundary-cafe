@@ -1,7 +1,5 @@
 'use client';
-import { useState, useRef, useEffect, useCallback } from 'react';
 import { usePage } from '@inertiajs/react';
-import { cn } from '@/lib/utils';
 import {
     Bot,
     X,
@@ -27,6 +25,9 @@ import {
     RefreshCw,
     CalendarClock,
 } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { cn } from '@/lib/utils';
+import type { SharedProps } from '@/types/shared';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface DataItem {
@@ -77,7 +78,7 @@ function getCsrf(): string {
 
 // ─── Guard wrapper — only mounts for manager/cashier and not on /pos ─────────
 export default function FloatingChat() {
-    const { props } = usePage<any>();
+    const { props } = usePage<SharedProps>();
     const role = props.auth?.user?.role ?? '';
     const aiEnabled = props.app?.ai_chat_enabled !== false;
     const currentPath = usePage().url.split('?')[0];

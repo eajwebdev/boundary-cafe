@@ -1,13 +1,12 @@
 'use client';
 
-import React from 'react';
 import { createInertiaApp, router } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
-import { createRoot } from 'react-dom/client';
-import '../css/app.css';
-
 // ── Theme support ───────────────────────────────────────────────────────────────
 import { ThemeProvider } from 'next-themes';
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import '../css/app.css';
 
 // ── Sonner toast (global toaster) ──────────────────────────────────────────────
 import { Toaster } from '@/components/ui/sonner';
@@ -39,6 +38,9 @@ type SharedApp = {
     icon_url?: string | null;
     color_theme?: string;
 };
+
+/** The slice of the shared Inertia props that carries the branding. */
+type BrandProps = { app?: SharedApp };
 
 const fallbackAppName = import.meta.env.VITE_APP_NAME || 'Boundary Cafe';
 let currentAppName = document.documentElement.dataset.appName || fallbackAppName;
@@ -77,14 +79,14 @@ createInertiaApp({
     resolve: (name) => resolvePageComponent(`./pages/${name}.tsx`, import.meta.glob('./pages/**/*.tsx')),
 
     setup({ el, App, props }) {
-        syncBrand((props.initialPage.props as any)?.app);
+        syncBrand((props.initialPage.props as BrandProps).app);
 
         // Sync data-theme on every Inertia navigation (after blade sets it on first load)
         router.on('navigate', (event) => {
-            syncBrand((event.detail.page.props as any)?.app);
+            syncBrand((event.detail.page.props as BrandProps).app);
         });
         router.on('success', (event) => {
-            syncBrand((event.detail.page.props as any)?.app);
+            syncBrand((event.detail.page.props as BrandProps).app);
         });
 
         createRoot(el).render(

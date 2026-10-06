@@ -1,22 +1,36 @@
 'use client';
 
-import { useState } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
-import AdminLayout from '@/layouts/AdminLayout';
+import { Plus, Edit2, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import AdminLayout from '@/layouts/AdminLayout';
 
-import { Plus, Edit2, Trash2 } from 'lucide-react';
 import { routes } from '@/routes';
 
+interface ExpenseCategory {
+    id: number;
+    name: string;
+    description: string | null;
+    color: string | null;
+    is_active: boolean;
+}
+
+interface PageProps {
+    categories: ExpenseCategory[];
+    is_manager: boolean;
+    [key: string]: unknown;
+}
+
 export default function ExpenseCategoriesIndex() {
-    const { categories, is_manager, current_user } = usePage().props as any;
+    const { categories, is_manager } = usePage<PageProps>().props;
 
     // New category form
     const [name, setName] = useState('');
@@ -46,7 +60,7 @@ export default function ExpenseCategoriesIndex() {
         );
     };
 
-    const startEdit = (cat: any) => {
+    const startEdit = (cat: ExpenseCategory) => {
         setEditingId(cat.id);
         setEditName(cat.name);
         setEditDescription(cat.description || '');
@@ -69,7 +83,7 @@ export default function ExpenseCategoriesIndex() {
         );
     };
 
-    const toggleActive = (id: number, currentActive: boolean) => {
+    const toggleActive = (id: number) => {
         router.patch(routes.expenseCategories.toggle(id));
     };
 
@@ -154,7 +168,7 @@ export default function ExpenseCategoriesIndex() {
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-3">
-                                    {categories.map((cat: any) => (
+                                    {categories.map((cat) => (
                                         <div key={cat.id} className="flex items-center justify-between rounded-2xl border p-4 hover:bg-muted/50">
                                             <div className="flex items-center gap-4">
                                                 <div className="h-6 w-6 rounded-full" style={{ backgroundColor: cat.color || '#3b82f6' }} />
@@ -174,7 +188,7 @@ export default function ExpenseCategoriesIndex() {
                                                         <Button size="icon" variant="ghost" onClick={() => startEdit(cat)}>
                                                             <Edit2 className="h-4 w-4" />
                                                         </Button>
-                                                        <Button size="icon" variant="ghost" onClick={() => toggleActive(cat.id, cat.is_active)}>
+                                                        <Button size="icon" variant="ghost" onClick={() => toggleActive(cat.id)}>
                                                             <Switch checked={cat.is_active} />
                                                         </Button>
                                                         <Button size="icon" variant="ghost" onClick={() => handleDelete(cat.id, cat.name)}>
