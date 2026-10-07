@@ -20,6 +20,7 @@ import {
     Palette,
     Upload,
     ImageIcon,
+    FileText,
 } from 'lucide-react';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -108,6 +109,7 @@ const GROUP_META: Record<string, { label: string; icon: React.ElementType; desc:
     inventory: { label: 'Inventory', icon: Package, desc: 'Stock alerts and automation', color: 'text-cyan-500' },
     cash: { label: 'Cash', icon: Banknote, desc: 'Sessions, petty cash, over/short', color: 'text-green-500' },
     notification: { label: 'Notifications', icon: Bell, desc: 'Dashboard alerts', color: 'text-rose-500' },
+    quotation: { label: 'Quotation', icon: FileText, desc: 'Client and project shown on the public quotation pages', color: 'text-pink-500' },
     modules: { label: 'Modules', icon: Layers, desc: 'Enable or disable system features', color: 'text-indigo-500' },
 };
 
@@ -682,7 +684,7 @@ export default function SettingsIndex() {
                     <Shield className="h-3.5 w-3.5 shrink-0" />
                     {is_super_admin
                         ? 'Super Admin — you can edit all settings, modules/feature flags, and branch overrides.'
-                        : 'Administrator — you can configure global settings (General, Inventory, Notifications, POS, Receipt, Tax), modules/feature flags, and branch-specific overrides.'}
+                        : 'Administrator — you can configure global settings (General, Inventory, Notifications, POS, Quotation, Receipt, Tax), modules/feature flags, and branch-specific overrides.'}
                 </div>
 
                 {/* Scope selector — Super Admin + Administrator */}
@@ -729,7 +731,7 @@ export default function SettingsIndex() {
                             ) : is_super_admin ? (
                                 'Editing global defaults. These apply to all branches unless overridden.'
                             ) : (
-                                'Editing global defaults for General, Inventory, Notifications, POS, Receipt, Tax, and Modules.'
+                                'Editing global defaults for General, Inventory, Notifications, POS, Quotation, Receipt, Tax, and Modules.'
                             )}
                         </p>
                     </div>

@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Boundary Café Quote · Subscription</title>
+<meta name="description" content="Build your Boundary Café POS subscription: choose a plan, switch add-ons on or off, see the monthly total and download the quotation.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="assets/eaj-mark.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/quote.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <img class="masthead-logo" src="assets/eaj-logo.png" alt="EAJ Web Development Services">
+    <div class="masthead-quote">
+      <p class="quote-word">QUOTE<span>.</span></p>
+      <dl class="meta" id="meta"></dl>
+    </div>
+  </div>
+</header>
+
+<div class="mode-bar">
+  <div class="mode-bar-inner">
+    <nav class="mode-switch" aria-label="Pricing model">
+      <a href="subscription.html" aria-current="page">Online subscription</a>
+      <a href="one-time.html">One-time (offline)</a>
+    </nav>
+    <p class="mode-hint">Fully hosted and paid monthly per branch. No lock-in.</p>
+  </div>
+</div>
+
+<div class="parties">
+  <div class="party"><p class="party-label">Prepared for</p><strong data-q="client_name">Boundary Café</strong><span data-q="client_address">Mabinay, Negros Oriental</span></div>
+  <div class="party"><p class="party-label">Prepared by</p><strong>EAJ Web Development Services</strong><span>Software development & hosting</span></div>
+  <div class="party"><p class="party-label">Project</p><strong data-q="project_name">Boundary Café POS & Ordering System</strong><span data-q="project_note">Cloud-hosted restaurant POS, inventory and online ordering</span></div>
+</div>
+
+<main class="layout">
+  <div class="content">
+    <section class="section" aria-labelledby="plans-title">
+      <p class="eyebrow">01 · Subscription plans</p>
+      <h2 id="plans-title">Choose a base plan</h2>
+      <p class="section-lede">Plans are billed per branch. Every plan is fully hosted, with hosting, SSL, updates and backups included, so there are no servers to buy or maintain. Staff accounts are unlimited and free.</p>
+      <div class="plans" id="plans" role="radiogroup" aria-label="Base plan"></div>
+    </section>
+
+    <section class="section" aria-labelledby="addons-title">
+      <p class="eyebrow">02 · Add-ons</p>
+      <h2 id="addons-title">Free modules & monthly add-ons</h2>
+      <p class="section-lede">Switch on the add-ons you want. Your total updates as you go. Paid add-ons are priced per branch, so turn on only what each branch needs.</p>
+      <p class="party-label sub-label">Free with every plan</p>
+      <div class="free-grid" id="free-modules"></div>
+      <p class="party-label sub-label">Monthly add-ons</p>
+      <div class="addons" id="addons"></div>
+      <p class="footnote">Each branch is billed for its own plan plus the add-ons switched on for that branch. PayMongo's own transaction fees are charged by PayMongo per payment.</p>
+    </section>
+
+    <section class="section" aria-labelledby="terms-title">
+      <p class="eyebrow">03 · Terms</p>
+      <h2 id="terms-title">Terms & conditions</h2>
+      <ol class="terms" id="terms"></ol>
+    </section>
+
+    <section class="section" aria-labelledby="conforme-title">
+      <p class="eyebrow">04 · Acceptance</p>
+      <h2 id="conforme-title">Conforme</h2>
+      <p class="section-lede">Download the quotation, sign it, and send it back to confirm the selected plan and add-ons for each branch. We will schedule setup and staff training after we receive your signed copy.</p>
+      <div class="signatures">
+        <div class="signature"><strong>EAJ Web Development Services</strong><span>Authorized representative · Date</span></div>
+        <div class="signature"><strong data-q="client_name">Boundary Café</strong><span>Owner / authorized representative · Date</span></div>
+      </div>
+    </section>
+  </div>
+
+  <aside class="summary" id="summary" aria-labelledby="summary-title">
+    <div class="summary-head">
+      <p class="eyebrow">Your quotation</p>
+      <h3 id="summary-title">What you'll pay</h3>
+    </div>
+    <div class="summary-body">
+      <div class="branches">
+        <label for="branch-count">Number of branches</label>
+        <div class="stepper">
+          <button type="button" id="branch-minus" aria-label="Fewer branches">−</button>
+          <input type="number" id="branch-count" min="1" max="20" value="1" inputmode="numeric">
+          <button type="button" id="branch-plus" aria-label="More branches">+</button>
+        </div>
+      </div>
+      <div class="term">
+        <div class="branches">
+          <label for="month-count">Subscription length (months)</label>
+          <div class="stepper">
+            <button type="button" id="month-minus" aria-label="Fewer months">−</button>
+            <input type="number" id="month-count" min="1" max="36" value="12" inputmode="numeric">
+            <button type="button" id="month-plus" aria-label="More months">+</button>
+          </div>
+        </div>
+        <div class="term-chips" role="group" aria-label="Quick pick">
+          <button type="button" data-months="1">1 mo</button>
+          <button type="button" data-months="3">3 mo</button>
+          <button type="button" data-months="6">6 mo</button>
+          <button type="button" data-months="12">12 mo</button>
+        </div>
+      </div>
+      <ul class="lines" id="summary-lines"></ul>
+      <ul class="calc" id="summary-calc"></ul>
+      <div class="total" aria-live="polite">
+        <p class="discount-badge" id="discount-badge" hidden></p>
+        <p class="total-label" id="total-label"></p>
+        <p class="total-value tabular" id="total-value"></p>
+        <p class="total-note" id="total-note"></p>
+      </div>
+      <ul class="extras" id="summary-extras"></ul>
+      <p class="savings" id="savings"></p>
+      <div class="actions">
+        <button type="button" class="btn btn-primary" id="btn-download"></button>
+        <div class="btn-row">
+          <button type="button" class="btn btn-ghost" id="btn-print"></button>
+          <button type="button" class="btn btn-ghost" id="btn-link"></button>
+        </div>
+      </div>
+      <p class="fine">Prices in Philippine Peso, excluding applicable government taxes.</p>
+    </div>
+  </aside>
+</main>
+
+<footer class="site-footer">
+  <div class="site-footer-inner">
+    <img src="assets/eaj-mark.png" alt="EAJ">
+    <span>Thank you for choosing EAJ Web Development Services.</span>
+  </div>
+</footer>
+
+<div class="mobile-bar">
+  <div><small id="mobile-label"></small><strong class="tabular" id="mobile-total"></strong></div>
+  <button type="button" class="btn btn-primary" id="mobile-download">Download PDF</button>
+</div>
+<div class="toast" id="toast" role="status"></div>
+<div id="print-root"></div>
+
+<script>
+  window.QUOTE = {
+    // ── DISCOUNT ── Put your discount percentage here (e.g. 10 = 10% off). 0 = no discount.
+    discountPercent: 0,
+
+    number: 'EAJ-Q-2026-1005',
+    issued: 'October 5, 2026',
+    validUntil: 'November 4, 2026',
+    billingKey: 'Billing',
+    billingValue: 'Monthly, per branch',
+    fileTag: 'Subscription',
+    docTitle: 'Online subscription',
+    // Client & project text is edited in System Settings → Quotation; the text in the page is the fallback.
+    detailsKey: 'subscription',
+    assetBase: 'assets/',
+
+    // Prices in PHP, per branch, per month.
+    plans: { standard: 1499, advance: 2499 },
+    planSuffix: '/ month / branch',
+    addonSuffix: '/ mo',
+    priceColumn: 'Monthly',
+    hasMonths: true,
+    defaultMonths: 12,
+    perBranchLabel: 'Per branch / month',
+    addons: [
+      { id: 'storefront', price: 279, includedIn: [] },
+      { id: 'table',      price: 199, includedIn: [] },
+      { id: 'epayment',   price: 249, includedIn: [] },
+      { id: 'promos',     price: 129, includedIn: ['advance'] },
+      { id: 'recipes',    price: 199, includedIn: ['advance'] },
+      { id: 'support',    price: 149, includedIn: ['advance'] },
+    ],
+
+    totalLabel: function (quote) {
+      return 'Total for ' + quote.months + ' month' + (quote.months === 1 ? '' : 's');
+    },
+    totalNote: function (quote, peso) {
+      return 'Billed monthly in advance at ' + peso(quote.periodNet) + ' a month. Hosting, SSL, updates and backups included.';
+    },
+    savingsSuffix: 'a month',
+    extras: function (quote) {
+      return [
+        ['Monthly payment (all branches)', quote.periodNet],
+      ];
+    },
+
+    terms: [
+      ['Prices are in Philippine Peso.', 'They exclude any applicable government taxes.'],
+      ['Billed monthly in advance, per branch.', 'Payment is due within 5 days of the invoice, by GCash, bank transfer or cash.'],
+      ['Hosting is included.', 'Cloud server, SSL, system updates, bug fixes and backups are part of every plan.'],
+      ['No lock-in.', "Cancel with 30 days' written notice. You get a full export of your data on request."],
+      ['Flexible add-ons.', 'Add or remove add-ons anytime. Changes apply from the next billing cycle.'],
+      ['Unlimited staff.', 'Add as many cashier, waiter and admin accounts as you need at no extra cost.'],
+      ['Payment fees.', 'PayMongo transaction fees are charged by PayMongo and are separate from this subscription.'],
+      ['Hardware is not included.', 'Tablets, phones, receipt printers and cash drawers are provided by the client.'],
+      ['Your data is yours.', 'Customer and sales data belongs to {client} and is never shared.'],
+      ['Validity.', 'This quotation is valid until November 4, 2026.'],
+    ],
+  };
+</script>
+<script src="assets/quote.js"></script>
+</body>
+</html>

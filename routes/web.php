@@ -25,6 +25,7 @@ use App\Http\Controllers\PosController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\PromoController;
 use App\Http\Controllers\PurchaseController;
+use App\Http\Controllers\QuotationController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\StockAdjustmentController;
 use App\Http\Controllers\StockCountController;
@@ -34,6 +35,7 @@ use App\Http\Controllers\SystemSettingsController;
 use App\Http\Controllers\TableOrderController;
 use App\Http\Controllers\TimeClockController;
 use App\Http\Controllers\UserController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 // ─── PUBLIC STOREFRONT (customer ordering app) ───────────────────────────────
@@ -45,6 +47,11 @@ Route::get('/time-clock', [TimeClockController::class, 'show'])->name('time-cloc
 Route::post('/time-clock/identify', [TimeClockController::class, 'identify'])->middleware('throttle:20,1')->name('time-clock.identify');
 Route::post('/time-clock/punch', [TimeClockController::class, 'punch'])->middleware('throttle:20,1')->name('time-clock.punch');
 
+// Public quotation pages (static files in public/proposal) — shareable, no sign-in.
+Route::get('/quotation', fn (Request $request) => redirect('/proposal/boundary-cafe/subscription.html' . ($request->getQueryString() ? '?' . $request->getQueryString() : '')))->name('quotation');
+Route::get('/quotation/one-time', fn (Request $request) => redirect('/proposal/boundary-cafe/one-time.html' . ($request->getQueryString() ? '?' . $request->getQueryString() : '')))->name('quotation.one-time');
+Route::get('/quotation/details', [QuotationController::class, 'details'])->name('quotation.details');
+
 // Staff sign-in
 Route::get('/login', [LoginAuthController::class, 'getLogin'])->name('login');
 Route::post('/login', [LoginAuthController::class, 'postLogin'])->middleware('throttle:20,1')->name('login.post');
@@ -55,6 +62,10 @@ Route::prefix('account')->name('customer.')->group(function () {
     Route::post('/login', [Customer\AuthController::class, 'login'])->middleware('throttle:10,1')->name('login.post');
     Route::get('/register', [Customer\AuthController::class, 'showRegister'])->name('register');
     Route::post('/register', [Customer\AuthController::class, 'register'])->middleware('throttle:6,1')->name('register.post');
+
+    // Public aliases for the quotation pages — no sign-in.
+    Route::get('/quote', fn (Request $request) => redirect()->route('quotation', $request->query()))->name('quote');
+    Route::get('/quote/one-time', fn (Request $request) => redirect()->route('quotation.one-time', $request->query()))->name('quote.one-time');
 
     Route::middleware('auth:customer')->group(function () {
         Route::post('/logout', [Customer\AuthController::class, 'logout'])->name('logout');

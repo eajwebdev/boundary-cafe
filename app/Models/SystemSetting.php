@@ -314,6 +314,13 @@ class SystemSetting extends Model
             // ── Notifications ─────────────────────────────────────
             ['key' => 'notification.low_stock_alert','value' => 'true',             'type' => 'boolean', 'group' => 'notification','label' => 'Show low stock alert on dashboard'],
             ['key' => 'notification.expiry_alert',   'value' => 'true',             'type' => 'boolean', 'group' => 'notification','label' => 'Show near-expiry alert on dashboard'],
+
+            // ── Quotation (public pages in public/proposal) ───────
+            ['key' => 'quotation.client_name',            'value' => 'Boundary Café',                                              'type' => 'string', 'group' => 'quotation', 'label' => 'Prepared for — name', 'description' => 'Client name on the quotation, signature line and PDF'],
+            ['key' => 'quotation.client_address',         'value' => 'Mabinay, Negros Oriental',                                   'type' => 'string', 'group' => 'quotation', 'label' => 'Prepared for — address'],
+            ['key' => 'quotation.project_name',           'value' => 'Boundary Café POS & Ordering System',                        'type' => 'string', 'group' => 'quotation', 'label' => 'Project name'],
+            ['key' => 'quotation.project_note_subscription', 'value' => 'Cloud-hosted restaurant POS, inventory and online ordering', 'type' => 'string', 'group' => 'quotation', 'label' => 'Project description — online subscription'],
+            ['key' => 'quotation.project_note_one_time',  'value' => 'Offline restaurant POS and inventory, installed at your café', 'type' => 'string', 'group' => 'quotation', 'label' => 'Project description — one-time (offline)'],
         ];
     }
 

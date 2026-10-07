@@ -45,7 +45,12 @@ class SystemSettingsController extends Controller
 
     // Groups that administrators are allowed to access at global scope (null branch).
     private const ADMIN_GLOBAL_GROUPS = [
-        'general', 'tax', 'pos', 'receipt', 'inventory', 'cash', 'notification',
+        'general', 'tax', 'pos', 'receipt', 'inventory', 'cash', 'notification', 'quotation',
+    ];
+
+    // Groups that only exist at global scope (no per-branch overrides).
+    private const GLOBAL_ONLY_GROUPS = [
+        'quotation',    // read by the public quotation pages, which have no branch
     ];
 
     // ── Index ─────────────────────────────────────────────────────────────────
@@ -92,6 +97,8 @@ class SystemSettingsController extends Controller
 
             // Online ordering (menu 43) and loyalty (menu 44) have their own dedicated pages.
             if (in_array($group, ['online', 'loyalty'], true)) continue;
+
+            if ($branchId && in_array($group, self::GLOBAL_ONLY_GROUPS, true)) continue;
 
             // When an admin is in global scope (no branch selected), only show
             // the groups they are allowed to configure globally
@@ -168,6 +175,7 @@ class SystemSettingsController extends Controller
             $def = $definitions->get($key);
             if (! $def)             continue;
             if ($def->is_readonly)  continue;
+            if ($branchId && in_array($def->group, self::GLOBAL_ONLY_GROUPS, true)) continue;
 
             // Non-super admins: block modules group and super-admin-only keys
             if (! $isSuper) {
