@@ -44,6 +44,7 @@
     "@radix-ui/react-icons": "^1.3.2",
     "@tailwindcss/vite": "^4.1.11",
     "@tanstack/react-table": "^8.21.3",
+    "@vladmandic/face-api": "^1.7.15",
     "apexcharts": "^5.10.4",
     "auto-skeleton-react": "^1.0.5",
     "class-variance-authority": "^0.7.1",

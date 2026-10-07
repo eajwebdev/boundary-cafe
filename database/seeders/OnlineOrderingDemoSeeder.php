@@ -127,7 +127,7 @@ class OnlineOrderingDemoSeeder extends Seeder
             'name' => 'Welcome ₱50 off',
             'description' => '₱50 off your online order of ₱300 or more. Use code WELCOME50.',
             'discount_type' => 'fixed', 'discount_value' => 50, 'applies_to' => 'all',
-            'minimum_purchase' => 300, 'is_active' => true, 'show_on_storefront' => true,
+            'minimum_purchase' => 300, 'max_uses_per_customer' => 1, 'is_active' => true, 'show_on_storefront' => true,
             'banner_image' => null, 'channels' => 'online',
         ]);
     }

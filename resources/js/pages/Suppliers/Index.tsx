@@ -1,31 +1,17 @@
 'use client';
 
 import { usePage, useForm, Head } from '@inertiajs/react';
-import { Link } from '@inertiajs/react';
-import type {
-    ColumnDef,
-    SortingState,
-    PaginationState,
-    FilterFn,
-    Row} from '@tanstack/react-table';
-import {
-    flexRender,
-    getCoreRowModel,
-    getSortedRowModel,
-    getPaginationRowModel,
-    getFilteredRowModel,
-    useReactTable
-} from '@tanstack/react-table';
-import { Trash2, Pencil, Plus, AlertTriangle, Search, X, ClipboardList } from 'lucide-react';
+import type { ColumnDef, SortingState, PaginationState, FilterFn, Row } from '@tanstack/react-table';
+import { flexRender, getCoreRowModel, getSortedRowModel, getPaginationRowModel, getFilteredRowModel, useReactTable } from '@tanstack/react-table';
+import { Trash2, Pencil, Plus, AlertTriangle, Search, X, ClipboardList, Truck } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { route } from 'ziggy-js';
+import { controlCls, EmptyRow, PageHeader, Panel, SimplePager, Stat, StatStrip, thCls } from '@/components/AdminKit';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AdminLayout from '@/layouts/AdminLayout';
 
 import { cn } from '@/lib/utils';
@@ -43,10 +29,11 @@ interface Supplier {
 
 interface PageProps {
     suppliers: Supplier[];
+    [key: string]: unknown;
 }
 
 // ──────────────────────────────────────────────── Custom global filter – searches all relevant string fields
-const globalFilterAllColumns: FilterFn<Supplier> = (row: Row<Supplier>, _columnIds: string[], filterValue: string) => {
+const globalFilterAllColumns: FilterFn<Supplier> = (row: Row<Supplier>, _columnId: string, filterValue: string) => {
     if (!filterValue?.trim()) return true;
 
     const term = filterValue.toLowerCase().trim();
@@ -127,7 +114,7 @@ export default function SupplierIndex() {
                 }
                 setSelected(null);
             },
-            onError: (errors) => {
+            onError: (errors: Record<string, string>) => {
                 toast.error('Validation failed', {
                     description: Object.values(errors).join('\n'),
                     duration: 7000,
@@ -162,80 +149,62 @@ export default function SupplierIndex() {
     const columns = useMemo<ColumnDef<Supplier>[]>(
         () => [
             {
-                id: 'rowNumber',
-                header: '#',
-                size: 60,
-                cell: ({ row }) => <div className="text-center text-muted-foreground">{row.index + 1}</div>,
-            },
-            {
                 accessorKey: 'name',
-                header: 'Supplier Name',
+                header: 'Supplier',
+                cell: ({ row }) => (
+                    <div className="min-w-0">
+                        <p className="truncate font-semibold">{row.original.name}</p>
+                        {row.original.address && (
+                            <p className="max-w-72 truncate text-[11px] text-muted-foreground" title={row.original.address}>
+                                {row.original.address}
+                            </p>
+                        )}
+                    </div>
+                ),
             },
             {
                 accessorKey: 'contact_person',
-                header: 'Contact Person',
-                cell: ({ getValue }) => {
-                    const val = getValue() as string | undefined;
-                    return val || '—';
-                },
-            },
-            {
-                accessorKey: 'phone',
-                header: 'Phone',
-                cell: ({ getValue }) => {
-                    const val = getValue() as string | undefined;
-                    return val || '—';
-                },
-            },
-            {
-                accessorKey: 'address',
-                header: 'Address',
-                cell: ({ getValue }) => {
-                    const val = getValue() as string | undefined;
-                    return val ? (
-                        <div className="max-w-xs truncate" title={val}>
-                            {val}
-                        </div>
-                    ) : (
-                        '—'
-                    );
-                },
+                header: 'Contact',
+                cell: ({ row }) => (
+                    <div className="text-xs">
+                        <p>{row.original.contact_person || '—'}</p>
+                        {row.original.phone && <p className="text-muted-foreground">{row.original.phone}</p>}
+                    </div>
+                ),
             },
             {
                 accessorKey: 'branches_count',
                 header: 'Branches',
-                size: 100,
+                cell: ({ getValue }) => <span className="tabular-nums">{(getValue() as number | undefined) ?? 0}</span>,
             },
             {
                 accessorKey: 'orders_count',
                 header: 'Orders',
-                size: 100,
+                cell: ({ getValue }) => <span className="font-semibold tabular-nums">{(getValue() as number | undefined) ?? 0}</span>,
             },
             {
                 id: 'actions',
-                header: () => <div className="text-right">Actions</div>,
+                header: () => null,
                 cell: ({ row }) => (
-                    <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="icon" asChild title="View Orders">
-                            <Link href={route('suppliers.orders', row.original.id)}>
-                                <ClipboardList className="h-4 w-4" />
-                            </Link>
-                        </Button>
-                        <Button variant="outline" size="icon" onClick={() => openEdit(row.original)}>
-                            <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            size="icon"
+                    <div className="flex justify-end gap-0.5">
+                        <button
+                            onClick={() => openEdit(row.original)}
+                            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                            aria-label={`Edit ${row.original.name}`}
+                        >
+                            <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
                             onClick={() => openDelete(row.original)}
                             disabled={!!row.original.orders_count}
-                            title={row.original.orders_count ? 'Has associated orders' : ''}
+                            title={row.original.orders_count ? 'Has orders, so it cannot be deleted' : 'Delete'}
+                            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-30"
+                            aria-label={`Delete ${row.original.name}`}
                         >
-                            <Trash2 className="h-4 w-4" />
-                        </Button>
+                            <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                     </div>
                 ),
-                size: 110,
             },
         ],
         [],
@@ -259,122 +228,103 @@ export default function SupplierIndex() {
         globalFilterFn: globalFilterAllColumns,
     });
 
+    const filteredCount = table.getFilteredRowModel().rows.length;
+    const { pageIndex, pageSize } = table.getState().pagination;
+    const withOrders = suppliers.filter((sup) => (sup.orders_count ?? 0) > 0).length;
+    const totalOrders = suppliers.reduce((sum, sup) => sum + (sup.orders_count ?? 0), 0);
+
     // ──────────────────────────────────────────────── Render
     return (
         <AdminLayout>
             <Head title="Suppliers" />
 
-            <div className="space-y-6 p-6">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h1 className="text-3xl font-bold tracking-tight">Suppliers</h1>
-                        <p className="mt-1 text-muted-foreground">{suppliers.length} total</p>
-                    </div>
-                    <Button onClick={openCreate}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        New Supplier
+            <div className="space-y-4">
+                <PageHeader title="Suppliers" subtitle="Where ingredients and stock are bought from.">
+                    <Button size="sm" className="h-9 gap-1.5" onClick={openCreate}>
+                        <Plus className="h-4 w-4" /> Add supplier
                     </Button>
-                </div>
+                </PageHeader>
 
-                <div className="relative max-w-md">
-                    <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                        placeholder="Search name, contact, phone, address..."
-                        value={globalFilter}
-                        onChange={(e) => setGlobalFilter(e.target.value)}
-                        className="pr-10 pl-9"
-                    />
-                    {globalFilter && (
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="absolute top-1/2 right-1 h-7 w-7 -translate-y-1/2"
-                            onClick={() => setGlobalFilter('')}
-                        >
-                            <X className="h-4 w-4" />
-                        </Button>
-                    )}
-                </div>
+                <StatStrip count={3}>
+                    <Stat icon={Truck} label="Suppliers" value={suppliers.length.toLocaleString()} />
+                    <Stat icon={ClipboardList} label="With orders" value={withOrders.toLocaleString()} />
+                    <Stat icon={ClipboardList} label="Orders placed" value={totalOrders.toLocaleString()} />
+                </StatStrip>
 
-                <Card>
-                    <CardHeader className="pb-3">
-                        <CardTitle>Supplier List</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                        <div className="overflow-x-auto">
-                            <Table>
-                                <TableHeader>
-                                    {table.getHeaderGroups().map((hg) => (
-                                        <TableRow key={hg.id}>
-                                            {hg.headers.map((h) => (
-                                                <TableHead
-                                                    key={h.id}
-                                                    className={cn(
-                                                        h.column.getCanSort() ? 'cursor-pointer select-none' : '',
-                                                        h.column.id === 'rowNumber' && 'text-center',
-                                                    )}
-                                                    onClick={h.column.getToggleSortingHandler()}
-                                                >
-                                                    {flexRender(h.column.columnDef.header, h.getContext())}
-                                                    {{
-                                                        asc: ' ↑',
-                                                        desc: ' ↓',
-                                                    }[h.column.getIsSorted() as string] ?? null}
-                                                </TableHead>
+                <Panel
+                    flush
+                    icon={Truck}
+                    title="Supplier list"
+                    actions={
+                        <div className="relative w-full sm:w-72">
+                            <Search className="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                            <input
+                                placeholder="Name, contact, phone or address"
+                                value={globalFilter}
+                                onChange={(e) => setGlobalFilter(e.target.value)}
+                                className={cn(controlCls, 'w-full pr-8 pl-8')}
+                            />
+                            {globalFilter && (
+                                <button
+                                    onClick={() => setGlobalFilter('')}
+                                    className="absolute top-1/2 right-2.5 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                    aria-label="Clear search"
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                </button>
+                            )}
+                        </div>
+                    }
+                >
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead className="border-b border-border">
+                                {table.getHeaderGroups().map((hg) => (
+                                    <tr key={hg.id}>
+                                        {hg.headers.map((h) => (
+                                            <th
+                                                key={h.id}
+                                                className={cn(thCls, h.column.getCanSort() && 'cursor-pointer select-none hover:text-foreground')}
+                                                onClick={h.column.getToggleSortingHandler()}
+                                            >
+                                                {flexRender(h.column.columnDef.header, h.getContext())}
+                                                {{ asc: ' ↑', desc: ' ↓' }[h.column.getIsSorted() as string] ?? null}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                                {table.getRowModel().rows.length ? (
+                                    table.getRowModel().rows.map((row) => (
+                                        <tr key={row.id} className="hover:bg-muted/30">
+                                            {row.getVisibleCells().map((cell) => (
+                                                <td key={cell.id} className="px-4 py-2">
+                                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                                </td>
                                             ))}
-                                        </TableRow>
-                                    ))}
-                                </TableHeader>
-                                <TableBody>
-                                    {table.getRowModel().rows?.length ? (
-                                        table.getRowModel().rows.map((row) => (
-                                            <TableRow key={row.id}>
-                                                {row.getVisibleCells().map((cell) => (
-                                                    <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
-                                                ))}
-                                            </TableRow>
-                                        ))
-                                    ) : (
-                                        <TableRow>
-                                            <TableCell colSpan={columns.length} className="h-32 text-center text-muted-foreground">
-                                                No suppliers found.
-                                            </TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </div>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <EmptyRow colSpan={columns.length} icon={Truck}>
+                                        {globalFilter ? 'No suppliers match your search.' : 'No suppliers yet.'}
+                                    </EmptyRow>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
 
-                        {/* Pagination */}
-                        <div className="flex flex-col items-center justify-between gap-4 border-t px-4 py-3 text-sm sm:flex-row">
-                            <div>
-                                Showing{' '}
-                                <strong>
-                                    {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}–
-                                    {Math.min(
-                                        (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-                                        table.getFilteredRowModel().rows.length,
-                                    )}
-                                </strong>{' '}
-                                of <strong>{table.getFilteredRowModel().rows.length}</strong>
-                            </div>
-
-                            <div className="flex items-center gap-4">
-                                <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
-                                    Previous
-                                </Button>
-
-                                <span className="text-muted-foreground">
-                                    Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
-                                </span>
-
-                                <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
-                                    Next
-                                </Button>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
+                    {table.getPageCount() > 1 && (
+                        <SimplePager
+                            from={filteredCount === 0 ? 0 : pageIndex * pageSize + 1}
+                            to={Math.min((pageIndex + 1) * pageSize, filteredCount)}
+                            total={filteredCount}
+                            page={pageIndex + 1}
+                            lastPage={table.getPageCount()}
+                            onPage={(page) => table.setPageIndex(page - 1)}
+                        />
+                    )}
+                </Panel>
 
                 {/* Create / Edit Dialog */}
                 <Dialog

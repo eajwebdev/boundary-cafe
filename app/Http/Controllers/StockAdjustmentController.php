@@ -19,7 +19,7 @@ class StockAdjustmentController extends Controller
 
     public function index(Request $request): Response
     {
-        $user     = Auth::user();
+        $user = Auth::user();
 
         // Super admin & administrator can see all branches or filter by one
         if ($user->isSuperAdmin() || $user->isAdministrator()) {
@@ -50,9 +50,15 @@ class StockAdjustmentController extends Controller
         // Summary for current filter
         $summaryQuery = StockAdjustment::query()
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId));
-        if ($request->filled('type'))   $summaryQuery->where('type', $request->type);
-        if ($request->filled('from'))   $summaryQuery->whereDate('created_at', '>=', $request->from);
-        if ($request->filled('to'))     $summaryQuery->whereDate('created_at', '<=', $request->to);
+        if ($request->filled('type')) {
+            $summaryQuery->where('type', $request->type);
+        }
+        if ($request->filled('from')) {
+            $summaryQuery->whereDate('created_at', '>=', $request->from);
+        }
+        if ($request->filled('to')) {
+            $summaryQuery->whereDate('created_at', '<=', $request->to);
+        }
         if ($request->filled('search')) {
             $s = $request->search;
             $summaryQuery->whereHas('product', fn ($q) => $q->where('name', 'like', "%{$s}%"));
@@ -65,7 +71,8 @@ class StockAdjustmentController extends Controller
 
         // Products for the form — if super/admin with no specific branch, load all stocked products
         $productsQuery = Product::query()
-            ->where('product_type', '!=', 'ingredient')
+            // Spoiled or damaged ingredients are written off too; made-to-order items have no stock of their own.
+            ->whereNotIn('product_type', ['made_to_order', 'service'])
             ->orderBy('name');
 
         if ($branchId) {
@@ -75,10 +82,10 @@ class StockAdjustmentController extends Controller
         }
 
         $products = $productsQuery->get()->map(fn (Product $p) => [
-            'id'        => $p->id,
-            'name'      => $p->name,
-            'barcode'   => $p->barcode,
-            'stock'     => (int) ($branchId
+            'id' => $p->id,
+            'name' => $p->name,
+            'barcode' => $p->barcode,
+            'stock' => (int) ($branchId
                 ? ($p->stocks->firstWhere('branch_id', $branchId)?->stock ?? 0)
                 : $p->stocks->sum('stock')),
             'unit_cost' => (float) ($branchId
@@ -87,29 +94,29 @@ class StockAdjustmentController extends Controller
         ]);
 
         return Inertia::render('StockAdjustments/Index', [
-            'adjustments'  => $adjustments,
-            'products'     => $products,
-            'types'        => self::TYPES,
-            'summary'      => $summary,
-            'filters'      => $request->only(['type', 'from', 'to', 'search', 'branch_id']),
-            'can_delete'   => $user->hasElevatedAccess(),
-            'branch_id'    => $branchId,
+            'adjustments' => $adjustments,
+            'products' => $products,
+            'types' => self::TYPES,
+            'summary' => $summary,
+            'filters' => $request->only(['type', 'from', 'to', 'search', 'branch_id']),
+            'can_delete' => $user->hasElevatedAccess(),
+            'branch_id' => $branchId,
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $user     = Auth::user();
+        $user = Auth::user();
         $branchId = ($user->isSuperAdmin() || $user->isAdministrator())
             ? ($request->integer('branch_id') ?: $user->branch_id)
             : $user->branch_id;
 
         $validated = $request->validate([
             'product_id' => ['required', 'exists:products,id'],
-            'type'       => ['required', 'in:' . implode(',', self::TYPES)],
-            'quantity'   => ['required', 'integer', 'min:1'],
-            'note'       => ['nullable', 'string', 'max:500'],
-            'branch_id'  => ['nullable', 'integer', 'exists:branches,id'],
+            'type' => ['required', 'in:'.implode(',', self::TYPES)],
+            'quantity' => ['required', 'integer', 'min:1'],
+            'note' => ['nullable', 'string', 'max:500'],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
         ]);
 
         DB::transaction(function () use ($validated, $user, $branchId) {
@@ -123,33 +130,33 @@ class StockAdjustmentController extends Controller
             }
 
             $unitCost = (float) $productStock->capital;
-            $qty      = (int) $validated['quantity'];
+            $qty = (int) $validated['quantity'];
 
             // Deduct stock (clamp at 0 to avoid negative stock)
             $productStock->decrement('stock', min($qty, $productStock->stock));
 
             $adjustment = StockAdjustment::create([
-                'branch_id'   => $branchId,
-                'product_id'  => $validated['product_id'],
+                'branch_id' => $branchId,
+                'product_id' => $validated['product_id'],
                 'recorded_by' => $user->id,
-                'type'        => $validated['type'],
-                'quantity'    => $qty,
-                'unit_cost'   => $unitCost,
-                'note'        => $validated['note'] ?? null,
+                'type' => $validated['type'],
+                'quantity' => $qty,
+                'unit_cost' => $unitCost,
+                'note' => $validated['note'] ?? null,
             ]);
 
             ActivityLog::create([
-                'user_id'      => $user->id,
-                'action'       => 'stock_adjustment_recorded',
+                'user_id' => $user->id,
+                'action' => 'stock_adjustment_recorded',
                 'subject_type' => StockAdjustment::class,
-                'subject_id'   => $adjustment->id,
-                'properties'   => [
-                    'product_id'   => $validated['product_id'],
-                    'branch_id'    => $branchId,
-                    'type'         => $validated['type'],
-                    'quantity'     => $qty,
-                    'unit_cost'    => $unitCost,
-                    'total_cost'   => round($unitCost * $qty, 2),
+                'subject_id' => $adjustment->id,
+                'properties' => [
+                    'product_id' => $validated['product_id'],
+                    'branch_id' => $branchId,
+                    'type' => $validated['type'],
+                    'quantity' => $qty,
+                    'unit_cost' => $unitCost,
+                    'total_cost' => round($unitCost * $qty, 2),
                 ],
             ]);
         });
@@ -163,7 +170,9 @@ class StockAdjustmentController extends Controller
     public function destroy(StockAdjustment $stockAdjustment): RedirectResponse
     {
         $user = Auth::user();
-        if (! $user->hasElevatedAccess()) abort(403);
+        if (! $user->hasElevatedAccess()) {
+            abort(403);
+        }
         $this->authorizeBranch($stockAdjustment->branch_id);
 
         DB::transaction(function () use ($stockAdjustment, $user) {
@@ -173,15 +182,15 @@ class StockAdjustmentController extends Controller
                 ->increment('stock', $stockAdjustment->quantity);
 
             ActivityLog::create([
-                'user_id'      => $user->id,
-                'action'       => 'stock_adjustment_deleted',
+                'user_id' => $user->id,
+                'action' => 'stock_adjustment_deleted',
                 'subject_type' => StockAdjustment::class,
-                'subject_id'   => $stockAdjustment->id,
-                'properties'   => [
+                'subject_id' => $stockAdjustment->id,
+                'properties' => [
                     'product_id' => $stockAdjustment->product_id,
-                    'type'       => $stockAdjustment->type,
-                    'quantity'   => $stockAdjustment->quantity,
-                    'note'       => $stockAdjustment->note,
+                    'type' => $stockAdjustment->type,
+                    'quantity' => $stockAdjustment->quantity,
+                    'note' => $stockAdjustment->note,
                 ],
             ]);
 

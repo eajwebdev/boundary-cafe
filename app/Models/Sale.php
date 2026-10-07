@@ -20,6 +20,7 @@ class Sale extends Model
         'cash_session_id',
         'table_order_id',   // null for walk-up / takeout, set for dine-in
         'customer_id',
+        'promo_id',
         'total',
         'payment_method',
         'payment_amount',

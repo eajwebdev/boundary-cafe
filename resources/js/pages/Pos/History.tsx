@@ -5,7 +5,6 @@ import {
     Search,
     X,
     Filter,
-    ChevronRight,
     Eye,
     TrendingUp,
     Banknote,
@@ -16,9 +15,11 @@ import {
     Table2,
     Calendar,
     Wallet,
+    Receipt,
 } from 'lucide-react';
 import { useState } from 'react';
 import { type DateRange } from 'react-day-picker';
+import { Chip, controlCls, PageHeader, Pager, Panel, Stat, StatStrip, thCls } from '@/components/AdminKit';
 import { Button } from '@/components/ui/button';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import AdminLayout from '@/layouts/AdminLayout';
@@ -236,194 +237,143 @@ export default function PosHistory() {
     const hasFilters = !!(filters.search || filters.status || filters.payment_method || filters.from || filters.to);
     const activePreset = presets.find((p) => p.from === (filters.from ?? '') && p.to === (filters.to ?? ''));
 
-    const summaryCards = [
-        {
-            label: 'Revenue',
-            value: fmtMoney(summary.total_sales, currency),
-            icon: TrendingUp,
-            color: 'bg-indigo-50  text-indigo-600  dark:bg-indigo-950/30  dark:text-indigo-400',
-        },
-        {
-            label: 'Cash',
-            value: fmtMoney(summary.cash_total, currency),
-            icon: Banknote,
-            color: 'bg-green-50   text-green-600   dark:bg-green-950/30   dark:text-green-400',
-        },
-        {
-            label: 'GCash',
-            value: fmtMoney(summary.gcash_total, currency),
-            icon: Smartphone,
-            color: 'bg-blue-50    text-blue-600    dark:bg-blue-950/30    dark:text-blue-400',
-        },
-        {
-            label: 'Card',
-            value: fmtMoney(summary.card_total, currency),
-            icon: CreditCard,
-            color: 'bg-purple-50  text-purple-600  dark:bg-purple-950/30  dark:text-purple-400',
-        },
-        ...((summary.credit_paid ?? 0) > 0 || (summary.credit_balance ?? 0) > 0
+    const hasCredit = (summary.credit_paid ?? 0) > 0 || (summary.credit_balance ?? 0) > 0;
+    const summaryStats: { label: string; value: string; icon: React.ElementType; tone?: 'warning' | 'success' }[] = [
+        { label: 'Transactions', value: summary.total_count.toLocaleString(), icon: Receipt },
+        { label: 'Revenue', value: fmtMoney(summary.total_sales, currency), icon: TrendingUp, tone: 'success' },
+        { label: 'Cash', value: fmtMoney(summary.cash_total, currency), icon: Banknote },
+        { label: 'GCash', value: fmtMoney(summary.gcash_total, currency), icon: Smartphone },
+        { label: 'Card', value: fmtMoney(summary.card_total, currency), icon: CreditCard },
+        ...(hasCredit
             ? [
-                  {
-                      label: 'Credit Collected',
-                      value: fmtMoney(summary.credit_paid ?? 0, currency),
-                      icon: Banknote,
-                      color: 'bg-emerald-50  text-emerald-600  dark:bg-emerald-950/30  dark:text-emerald-400',
-                  },
-                  {
-                      label: 'Credit Balance',
-                      value: fmtMoney(summary.credit_balance ?? 0, currency),
-                      icon: Wallet,
-                      color: 'bg-amber-50  text-amber-600  dark:bg-amber-950/30  dark:text-amber-400',
-                  },
+                  { label: 'Credit collected', value: fmtMoney(summary.credit_paid ?? 0, currency), icon: Banknote },
+                  { label: 'Credit balance', value: fmtMoney(summary.credit_balance ?? 0, currency), icon: Wallet, tone: 'warning' as const },
               ]
             : []),
-        {
-            label: 'Discounts',
-            value: fmtMoney(summary.discount_total, currency),
-            icon: Tag,
-            color: 'bg-amber-50   text-amber-600   dark:bg-amber-950/30   dark:text-amber-400',
-        },
+        { label: 'Discounts', value: fmtMoney(summary.discount_total, currency), icon: Tag },
     ];
+
+    const rangeLabel = activePreset
+        ? activePreset.label
+        : filters.from
+          ? filters.to && filters.to !== filters.from
+              ? `${fmtDate(filters.from + 'T00:00:00+08:00', 'MMM d')} – ${fmtDate(filters.to + 'T00:00:00+08:00', 'MMM d, yyyy')}`
+              : fmtDate(filters.from + 'T00:00:00+08:00', 'MMM d, yyyy')
+          : 'All dates';
 
     // Build table columns
     const baseCols = ['Receipt', 'Date'];
     if (showTableCol) baseCols.push('Table');
     if (showCustomerCol) baseCols.push('Customer');
-    baseCols.push('Method', 'Items', 'Total', 'Collected', 'Balance', 'Status', '');
+    baseCols.push('Method', 'Items', 'Total', 'Collected', 'Balance', 'Status');
 
     return (
         <AdminLayout>
-            <div className="mx-auto max-w-[1400px] space-y-5">
-                {/* Header */}
-                <div className="flex items-center gap-3">
-                    <Link href={routes.pos.index()}>
-                        <button className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
-                            <ArrowLeft className="h-3.5 w-3.5" />
-                        </button>
-                    </Link>
-                    <div>
-                        <h1 className="text-xl font-bold text-foreground">Sales History</h1>
-                        <p className="mt-0.5 text-xs text-muted-foreground">{sales.total.toLocaleString()} total transactions</p>
-                    </div>
-                </div>
+            <div className="space-y-4">
+                <PageHeader
+                    title="Sales History"
+                    subtitle={`${sales.total.toLocaleString()} transaction${sales.total !== 1 ? 's' : ''} · ${rangeLabel}`}
+                    leading={
+                        <Link
+                            href={routes.pos.index()}
+                            className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+                            aria-label="Back to POS"
+                        >
+                            <ArrowLeft className="h-4 w-4" />
+                        </Link>
+                    }
+                />
 
-                {/* Summary */}
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                    {summaryCards.map(({ label, value, icon: Icon, color }) => (
-                        <div key={label} className="rounded-xl border border-border bg-card p-3.5">
-                            <div className={cn('mb-2 inline-flex rounded-lg p-1.5', color.split(' ').slice(1).join(' '))}>
-                                <Icon className={cn('h-3.5 w-3.5', color.split(' ')[0])} />
-                            </div>
-                            <p className="text-[10px] font-medium tracking-wider text-muted-foreground uppercase">{label}</p>
-                            <p className="mt-0.5 text-base font-bold text-foreground tabular-nums">{value}</p>
-                        </div>
+                <StatStrip count={summaryStats.length}>
+                    {summaryStats.map((stat) => (
+                        <Stat key={stat.label} icon={stat.icon} label={stat.label} value={stat.value} tone={stat.tone} />
                     ))}
-                </div>
+                </StatStrip>
 
-                {/* Filters */}
-                <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-                    {/* Quick date presets — admin only */}
-                    {is_admin && (
-                        <div className="flex flex-wrap items-center gap-2">
-                            <span className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                                <Calendar className="h-3.5 w-3.5" />
-                                Quick range:
-                            </span>
-                            {presets.map((p) => (
-                                <button
-                                    key={p.label}
-                                    onClick={() => applyPreset(p)}
-                                    className={cn(
-                                        'h-7 rounded-lg border px-3 text-xs font-medium transition-colors',
-                                        activePreset?.label === p.label
-                                            ? 'border-primary bg-primary text-primary-foreground'
-                                            : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground',
-                                    )}
-                                >
-                                    {p.label}
-                                </button>
-                            ))}
-                            {hasFilters && (
-                                <button
-                                    onClick={clearFilters}
-                                    className="ml-auto flex h-7 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                                >
-                                    <X className="h-3 w-3" />
-                                    Clear all
-                                </button>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Filter inputs */}
-                    <div className="flex flex-wrap items-end gap-2">
-                        <div className="relative min-w-[180px] flex-1">
-                            <Search className="absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                            <input
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') applyFilters();
-                                }}
-                                placeholder="Receipt no. or customer…"
-                                className="h-9 w-full rounded-lg border border-border bg-background pr-3 pl-9 text-sm placeholder:text-muted-foreground focus:ring-1 focus:ring-primary focus:outline-none"
-                            />
-                        </div>
-                        <select
-                            value={status}
-                            onChange={(e) => setStatus(e.target.value)}
-                            className="h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
-                        >
-                            <option value="">All status</option>
-                            <option value="completed">Completed</option>
-                            <option value="voided">Voided</option>
-                        </select>
-                        <select
-                            value={method}
-                            onChange={(e) => setMethod(e.target.value)}
-                            className="h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
-                        >
-                            <option value="">All methods</option>
-                            <option value="cash">Cash</option>
-                            <option value="gcash">GCash</option>
-                            <option value="card">Card</option>
-                            <option value="others">Others</option>
-                            <option value="credit">Credit</option>
-                            <option value="mixed">Partial</option>
-                        </select>
-                        {is_admin ? (
-                            <div className="min-w-[240px]">
-                                <DateRangePicker dateRange={dateRange} onDateRangeChange={setDateRange} />
-                            </div>
-                        ) : (
-                            <div className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-muted px-3 text-xs font-medium text-muted-foreground">
-                                <Calendar className="h-3.5 w-3.5" />
-                                Today only
+                <Panel
+                    flush
+                    icon={Receipt}
+                    title="Transactions"
+                    actions={
+                        hasFilters && (
+                            <button
+                                type="button"
+                                onClick={clearFilters}
+                                className="flex h-7 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+                            >
+                                <X className="h-3 w-3" /> Clear filters
+                            </button>
+                        )
+                    }
+                >
+                    {/* Filters */}
+                    <div className="space-y-2 border-b border-border bg-muted/20 px-4 py-2.5">
+                        {is_admin && (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                                <Calendar className="mr-0.5 h-3.5 w-3.5 text-muted-foreground" />
+                                {presets.map((p) => (
+                                    <Chip key={p.label} active={activePreset?.label === p.label} onClick={() => applyPreset(p)}>
+                                        {p.label}
+                                    </Chip>
+                                ))}
                             </div>
                         )}
-                        <Button size="sm" className="h-9 gap-2" onClick={() => applyFilters()}>
-                            <Filter className="h-3.5 w-3.5" />
-                            Apply
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <div className="relative min-w-44 flex-1">
+                                <Search className="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                                <input
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') applyFilters();
+                                    }}
+                                    placeholder="Receipt no. or customer"
+                                    className={cn(controlCls, 'w-full pl-8')}
+                                />
+                            </div>
+                            <select value={status} onChange={(e) => setStatus(e.target.value)} className={controlCls} aria-label="Status">
+                                <option value="">All status</option>
+                                <option value="completed">Completed</option>
+                                <option value="voided">Voided</option>
+                            </select>
+                            <select value={method} onChange={(e) => setMethod(e.target.value)} className={controlCls} aria-label="Payment method">
+                                <option value="">All methods</option>
+                                <option value="cash">Cash</option>
+                                <option value="gcash">GCash</option>
+                                <option value="card">Card</option>
+                                <option value="others">Others</option>
+                                <option value="credit">Credit</option>
+                                <option value="mixed">Partial</option>
+                            </select>
+                            {is_admin ? (
+                                <div className="min-w-60">
+                                    <DateRangePicker dateRange={dateRange} onDateRangeChange={setDateRange} />
+                                </div>
+                            ) : (
+                                <span className="flex h-8 items-center gap-1.5 rounded-lg bg-muted px-2.5 text-xs font-semibold text-muted-foreground">
+                                    <Calendar className="h-3.5 w-3.5" /> Today only
+                                </span>
+                            )}
+                            <Button size="sm" className="h-8 gap-1.5" onClick={() => applyFilters()}>
+                                <Filter className="h-3.5 w-3.5" /> Apply
+                            </Button>
+                        </div>
                     </div>
-                </div>
 
-                {/* Table */}
-                <div className="overflow-hidden rounded-xl border border-border bg-card">
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-border bg-muted/30">
+                            <thead className="border-b border-border">
+                                <tr>
                                     {baseCols.map((h) => (
                                         <th
                                             key={h}
                                             className={cn(
-                                                'px-4 py-3 text-[10px] font-bold tracking-widest text-muted-foreground uppercase',
-                                                h === 'Total' || h === 'Collected' || h === 'Balance' || h === '' ? 'text-right' : 'text-left',
-                                                h === 'Date' ? 'hidden sm:table-cell' : '',
-                                                h === 'Customer' ? 'hidden md:table-cell' : '',
-                                                h === 'Items' ? 'hidden lg:table-cell' : '',
-                                                h === 'Table' ? 'hidden sm:table-cell' : '',
+                                                thCls,
+                                                (h === 'Total' || h === 'Collected' || h === 'Balance' || h === 'Status') && 'text-right',
+                                                h === 'Date' && 'hidden sm:table-cell',
+                                                h === 'Customer' && 'hidden md:table-cell',
+                                                h === 'Items' && 'hidden lg:table-cell',
+                                                h === 'Table' && 'hidden sm:table-cell',
                                             )}
                                         >
                                             {h}
@@ -435,30 +385,30 @@ export default function PosHistory() {
                                 {sales.data.length === 0 ? (
                                     <tr>
                                         <td colSpan={baseCols.length} className="px-4 py-12 text-center text-sm text-muted-foreground">
-                                            No sales found
+                                            No sales for this range.
                                         </td>
                                     </tr>
                                 ) : (
                                     sales.data.map((sale) => (
                                         <tr
                                             key={sale.id}
-                                            className="cursor-pointer transition-colors hover:bg-muted/20"
+                                            className={cn('cursor-pointer hover:bg-muted/30', sale.status === 'voided' && 'opacity-60')}
                                             onClick={() => setSelected(sale)}
                                         >
-                                            <td className="px-4 py-3">
-                                                <p className="font-mono text-xs font-bold text-foreground">{sale.receipt_number}</p>
-                                                <p className="mt-0.5 text-[10px] text-muted-foreground sm:hidden">
+                                            <td className="px-4 py-2">
+                                                <p className="font-mono text-xs font-bold">{sale.receipt_number}</p>
+                                                <p className="text-[11px] text-muted-foreground sm:hidden">
                                                     {fmtDate(sale.created_at, 'MMM d, h:mm a')}
                                                 </p>
                                             </td>
-                                            <td className="hidden px-4 py-3 sm:table-cell">
-                                                <p className="text-sm text-foreground">{fmtDate(sale.created_at, 'MMM d, yyyy')}</p>
-                                                <p className="text-[11px] text-muted-foreground">{fmtDate(sale.created_at, 'h:mm a')}</p>
+                                            <td className="hidden px-4 py-2 whitespace-nowrap sm:table-cell">
+                                                {fmtDate(sale.created_at, 'MMM d')}
+                                                <span className="text-muted-foreground"> · {fmtDate(sale.created_at, 'h:mm a')}</span>
                                             </td>
                                             {showTableCol && (
-                                                <td className="hidden px-4 py-3 sm:table-cell">
+                                                <td className="hidden px-4 py-2 sm:table-cell">
                                                     {sale.table_label ? (
-                                                        <span className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                                                        <span className="flex items-center gap-1 text-xs font-semibold text-amber-700 dark:text-amber-400">
                                                             <Table2 className="h-3 w-3 shrink-0" />
                                                             {sale.table_label}
                                                         </span>
@@ -468,48 +418,44 @@ export default function PosHistory() {
                                                 </td>
                                             )}
                                             {showCustomerCol && (
-                                                <td className="hidden px-4 py-3 md:table-cell">
-                                                    <p className="text-sm text-foreground">
-                                                        {sale.customer?.name ?? sale.customer_name ?? 'Walk-in'}
-                                                    </p>
+                                                <td className="hidden max-w-48 truncate px-4 py-2 md:table-cell">
+                                                    {sale.customer?.name ?? sale.customer_name ?? (
+                                                        <span className="text-muted-foreground">Walk-in</span>
+                                                    )}
                                                 </td>
                                             )}
-                                            <td className="px-4 py-3">
+                                            <td className="px-4 py-2">
                                                 <MethodChip method={sale.payment_method} />
                                             </td>
-                                            <td className="hidden px-4 py-3 lg:table-cell">
-                                                <p className="text-sm text-muted-foreground">
-                                                    {sale.item_count} item{sale.item_count !== 1 ? 's' : ''}
-                                                </p>
-                                            </td>
-                                            <td className="px-4 py-3 text-right">
-                                                <p className="font-bold text-foreground tabular-nums">{fmtMoney(sale.total, currency)}</p>
+                                            <td className="hidden px-4 py-2 text-muted-foreground tabular-nums lg:table-cell">{sale.item_count}</td>
+                                            <td className="px-4 py-2 text-right">
+                                                <p className="font-bold tabular-nums">{fmtMoney(sale.total, currency)}</p>
                                                 {sale.discount_amount > 0 && (
-                                                    <p className="text-[10px] text-green-600 tabular-nums dark:text-green-400">
+                                                    <p className="text-[11px] text-emerald-700 tabular-nums dark:text-emerald-400">
                                                         −{fmtMoney(sale.discount_amount, currency)}
                                                     </p>
                                                 )}
                                             </td>
-                                            <td className="px-4 py-3 text-right">
-                                                <p className="font-semibold text-foreground tabular-nums">
-                                                    {fmtMoney(sale.amount_paid ?? sale.payment_amount, currency)}
-                                                </p>
+                                            <td className="px-4 py-2 text-right">
+                                                <p className="tabular-nums">{fmtMoney(sale.amount_paid ?? sale.payment_amount, currency)}</p>
                                                 {sale.payment_status && sale.payment_status !== 'paid' && (
-                                                    <p className="text-[10px] text-muted-foreground capitalize">{sale.payment_status}</p>
+                                                    <p className="text-[11px] text-muted-foreground capitalize">{sale.payment_status}</p>
                                                 )}
                                             </td>
-                                            <td className="px-4 py-3 text-right">
+                                            <td className="px-4 py-2 text-right">
                                                 <p
                                                     className={cn(
-                                                        'font-semibold tabular-nums',
-                                                        (sale.balance_due ?? 0) > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground',
+                                                        'tabular-nums',
+                                                        (sale.balance_due ?? 0) > 0
+                                                            ? 'font-bold text-amber-700 dark:text-amber-400'
+                                                            : 'text-muted-foreground',
                                                     )}
                                                 >
                                                     {fmtMoney(sale.balance_due ?? 0, currency)}
                                                 </p>
-                                                {sale.due_date && <p className="text-[10px] text-muted-foreground">Due {sale.due_date}</p>}
+                                                {sale.due_date && <p className="text-[11px] text-muted-foreground">Due {sale.due_date}</p>}
                                             </td>
-                                            <td className="px-4 py-3 text-right">
+                                            <td className="px-4 py-2 text-right">
                                                 <span
                                                     className={cn(
                                                         'badge text-[10px] font-bold capitalize',
@@ -519,9 +465,6 @@ export default function PosHistory() {
                                                     {sale.status}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-3 text-right">
-                                                <ChevronRight className="ml-auto h-3.5 w-3.5 text-muted-foreground/40" />
-                                            </td>
                                         </tr>
                                     ))
                                 )}
@@ -529,31 +472,16 @@ export default function PosHistory() {
                         </table>
                     </div>
 
-                    {/* Pagination */}
                     {sales.last_page > 1 && (
-                        <div className="flex items-center justify-between border-t border-border bg-muted/10 px-4 py-3">
-                            <p className="text-xs text-muted-foreground">
-                                {sales.from}–{sales.to} of {sales.total.toLocaleString()}
-                            </p>
-                            <div className="flex items-center gap-1">
-                                {sales.links.map((link, i) => (
-                                    <button
-                                        key={i}
-                                        disabled={!link.url}
-                                        onClick={() => link.url && router.get(link.url, {}, { preserveState: true })}
-                                        className={cn(
-                                            'h-7 min-w-[28px] rounded-md border px-2 text-xs font-medium transition-all',
-                                            link.active
-                                                ? 'border-primary bg-primary text-primary-foreground'
-                                                : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30',
-                                        )}
-                                        dangerouslySetInnerHTML={{ __html: link.label }}
-                                    />
-                                ))}
-                            </div>
-                        </div>
+                        <Pager
+                            from={sales.from}
+                            to={sales.to}
+                            total={sales.total}
+                            links={sales.links}
+                            onVisit={(url) => router.get(url, {}, { preserveState: true })}
+                        />
                     )}
-                </div>
+                </Panel>
             </div>
 
             {selected && <ReceiptDrawer sale={selected} currency={currency} businessType={bizType} onClose={() => setSelected(null)} />}

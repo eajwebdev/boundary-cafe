@@ -16,10 +16,16 @@ import {
     CheckCircle,
     XCircle,
     Clock,
+    CalendarX,
+    Ticket,
+    Trophy,
 } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
+import { toast } from 'sonner';
+import { Chip, controlCls, PageHeader, Panel, Stat, StatStrip } from '@/components/AdminKit';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import AdminLayout from '@/layouts/AdminLayout';
 import { cn } from '@/lib/utils';
 import { routes } from '@/routes';
@@ -46,6 +52,7 @@ interface Promo {
     applies_to: 'all' | 'specific_products' | 'specific_categories';
     minimum_purchase: number | null;
     max_uses: number | null;
+    max_uses_per_customer: number | null;
     uses_count: number;
     starts_at: string | null;
     expires_at: string | null;
@@ -75,6 +82,7 @@ interface PromoForm {
     category_ids: number[];
     minimum_purchase: string;
     max_uses: string;
+    max_uses_per_customer: string;
     starts_at: string;
     expires_at: string;
     is_active: boolean;
@@ -105,6 +113,7 @@ const EMPTY_FORM: PromoForm = {
     category_ids: [],
     minimum_purchase: '',
     max_uses: '',
+    max_uses_per_customer: '',
     starts_at: '',
     expires_at: '',
     is_active: true,
@@ -183,6 +192,7 @@ function PromoDrawer({
                 category_ids: promo.category_ids,
                 minimum_purchase: promo.minimum_purchase?.toString() ?? '',
                 max_uses: promo.max_uses?.toString() ?? '',
+                max_uses_per_customer: promo.max_uses_per_customer?.toString() ?? '',
                 starts_at: promo.starts_at ? promo.starts_at.slice(0, 16) : '',
                 expires_at: promo.expires_at ? promo.expires_at.slice(0, 16) : '',
                 is_active: promo.is_active,
@@ -221,6 +231,7 @@ function PromoDrawer({
             code: form.code.trim().toUpperCase() || null,
             minimum_purchase: form.minimum_purchase || null,
             max_uses: form.max_uses || null,
+            max_uses_per_customer: form.max_uses_per_customer || null,
             starts_at: form.starts_at || null,
             expires_at: form.expires_at || null,
             banner_image: form.banner_image || null,
@@ -415,7 +426,10 @@ function PromoDrawer({
                                             key={v}
                                             type="button"
                                             onClick={() => set('channels', v)}
-                                            className={cn('h-8 rounded-md text-xs font-semibold', form.channels === v ? 'bg-background shadow-sm' : 'text-muted-foreground')}
+                                            className={cn(
+                                                'h-8 rounded-md text-xs font-semibold',
+                                                form.channels === v ? 'bg-background shadow-sm' : 'text-muted-foreground',
+                                            )}
                                         >
                                             {l}
                                         </button>
@@ -432,7 +446,8 @@ function PromoDrawer({
                                     <span>
                                         <span className="block text-sm font-medium">Show on the customer ordering site</span>
                                         <span className="block text-xs text-muted-foreground">
-                                            Appears in the “Deals for you” banners immediately. Without a code it is applied automatically at online checkout.
+                                            Appears in the “Deals for you” banners immediately. Without a code it is applied automatically at online
+                                            checkout.
                                         </span>
                                     </span>
                                 </label>
@@ -481,7 +496,12 @@ function PromoDrawer({
                                                             set('banner_upload', null);
                                                             set('remove_banner', false);
                                                         }}
-                                                        className={cn('h-12 w-20 shrink-0 overflow-hidden rounded-md border-2', form.banner_image === src && !form.banner_upload ? 'border-primary' : 'border-transparent')}
+                                                        className={cn(
+                                                            'h-12 w-20 shrink-0 overflow-hidden rounded-md border-2',
+                                                            form.banner_image === src && !form.banner_upload
+                                                                ? 'border-primary'
+                                                                : 'border-transparent',
+                                                        )}
                                                         title={src}
                                                     >
                                                         <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" />
@@ -682,20 +702,32 @@ function PromoDrawer({
                                 />
                             </Field>
 
-                            <Field
-                                label="Usage Limit"
-                                error={errors.max_uses}
-                                hint="Max number of times this promo can be used. Leave blank for unlimited."
-                            >
-                                <Input
-                                    type="number"
-                                    min="1"
-                                    value={form.max_uses}
-                                    onChange={(e) => set('max_uses', e.target.value)}
-                                    placeholder="Unlimited"
-                                    className="mt-1 h-9"
-                                />
-                            </Field>
+                            <div className="grid grid-cols-2 gap-3">
+                                <Field label="Usage Limit" error={errors.max_uses} hint="Total uses across all customers. Blank = unlimited.">
+                                    <Input
+                                        type="number"
+                                        min="1"
+                                        value={form.max_uses}
+                                        onChange={(e) => set('max_uses', e.target.value)}
+                                        placeholder="Unlimited"
+                                        className="mt-1 h-9"
+                                    />
+                                </Field>
+                                <Field
+                                    label="Per Customer"
+                                    error={errors.max_uses_per_customer}
+                                    hint="Uses allowed per customer — 1 for one-time. At the POS a customer must be selected."
+                                >
+                                    <Input
+                                        type="number"
+                                        min="1"
+                                        value={form.max_uses_per_customer}
+                                        onChange={(e) => set('max_uses_per_customer', e.target.value)}
+                                        placeholder="Unlimited"
+                                        className="mt-1 h-9"
+                                    />
+                                </Field>
+                            </div>
 
                             <div className="grid grid-cols-2 gap-3">
                                 <Field label="Start Date" error={errors.starts_at}>
@@ -788,6 +820,106 @@ function DeleteDialog({ promo, onClose }: { promo: Promo; onClose: () => void })
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+const CHANNEL_LABEL: Record<Promo['channels'], string> = { both: 'POS + Online', pos: 'POS only', online: 'Online only' };
+
+function PromoRow({ promo, onToggle, onEdit, onDelete }: { promo: Promo; onToggle: () => void; onEdit: () => void; onDelete: () => void }) {
+    const scope =
+        promo.applies_to === 'all'
+            ? 'All products'
+            : promo.applies_to === 'specific_products'
+              ? `${promo.product_ids.length} product${promo.product_ids.length !== 1 ? 's' : ''}`
+              : `${promo.category_ids.length} categor${promo.category_ids.length !== 1 ? 'ies' : 'y'}`;
+    const scopeTitle = promo.applies_to === 'specific_products' ? promo.product_names.join(', ') : promo.category_names.join(', ');
+
+    const meta = [
+        promo.minimum_purchase ? `Min ₱${promo.minimum_purchase.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : null,
+        CHANNEL_LABEL[promo.channels] ?? CHANNEL_LABEL.both,
+        promo.max_uses_per_customer ? `${promo.max_uses_per_customer}× per customer` : null,
+        promo.starts_at && promo.status === 'scheduled' ? `Starts ${format(new Date(promo.starts_at), 'MMM d')}` : null,
+        promo.expires_at ? `Until ${format(new Date(promo.expires_at), 'MMM d, yyyy')}` : null,
+    ].filter(Boolean);
+
+    const StatusIcon = statusIcon[promo.status] ?? Tag;
+
+    return (
+        <li className={cn('flex items-center gap-3 px-4 py-2.5', !promo.is_active && 'opacity-60')}>
+            <span
+                className={cn(
+                    'flex h-11 w-14 shrink-0 flex-col items-center justify-center rounded-lg text-primary',
+                    promo.status === 'active' ? 'bg-primary/10' : 'bg-muted text-muted-foreground',
+                )}
+            >
+                <span className="text-sm leading-none font-extrabold tabular-nums">
+                    {promo.discount_type === 'percent' ? `${promo.discount_value}%` : `₱${promo.discount_value.toLocaleString()}`}
+                </span>
+                <span className="mt-0.5 text-[9px] font-bold tracking-wide uppercase opacity-70">off</span>
+            </span>
+
+            <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-1.5">
+                    <button onClick={onEdit} className="truncate text-left text-sm font-semibold hover:text-primary">
+                        {promo.name}
+                    </button>
+                    {promo.code ? (
+                        <span className="rounded bg-primary/10 px-1.5 py-px font-mono text-[11px] font-bold text-primary">{promo.code}</span>
+                    ) : (
+                        <span className="rounded bg-muted px-1.5 py-px text-[10px] font-semibold text-muted-foreground">automatic</span>
+                    )}
+                    <span className={cn('inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-bold', statusBadge[promo.status])}>
+                        <StatusIcon className="h-2.5 w-2.5" /> {promo.status_label}
+                    </span>
+                </div>
+                <p className="truncate text-xs text-muted-foreground">
+                    <span title={scopeTitle || undefined}>{scope}</span>
+                    {meta.map((item) => (
+                        <span key={item}> · {item}</span>
+                    ))}
+                </p>
+            </div>
+
+            <div className="hidden w-20 shrink-0 text-right sm:block">
+                <p className="text-sm font-bold tabular-nums">
+                    {promo.uses_count.toLocaleString()}
+                    {promo.max_uses && <span className="font-normal text-muted-foreground">/{promo.max_uses.toLocaleString()}</span>}
+                </p>
+                {promo.max_uses ? (
+                    <div className="mt-1 ml-auto h-1 w-16 overflow-hidden rounded-full bg-muted">
+                        <div
+                            className="h-full rounded-full bg-primary"
+                            style={{ width: `${Math.min(100, (promo.uses_count / promo.max_uses) * 100)}%` }}
+                        />
+                    </div>
+                ) : (
+                    <p className="text-[11px] text-muted-foreground">uses</p>
+                )}
+            </div>
+
+            <div className="flex shrink-0 items-center gap-0.5">
+                <Switch
+                    checked={promo.is_active}
+                    onCheckedChange={onToggle}
+                    aria-label={promo.is_active ? 'Switch off' : 'Switch on'}
+                    className="mr-1.5"
+                />
+                <button
+                    onClick={onEdit}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label={`Edit ${promo.name}`}
+                >
+                    <Edit2 className="h-3.5 w-3.5" />
+                </button>
+                <button
+                    onClick={onDelete}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    aria-label={`Delete ${promo.name}`}
+                >
+                    <Trash2 className="h-3.5 w-3.5" />
+                </button>
+            </div>
+        </li>
+    );
+}
+
 export default function PromosIndex() {
     const { promos, products, categories, flash, bannerChoices = [] } = usePage<PageProps>().props;
 
@@ -796,7 +928,12 @@ export default function PromosIndex() {
     const [typeFilter, setTypeFilter] = useState('');
     const [drawer, setDrawer] = useState<{ mode: 'create' | 'edit'; promo: Promo | null } | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<Promo | null>(null);
-    const [toast, setToast] = useState<{ type: string; text: string } | null>(flash?.message ?? null);
+
+    useEffect(() => {
+        if (!flash?.message) return;
+        if (flash.message.type === 'success') toast.success(flash.message.text);
+        else toast.error(flash.message.text);
+    }, [flash]);
 
     const filtered = useMemo(() => {
         let list = promos;
@@ -813,296 +950,195 @@ export default function PromosIndex() {
         router.patch(routes.promos.toggle(promo.id), {}, { preserveScroll: true });
     };
 
+    const countBy = (status: string) => promos.filter((p) => p.status === status).length;
     const stats = {
         total: promos.length,
-        active: promos.filter((p) => p.status === 'active').length,
-        uses: promos.reduce((s, p) => s + p.uses_count, 0),
+        active: countBy('active'),
+        scheduled: countBy('scheduled'),
+        ended: countBy('expired') + countBy('exhausted'),
+        inactive: countBy('inactive'),
+        uses: promos.reduce((sum, p) => sum + p.uses_count, 0),
     };
+
+    const mostUsed = [...promos]
+        .filter((p) => p.uses_count > 0)
+        .sort((a, b) => b.uses_count - a.uses_count)
+        .slice(0, 5);
+
+    const soon = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    const attention = promos
+        .filter((p) => p.status === 'active')
+        .map((p) => {
+            if (p.expires_at && new Date(p.expires_at).getTime() <= soon) {
+                return { promo: p, note: `Ends ${format(new Date(p.expires_at), 'MMM d')}` };
+            }
+            if (p.max_uses && p.uses_count / p.max_uses >= 0.8) {
+                return { promo: p, note: `${p.max_uses - p.uses_count} uses left` };
+            }
+            return null;
+        })
+        .filter((row): row is { promo: Promo; note: string } => row !== null);
+
+    const statusChips = [
+        { value: '', label: 'All', count: stats.total },
+        { value: 'active', label: 'Active', count: stats.active },
+        { value: 'scheduled', label: 'Scheduled', count: stats.scheduled },
+        { value: 'inactive', label: 'Inactive', count: stats.inactive },
+        { value: 'expired', label: 'Expired', count: countBy('expired') },
+        { value: 'exhausted', label: 'Limit reached', count: countBy('exhausted') },
+    ].filter((chip) => chip.value === '' || chip.count > 0);
 
     return (
         <AdminLayout>
             <Head title="Promos" />
 
-            {toast && (
-                <div
-                    className={cn(
-                        'fixed top-4 right-4 z-[9999] flex items-center gap-3 rounded-xl border px-5 py-3.5 text-sm font-medium shadow-2xl',
-                        toast.type === 'success'
-                            ? 'border-emerald-500/40 bg-[#0b1a10] text-emerald-300'
-                            : 'border-red-500/40 bg-[#1a0b0b] text-red-300',
-                    )}
-                >
-                    <span>{toast.type === 'success' ? '✓' : '✕'}</span>
-                    <span>{toast.text}</span>
-                    <button onClick={() => setToast(null)} className="ml-1 opacity-50 hover:opacity-100">
-                        ✕
-                    </button>
-                </div>
-            )}
-
-            <div className="mx-auto max-w-[1200px] space-y-5">
-                {/* Header */}
-                <div className="flex items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-xl font-bold text-foreground">Promos & Discounts</h1>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                            {stats.total} promo{stats.total !== 1 ? 's' : ''} · {stats.active} active · {stats.uses.toLocaleString()} total uses
-                        </p>
-                    </div>
-                    <Button className="h-9 gap-2 font-semibold" onClick={() => setDrawer({ mode: 'create', promo: null })}>
-                        <Plus className="h-4 w-4" /> Add Promo
+            <div className="space-y-4">
+                <PageHeader title="Promos & Discounts" subtitle="Codes and automatic discounts for the counter and the online store.">
+                    <Button className="h-9 gap-1.5" onClick={() => setDrawer({ mode: 'create', promo: null })}>
+                        <Plus className="h-4 w-4" /> Add promo
                     </Button>
-                </div>
+                </PageHeader>
 
-                {/* Summary cards */}
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    {[
-                        { label: 'Total', value: stats.total, color: 'text-foreground' },
-                        { label: 'Active', value: stats.active, color: 'text-emerald-600 dark:text-emerald-400' },
-                        { label: 'Inactive', value: promos.filter((p) => p.status === 'inactive').length, color: 'text-muted-foreground' },
-                        { label: 'Total Uses', value: stats.uses, color: 'text-primary' },
-                    ].map((s) => (
-                        <div key={s.label} className="rounded-xl border border-border bg-card p-4">
-                            <p className="mb-1 text-xs text-muted-foreground">{s.label}</p>
-                            <p className={cn('text-2xl font-bold tabular-nums', s.color)}>{s.value.toLocaleString()}</p>
-                        </div>
-                    ))}
-                </div>
+                <StatStrip count={6}>
+                    <Stat icon={Tag} label="Promos" value={stats.total.toLocaleString()} />
+                    <Stat icon={CheckCircle} label="Active" value={stats.active.toLocaleString()} tone="success" />
+                    <Stat icon={Clock} label="Scheduled" value={stats.scheduled.toLocaleString()} />
+                    <Stat icon={CalendarX} label="Ended" value={stats.ended.toLocaleString()} tone={stats.ended > 0 ? 'muted' : undefined} />
+                    <Stat
+                        icon={XCircle}
+                        label="Switched off"
+                        value={stats.inactive.toLocaleString()}
+                        tone={stats.inactive > 0 ? 'muted' : undefined}
+                    />
+                    <Stat icon={Users} label="Total uses" value={stats.uses.toLocaleString()} />
+                </StatStrip>
 
-                {/* Filters */}
-                <div className="rounded-xl border border-border bg-card p-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <div className="relative min-w-[200px] flex-1">
-                            <Search className="absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                            <input
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                placeholder="Search name or code…"
-                                className="h-9 w-full rounded-lg border border-border bg-background pr-9 pl-9 text-sm text-foreground placeholder:text-muted-foreground focus:ring-1 focus:ring-primary focus:outline-none"
-                            />
-                            {search && (
-                                <button
-                                    onClick={() => setSearch('')}
-                                    className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                                >
-                                    <X className="h-3.5 w-3.5" />
-                                </button>
-                            )}
-                        </div>
-                        <select
-                            value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
-                            className="h-9 min-w-[130px] rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
-                        >
-                            <option value="">All Status</option>
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                            <option value="expired">Expired</option>
-                            <option value="scheduled">Scheduled</option>
-                            <option value="exhausted">Limit reached</option>
-                        </select>
-                        <select
-                            value={typeFilter}
-                            onChange={(e) => setTypeFilter(e.target.value)}
-                            className="h-9 min-w-[130px] rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
-                        >
-                            <option value="">All Types</option>
-                            <option value="percent">Percentage</option>
-                            <option value="fixed">Fixed Amount</option>
-                        </select>
-                        {(search || statusFilter || typeFilter) && (
-                            <button
-                                onClick={() => {
-                                    setSearch('');
-                                    setStatusFilter('');
-                                    setTypeFilter('');
-                                }}
-                                className="flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-muted-foreground hover:bg-muted"
+                <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
+                    <Panel
+                        flush
+                        icon={Ticket}
+                        title="All promos"
+                        actions={
+                            <div className="relative w-full sm:w-64">
+                                <Search className="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                                <input
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    placeholder="Search name or code"
+                                    className={cn(controlCls, 'w-full pr-8 pl-8')}
+                                />
+                                {search && (
+                                    <button
+                                        onClick={() => setSearch('')}
+                                        className="absolute top-1/2 right-2.5 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                        aria-label="Clear search"
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                )}
+                            </div>
+                        }
+                    >
+                        <div className="flex flex-wrap items-center gap-1.5 border-b border-border bg-muted/20 px-4 py-2">
+                            {statusChips.map((chip) => (
+                                <Chip key={chip.value} active={statusFilter === chip.value} onClick={() => setStatusFilter(chip.value)}>
+                                    {chip.label} <span className="opacity-60">{chip.count}</span>
+                                </Chip>
+                            ))}
+                            <select
+                                value={typeFilter}
+                                onChange={(e) => setTypeFilter(e.target.value)}
+                                className={cn(controlCls, 'ml-auto h-7 text-xs')}
+                                aria-label="Discount type"
                             >
-                                <X className="h-3.5 w-3.5" /> Clear
-                            </button>
+                                <option value="">Any discount</option>
+                                <option value="percent">Percentage</option>
+                                <option value="fixed">Fixed amount</option>
+                            </select>
+                        </div>
+
+                        {filtered.length === 0 ? (
+                            <div className="py-14 text-center text-sm text-muted-foreground">
+                                <Tag className="mx-auto mb-2 h-8 w-8 opacity-20" />
+                                {promos.length === 0 ? 'No promos yet.' : 'No promos match these filters.'}
+                            </div>
+                        ) : (
+                            <ul className="divide-y divide-border">
+                                {filtered.map((promo) => (
+                                    <PromoRow
+                                        key={promo.id}
+                                        promo={promo}
+                                        onToggle={() => handleToggle(promo)}
+                                        onEdit={() => setDrawer({ mode: 'edit', promo })}
+                                        onDelete={() => setDeleteTarget(promo)}
+                                    />
+                                ))}
+                            </ul>
                         )}
-                        <span className="ml-auto text-xs text-muted-foreground">
-                            {filtered.length} result{filtered.length !== 1 ? 's' : ''}
-                        </span>
-                    </div>
-                </div>
+                    </Panel>
 
-                {/* Table */}
-                <div className="overflow-hidden rounded-xl border border-border bg-card">
-                    {filtered.length === 0 ? (
-                        <div className="py-20 text-center text-muted-foreground">
-                            <Tag className="mx-auto mb-3 h-10 w-10 opacity-20" />
-                            <p>No promos found</p>
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b border-border bg-muted/30">
-                                        {['Promo', 'Code', 'Discount', 'Applies To', 'Usage', 'Validity', 'Status', ''].map((h, i) => (
-                                            <th
-                                                key={i}
-                                                className={cn(
-                                                    'px-4 py-3 text-[10px] font-bold tracking-widest text-muted-foreground uppercase',
-                                                    i === 0 ? 'text-left' : i === 7 ? 'w-10 text-right' : 'text-left',
-                                                    i === 3 ? 'hidden lg:table-cell' : '',
-                                                    i === 5 ? 'hidden md:table-cell' : '',
-                                                )}
+                    <div className="space-y-4">
+                        <Panel
+                            flush
+                            icon={Trophy}
+                            title="Most used"
+                            actions={<span className="text-[11px] font-semibold text-muted-foreground">uses</span>}
+                        >
+                            {mostUsed.length === 0 ? (
+                                <p className="py-6 text-center text-sm text-muted-foreground">No promo has been used yet.</p>
+                            ) : (
+                                <ul className="divide-y divide-border">
+                                    {mostUsed.map((promo, i) => (
+                                        <li key={promo.id} className="flex items-center gap-2.5 px-4 py-2 text-sm">
+                                            <span className="w-4 text-xs font-bold text-muted-foreground tabular-nums">{i + 1}</span>
+                                            <button
+                                                onClick={() => setDrawer({ mode: 'edit', promo })}
+                                                className="min-w-0 flex-1 text-left hover:text-primary"
                                             >
-                                                {h}
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-border">
-                                    {filtered.map((promo) => {
-                                        const Icon = statusIcon[promo.status] ?? Tag;
-                                        return (
-                                            <tr key={promo.id} className="group transition-colors hover:bg-muted/20">
-                                                {/* Promo name */}
-                                                <td className="px-4 py-3">
-                                                    <p className="text-sm font-semibold text-foreground">{promo.name}</p>
-                                                    {promo.description && (
-                                                        <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{promo.description}</p>
-                                                    )}
-                                                </td>
+                                                <span className="block truncate font-semibold">{promo.name}</span>
+                                                <span className="block truncate font-mono text-[11px] text-muted-foreground">
+                                                    {promo.code ?? 'automatic'}
+                                                </span>
+                                            </button>
+                                            <span className="font-bold tabular-nums">{promo.uses_count.toLocaleString()}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </Panel>
 
-                                                {/* Code */}
-                                                <td className="px-4 py-3">
-                                                    {promo.code ? (
-                                                        <span className="rounded-lg bg-primary/10 px-2 py-1 font-mono text-xs font-bold text-primary">
-                                                            {promo.code}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-xs text-muted-foreground italic">No code</span>
-                                                    )}
-                                                </td>
-
-                                                {/* Discount */}
-                                                <td className="px-4 py-3">
-                                                    <div className="flex items-center gap-1.5">
-                                                        {promo.discount_type === 'percent' ? (
-                                                            <Percent className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                                                        ) : (
-                                                            <DollarSign className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                                                        )}
-                                                        <span className="font-bold text-foreground">
-                                                            {promo.discount_type === 'percent'
-                                                                ? `${promo.discount_value}%`
-                                                                : `₱${promo.discount_value.toFixed(2)}`}
-                                                        </span>
-                                                    </div>
-                                                    {promo.minimum_purchase && (
-                                                        <p className="mt-0.5 text-xs text-muted-foreground">
-                                                            Min: ₱{promo.minimum_purchase.toFixed(2)}
-                                                        </p>
-                                                    )}
-                                                </td>
-
-                                                {/* Applies to */}
-                                                <td className="hidden px-4 py-3 lg:table-cell">
-                                                    {promo.applies_to === 'all' && (
-                                                        <span className="text-xs text-muted-foreground">All products</span>
-                                                    )}
-                                                    {promo.applies_to === 'specific_products' && (
-                                                        <div>
-                                                            <p className="text-xs font-medium text-foreground">
-                                                                {promo.product_ids.length} product{promo.product_ids.length !== 1 ? 's' : ''}
-                                                            </p>
-                                                            {promo.product_names.length > 0 && (
-                                                                <p className="max-w-[160px] truncate text-xs text-muted-foreground">
-                                                                    {promo.product_names.slice(0, 2).join(', ')}
-                                                                    {promo.product_names.length > 2 ? ` +${promo.product_names.length - 2}` : ''}
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                    {promo.applies_to === 'specific_categories' && (
-                                                        <div>
-                                                            <p className="text-xs font-medium text-foreground">
-                                                                {promo.category_ids.length} categor{promo.category_ids.length !== 1 ? 'ies' : 'y'}
-                                                            </p>
-                                                            {promo.category_names.length > 0 && (
-                                                                <p className="max-w-[160px] truncate text-xs text-muted-foreground">
-                                                                    {promo.category_names.join(', ')}
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </td>
-
-                                                {/* Usage */}
-                                                <td className="px-4 py-3">
-                                                    <p className="text-sm text-foreground tabular-nums">
-                                                        {promo.uses_count.toLocaleString()}
-                                                        {promo.max_uses && (
-                                                            <span className="text-muted-foreground"> / {promo.max_uses.toLocaleString()}</span>
-                                                        )}
-                                                    </p>
-                                                    {promo.max_uses && (
-                                                        <div className="mt-1 h-1 w-16 overflow-hidden rounded-full bg-muted">
-                                                            <div
-                                                                className="h-full rounded-full bg-primary"
-                                                                style={{ width: `${Math.min(100, (promo.uses_count / promo.max_uses) * 100)}%` }}
-                                                            />
-                                                        </div>
-                                                    )}
-                                                </td>
-
-                                                {/* Validity */}
-                                                <td className="hidden px-4 py-3 md:table-cell">
-                                                    <div className="space-y-0.5 text-xs text-muted-foreground">
-                                                        {promo.starts_at && <p>From: {format(new Date(promo.starts_at), 'MMM d, yyyy')}</p>}
-                                                        {promo.expires_at && <p>Until: {format(new Date(promo.expires_at), 'MMM d, yyyy')}</p>}
-                                                        {!promo.starts_at && !promo.expires_at && <p className="italic">No limit</p>}
-                                                    </div>
-                                                </td>
-
-                                                {/* Status */}
-                                                <td className="px-4 py-3">
-                                                    <button
-                                                        onClick={() => handleToggle(promo)}
-                                                        title="Click to toggle active/inactive"
-                                                        className={cn(
-                                                            'flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold transition-all',
-                                                            statusBadge[promo.status] ?? 'bg-muted text-muted-foreground',
-                                                        )}
-                                                    >
-                                                        <Icon className="h-3 w-3" />
-                                                        {promo.status_label}
-                                                    </button>
-                                                </td>
-
-                                                {/* Actions */}
-                                                <td className="px-4 py-3 text-right">
-                                                    <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                                                        <button
-                                                            onClick={() => setDrawer({ mode: 'edit', promo })}
-                                                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                                                        >
-                                                            <Edit2 className="h-3.5 w-3.5" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setDeleteTarget(promo)}
-                                                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-destructive/30 hover:text-destructive"
-                                                        >
-                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
+                        <Panel flush icon={AlertTriangle} title="Needs attention">
+                            {attention.length === 0 ? (
+                                <p className="py-6 text-center text-sm text-muted-foreground">Nothing ending or running out this week.</p>
+                            ) : (
+                                <ul className="divide-y divide-border">
+                                    {attention.map(({ promo, note }) => (
+                                        <li key={promo.id} className="flex items-center gap-2.5 px-4 py-2 text-sm">
+                                            <button
+                                                onClick={() => setDrawer({ mode: 'edit', promo })}
+                                                className="min-w-0 flex-1 truncate text-left font-semibold hover:text-primary"
+                                            >
+                                                {promo.name}
+                                            </button>
+                                            <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">{note}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </Panel>
+                    </div>
                 </div>
             </div>
 
             {drawer && (
-                <PromoDrawer mode={drawer.mode} promo={drawer.promo} products={products} categories={categories} bannerChoices={bannerChoices} onClose={() => setDrawer(null)} />
+                <PromoDrawer
+                    mode={drawer.mode}
+                    promo={drawer.promo}
+                    products={products}
+                    categories={categories}
+                    bannerChoices={bannerChoices}
+                    onClose={() => setDrawer(null)}
+                />
             )}
             {deleteTarget && <DeleteDialog promo={deleteTarget} onClose={() => setDeleteTarget(null)} />}
         </AdminLayout>

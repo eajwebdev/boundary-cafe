@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Facades\Schema;
@@ -21,6 +21,7 @@ class Promo extends Model
         'applies_to',       // all | specific_products | specific_categories
         'minimum_purchase',
         'max_uses',
+        'max_uses_per_customer',
         'uses_count',
         'starts_at',
         'expires_at',
@@ -32,22 +33,23 @@ class Promo extends Model
     ];
 
     protected $casts = [
-        'discount_value'   => 'decimal:2',
+        'discount_value' => 'decimal:2',
         'minimum_purchase' => 'decimal:2',
-        'max_uses'         => 'integer',
-        'uses_count'       => 'integer',
-        'is_active'        => 'boolean',
+        'max_uses' => 'integer',
+        'max_uses_per_customer' => 'integer',
+        'uses_count' => 'integer',
+        'is_active' => 'boolean',
         'show_on_storefront' => 'boolean',
-        'starts_at'        => 'datetime',
-        'expires_at'       => 'datetime',
+        'starts_at' => 'datetime',
+        'expires_at' => 'datetime',
     ];
 
     protected $attributes = [
         'discount_type' => 'percent',
-        'applies_to'    => 'all',
-        'uses_count'    => 0,
-        'is_active'     => true,
-        'channels'      => 'both',
+        'applies_to' => 'all',
+        'uses_count' => 0,
+        'is_active' => true,
+        'channels' => 'both',
         'show_on_storefront' => false,
     ];
 
@@ -66,6 +68,7 @@ class Promo extends Model
         if ($exists === null) {
             $exists = Schema::hasTable('promos');
         }
+
         return $exists;
     }
 
@@ -92,11 +95,53 @@ class Promo extends Model
 
     public function isValid(): bool
     {
-        if (! $this->is_active)                                      return false;
-        if ($this->starts_at  && $this->starts_at->isFuture())       return false;
-        if ($this->expires_at && $this->expires_at->isPast())        return false;
-        if ($this->max_uses   && $this->uses_count >= $this->max_uses) return false;
+        if (! $this->is_active) {
+            return false;
+        }
+        if ($this->starts_at && $this->starts_at->isFuture()) {
+            return false;
+        }
+        if ($this->expires_at && $this->expires_at->isPast()) {
+            return false;
+        }
+        if ($this->max_uses && $this->uses_count >= $this->max_uses) {
+            return false;
+        }
+
         return true;
+    }
+
+    public function isLimitedPerCustomer(): bool
+    {
+        return (bool) $this->max_uses_per_customer;
+    }
+
+    /**
+     * How many times a customer has used this promo: online orders that were not
+     * cancelled or rejected, plus counter / dine-in sales that were not voided.
+     */
+    public function usesByCustomer(int $customerId): int
+    {
+        $onlineUses = OnlineOrder::where('promo_id', $this->id)
+            ->where('customer_id', $customerId)
+            ->where('promo_discount', '>', 0)
+            ->whereNotIn('status', [OnlineOrder::STATUS_CANCELLED, OnlineOrder::STATUS_REJECTED])
+            ->count();
+
+        // Completed online orders also create a sale; the order above already counts it.
+        $counterUses = Sale::where('promo_id', $this->id)
+            ->where('customer_id', $customerId)
+            ->where('channel', '!=', 'online')
+            ->where('status', '!=', 'voided')
+            ->count();
+
+        return $onlineUses + $counterUses;
+    }
+
+    /** True when the customer has reached this promo's per-customer limit. */
+    public function isUsedUpBy(int $customerId): bool
+    {
+        return $this->isLimitedPerCustomer() && $this->usesByCustomer($customerId) >= $this->max_uses_per_customer;
     }
 
     public function isExpired(): bool
@@ -106,22 +151,31 @@ class Promo extends Model
 
     public function getStatusAttribute(): string
     {
-        if (! $this->is_active)                                          return 'inactive';
-        if ($this->isExpired())                                          return 'expired';
-        if ($this->starts_at?->isFuture())                              return 'scheduled';
-        if ($this->max_uses && $this->uses_count >= $this->max_uses)    return 'exhausted';
+        if (! $this->is_active) {
+            return 'inactive';
+        }
+        if ($this->isExpired()) {
+            return 'expired';
+        }
+        if ($this->starts_at?->isFuture()) {
+            return 'scheduled';
+        }
+        if ($this->max_uses && $this->uses_count >= $this->max_uses) {
+            return 'exhausted';
+        }
+
         return 'active';
     }
 
     public function getStatusLabelAttribute(): string
     {
         return match ($this->status) {
-            'active'    => 'Active',
-            'inactive'  => 'Inactive',
-            'expired'   => 'Expired',
+            'active' => 'Active',
+            'inactive' => 'Inactive',
+            'expired' => 'Expired',
             'scheduled' => 'Scheduled',
             'exhausted' => 'Limit reached',
-            default     => ucfirst($this->status),
+            default => ucfirst($this->status),
         };
     }
 
@@ -152,11 +206,11 @@ class Promo extends Model
     public function appliesToProduct(Product $product): bool
     {
         return match ($this->applies_to) {
-            'all'                 => true,
-            'specific_products'   => $this->products->contains($product->id),
+            'all' => true,
+            'specific_products' => $this->products->contains($product->id),
             'specific_categories' => $product->category_id !== null
                 && $this->categories->pluck('id')->contains($product->category_id),
-            default               => false,
+            default => false,
         };
     }
 

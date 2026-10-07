@@ -5,14 +5,12 @@ import { format } from 'date-fns';
 import { ClipboardCheck, Plus, CheckCircle2, Clock, XCircle, ChevronRight, Package, LayoutList, FlaskConical } from 'lucide-react';
 import { useState } from 'react';
 
-import { Badge } from '@/components/ui/badge';
+import { controlCls, EmptyRow, PageHeader, Panel, Stat, StatStrip, StatusPill, thCls } from '@/components/AdminKit';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import AdminLayout from '@/layouts/AdminLayout';
 import { cn } from '@/lib/utils';
@@ -52,27 +50,30 @@ interface PageProps {
     branches: Branch[];
     is_admin: boolean;
     filters: { branch_id?: string };
+    [key: string]: unknown;
 }
 
 // ── Status helpers ─────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: Session['status'] }) {
-    if (status === 'committed')
+    if (status === 'committed') {
         return (
-            <Badge variant="outline" className="gap-1 border-green-300 text-green-600">
+            <StatusPill tone="success">
                 <CheckCircle2 className="h-3 w-3" /> Committed
-            </Badge>
+            </StatusPill>
         );
-    if (status === 'cancelled')
+    }
+    if (status === 'cancelled') {
         return (
-            <Badge variant="outline" className="gap-1 border-border text-muted-foreground">
+            <StatusPill tone="muted">
                 <XCircle className="h-3 w-3" /> Cancelled
-            </Badge>
+            </StatusPill>
         );
+    }
     return (
-        <Badge variant="outline" className="gap-1 border-orange-300 text-orange-600">
-            <Clock className="h-3 w-3" /> In Progress
-        </Badge>
+        <StatusPill tone="warning">
+            <Clock className="h-3 w-3" /> In progress
+        </StatusPill>
     );
 }
 
@@ -295,6 +296,9 @@ export default function StockCountIndex() {
     const draft = sessions.filter((s) => s.status === 'draft');
     const committed = sessions.filter((s) => s.status === 'committed');
 
+    const cancelled = sessions.filter((s) => s.status === 'cancelled');
+    const adjustedItems = committed.reduce((sum, s) => sum + s.items_adjusted, 0);
+
     function handleBranchChange(val: string) {
         router.get(routes.stockCount.index(), { branch_id: val }, { preserveState: false });
     }
@@ -302,145 +306,146 @@ export default function StockCountIndex() {
     return (
         <AdminLayout>
             <Head title="Stock Count" />
-            <div className="mx-auto max-w-4xl space-y-6 p-6">
-                {/* Header */}
-                <div className="flex flex-wrap items-center gap-3">
-                    <div>
-                        <h1 className="flex items-center gap-2 text-xl font-semibold">
-                            <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
-                            Stock Count
-                        </h1>
-                        <p className="mt-0.5 text-sm text-muted-foreground">
-                            Physical inventory — count daily, weekly, or monthly while sales continue
-                        </p>
-                    </div>
-                    <div className="ml-auto flex items-center gap-2">
-                        {is_admin && branches.length > 0 && (
-                            <Select value={String(branch_id)} onValueChange={handleBranchChange}>
-                                <SelectTrigger className="h-8 w-44 text-sm">
-                                    <SelectValue placeholder="Branch" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {branches.map((b) => (
-                                        <SelectItem key={b.id} value={String(b.id)}>
-                                            {b.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        )}
-                        <Button size="sm" onClick={() => setNewOpen(true)}>
-                            <Plus className="mr-1 h-4 w-4" />
-                            New Count
-                        </Button>
-                    </div>
-                </div>
+            <div className="space-y-4">
+                <PageHeader title="Stock Count" subtitle="Physical inventory: count daily, weekly or monthly while sales continue.">
+                    {is_admin && branches.length > 0 && (
+                        <select
+                            value={String(branch_id)}
+                            onChange={(e) => handleBranchChange(e.target.value)}
+                            className={cn(controlCls, 'h-9')}
+                            aria-label="Branch"
+                        >
+                            {branches.map((b) => (
+                                <option key={b.id} value={String(b.id)}>
+                                    {b.name}
+                                </option>
+                            ))}
+                        </select>
+                    )}
+                    <Button size="sm" className="h-9 gap-1.5" onClick={() => setNewOpen(true)}>
+                        <Plus className="h-4 w-4" /> New count
+                    </Button>
+                </PageHeader>
 
-                {/* Stats */}
-                <div className="grid grid-cols-3 gap-3">
-                    <Card>
-                        <CardContent className="pt-4 pb-3 text-center">
-                            <p className="text-2xl font-bold text-orange-600">{draft.length}</p>
-                            <p className="mt-0.5 text-xs text-muted-foreground">In Progress</p>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardContent className="pt-4 pb-3 text-center">
-                            <p className="text-2xl font-bold text-green-600">{committed.length}</p>
-                            <p className="mt-0.5 text-xs text-muted-foreground">Committed</p>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardContent className="pt-4 pb-3 text-center">
-                            <p className="text-2xl font-bold">{sessions.length}</p>
-                            <p className="mt-0.5 text-xs text-muted-foreground">Total</p>
-                        </CardContent>
-                    </Card>
-                </div>
+                <StatStrip count={4}>
+                    <Stat icon={Clock} label="In progress" value={draft.length.toLocaleString()} tone={draft.length > 0 ? 'warning' : undefined} />
+                    <Stat icon={CheckCircle2} label="Committed" value={committed.length.toLocaleString()} tone="success" />
+                    <Stat icon={Package} label="Items adjusted" value={adjustedItems.toLocaleString()} />
+                    <Stat
+                        icon={XCircle}
+                        label="Cancelled"
+                        value={cancelled.length.toLocaleString()}
+                        tone={cancelled.length > 0 ? 'muted' : undefined}
+                    />
+                </StatStrip>
 
-                {/* Sessions table */}
-                {sessions.length === 0 ? (
-                    <Card>
-                        <CardContent className="py-16 text-center text-sm text-muted-foreground">
-                            No count sessions yet.
-                            <br />
-                            <Button variant="link" className="mt-1 h-auto p-0 text-sm" onClick={() => setNewOpen(true)}>
-                                Start your first count
-                            </Button>
-                        </CardContent>
-                    </Card>
-                ) : (
-                    <Card>
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-muted/40">
-                                    <TableHead>Session</TableHead>
-                                    <TableHead className="hidden sm:table-cell">Type</TableHead>
-                                    <TableHead className="w-40 text-right">Progress</TableHead>
-                                    <TableHead className="hidden w-24 text-right md:table-cell">Adjusted</TableHead>
-                                    <TableHead className="hidden lg:table-cell">Date</TableHead>
-                                    <TableHead className="w-10" />
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {sessions.map((s) => (
-                                    <TableRow
-                                        key={s.id}
-                                        className={cn('cursor-pointer hover:bg-muted/30', s.status === 'cancelled' && 'opacity-50')}
-                                        onClick={() => router.visit(routes.stockCount.show(s.id))}
-                                    >
-                                        <TableCell>
-                                            <p className="text-sm font-medium">{s.name}</p>
-                                            <div className="mt-0.5 flex items-center gap-2">
-                                                <StatusBadge status={s.status} />
-                                                <span className="text-xs text-muted-foreground">{s.counted_by}</span>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="hidden sm:table-cell">
-                                            <Badge variant="secondary" className="text-xs capitalize">
-                                                {s.type}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            {s.status !== 'cancelled' && (
-                                                <div className="flex items-center justify-end gap-2">
-                                                    <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
-                                                        <div
-                                                            className="h-full rounded-full bg-primary transition-all"
-                                                            style={{ width: `${s.progress}%` }}
-                                                        />
+                <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
+                    <Panel
+                        flush
+                        icon={ClipboardCheck}
+                        title="Count sessions"
+                        actions={<span className="text-[11px] font-semibold text-muted-foreground">{sessions.length} total</span>}
+                    >
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead className="border-b border-border">
+                                    <tr>
+                                        <th className={thCls}>Session</th>
+                                        <th className={cn(thCls, 'hidden sm:table-cell')}>Scope</th>
+                                        <th className={cn(thCls, 'text-right')}>Progress</th>
+                                        <th className={cn(thCls, 'hidden text-right md:table-cell')}>Adjusted</th>
+                                        <th className={cn(thCls, 'hidden lg:table-cell')}>Date</th>
+                                        <th className="w-8" />
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                    {sessions.length === 0 ? (
+                                        <EmptyRow colSpan={6} icon={ClipboardCheck}>
+                                            No count sessions yet.{' '}
+                                            <button className="font-semibold text-primary hover:underline" onClick={() => setNewOpen(true)}>
+                                                Start your first count
+                                            </button>
+                                        </EmptyRow>
+                                    ) : (
+                                        sessions.map((s) => (
+                                            <tr
+                                                key={s.id}
+                                                className={cn('cursor-pointer hover:bg-muted/30', s.status === 'cancelled' && 'opacity-50')}
+                                                onClick={() => router.visit(routes.stockCount.show(s.id))}
+                                            >
+                                                <td className="px-4 py-2">
+                                                    <p className="font-semibold">{s.name}</p>
+                                                    <div className="mt-0.5 flex items-center gap-2">
+                                                        <StatusBadge status={s.status} />
+                                                        <span className="text-[11px] text-muted-foreground">{s.counted_by}</span>
                                                     </div>
-                                                    <span className="w-16 text-right text-xs text-muted-foreground tabular-nums">
-                                                        {s.items_counted}/{s.items_total}
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="hidden text-right md:table-cell">
-                                            {s.status === 'committed' && s.items_adjusted > 0 ? (
-                                                <Badge variant="outline" className="border-orange-300 text-orange-600">
-                                                    {s.items_adjusted}
-                                                </Badge>
-                                            ) : s.status === 'committed' ? (
-                                                <Badge variant="outline" className="border-green-300 text-green-600">
-                                                    0
-                                                </Badge>
-                                            ) : (
-                                                <span className="text-xs text-muted-foreground">—</span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">
-                                            {s.committed_at ?? s.created_at}
-                                        </TableCell>
-                                        <TableCell>
-                                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                                        </TableCell>
-                                    </TableRow>
+                                                </td>
+                                                <td className="hidden px-4 py-2 text-xs text-muted-foreground capitalize sm:table-cell">{s.type}</td>
+                                                <td className="px-4 py-2">
+                                                    {s.status !== 'cancelled' && (
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+                                                                <div className="h-full rounded-full bg-primary" style={{ width: `${s.progress}%` }} />
+                                                            </div>
+                                                            <span className="w-14 text-right text-xs text-muted-foreground tabular-nums">
+                                                                {s.items_counted}/{s.items_total}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td className="hidden px-4 py-2 text-right tabular-nums md:table-cell">
+                                                    {s.status === 'committed' ? (
+                                                        <span
+                                                            className={cn(
+                                                                'font-bold',
+                                                                s.items_adjusted > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground',
+                                                            )}
+                                                        >
+                                                            {s.items_adjusted}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-xs text-muted-foreground">—</span>
+                                                    )}
+                                                </td>
+                                                <td className="hidden px-4 py-2 text-xs text-muted-foreground lg:table-cell">
+                                                    {s.committed_at ?? s.created_at}
+                                                </td>
+                                                <td className="px-2 py-2">
+                                                    <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </Panel>
+
+                    <Panel flush icon={Clock} title="Continue counting" className="self-start">
+                        {draft.length === 0 ? (
+                            <p className="py-6 text-center text-sm text-muted-foreground">No count in progress.</p>
+                        ) : (
+                            <ul className="divide-y divide-border">
+                                {draft.map((s) => (
+                                    <li key={s.id}>
+                                        <button
+                                            onClick={() => router.visit(routes.stockCount.show(s.id))}
+                                            className="flex w-full items-center gap-2.5 px-4 py-2 text-left text-sm hover:bg-muted/30"
+                                        >
+                                            <span className="min-w-0 flex-1">
+                                                <span className="block truncate font-semibold">{s.name}</span>
+                                                <span className="block text-[11px] text-muted-foreground">
+                                                    {s.items_counted} of {s.items_total} counted
+                                                </span>
+                                            </span>
+                                            <span className="text-xs font-bold text-primary tabular-nums">{s.progress}%</span>
+                                        </button>
+                                    </li>
                                 ))}
-                            </TableBody>
-                        </Table>
-                    </Card>
-                )}
+                            </ul>
+                        )}
+                    </Panel>
+                </div>
             </div>
 
             <NewCountModal

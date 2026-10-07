@@ -9,7 +9,7 @@ use App\Models\Promo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -26,8 +26,8 @@ class PromoController extends Controller
             ->map(fn (Promo $p) => $this->mapPromo($p));
 
         return Inertia::render('Promos/Index', [
-            'promos'     => $promos,
-            'products'   => Product::orderBy('name')->get(['id', 'name', 'product_type']),
+            'promos' => $promos,
+            'products' => Product::orderBy('name')->get(['id', 'name', 'product_type']),
             'categories' => Category::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             // Images admins can pick as a storefront banner (seeded photos + earlier uploads)
             'bannerChoices' => collect(array_merge(
@@ -45,30 +45,31 @@ class PromoController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'name'             => ['required', 'string', 'max:255'],
-            'code'             => ['nullable', 'string', 'max:50', 'unique:promos,code'],
-            'description'      => ['nullable', 'string', 'max:1000'],
-            'discount_type'    => ['required', 'in:percent,fixed'],
-            'discount_value'   => ['required', 'numeric', 'min:0.01'],
-            'applies_to'       => ['required', 'in:all,specific_products,specific_categories'],
-            'product_ids'      => ['nullable', 'array'],
-            'product_ids.*'    => ['exists:products,id'],
-            'category_ids'     => ['nullable', 'array'],
-            'category_ids.*'   => ['exists:categories,id'],
+            'name' => ['required', 'string', 'max:255'],
+            'code' => ['nullable', 'string', 'max:50', 'unique:promos,code'],
+            'description' => ['nullable', 'string', 'max:1000'],
+            'discount_type' => ['required', 'in:percent,fixed'],
+            'discount_value' => ['required', 'numeric', 'min:0.01'],
+            'applies_to' => ['required', 'in:all,specific_products,specific_categories'],
+            'product_ids' => ['nullable', 'array'],
+            'product_ids.*' => ['exists:products,id'],
+            'category_ids' => ['nullable', 'array'],
+            'category_ids.*' => ['exists:categories,id'],
             'minimum_purchase' => ['nullable', 'numeric', 'min:0'],
-            'max_uses'         => ['nullable', 'integer', 'min:1'],
-            'starts_at'        => ['nullable', 'date'],
-            'expires_at'       => ['nullable', 'date', 'after_or_equal:starts_at'],
-            'is_active'        => ['nullable', 'boolean'],
+            'max_uses' => ['nullable', 'integer', 'min:1'],
+            'max_uses_per_customer' => ['nullable', 'integer', 'min:1'],
+            'starts_at' => ['nullable', 'date'],
+            'expires_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
+            'is_active' => ['nullable', 'boolean'],
             'show_on_storefront' => ['nullable', 'boolean'],
-            'channels'         => ['nullable', 'in:pos,online,both'],
-            'banner_image'     => ['nullable', 'string', 'max:255', 'regex:/^\/uploads\/[A-Za-z0-9_\-\/.]+$/', 'not_regex:/\.\./'],
-            'banner_upload'    => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:3072'],
-            'remove_banner'    => ['nullable', 'boolean'],
+            'channels' => ['nullable', 'in:pos,online,both'],
+            'banner_image' => ['nullable', 'string', 'max:255', 'regex:/^\/uploads\/[A-Za-z0-9_\-\/.]+$/', 'not_regex:/\.\./'],
+            'banner_upload' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:3072'],
+            'remove_banner' => ['nullable', 'boolean'],
         ], [
-            'code.unique'              => 'This promo code is already taken.',
-            'discount_value.min'       => 'Discount must be greater than zero.',
-            'expires_at.after_or_equal'=> 'Expiry must be on or after the start date.',
+            'code.unique' => 'This promo code is already taken.',
+            'discount_value.min' => 'Discount must be greater than zero.',
+            'expires_at.after_or_equal' => 'Expiry must be on or after the start date.',
         ]);
 
         // Percent discount cannot exceed 100
@@ -77,21 +78,22 @@ class PromoController extends Controller
         }
 
         $promo = Promo::create([
-            'name'             => trim($validated['name']),
-            'code'             => $validated['code'] ? strtoupper(trim($validated['code'])) : null,
-            'description'      => $validated['description'] ?? null,
-            'discount_type'    => $validated['discount_type'],
-            'discount_value'   => $validated['discount_value'],
-            'applies_to'       => $validated['applies_to'],
+            'name' => trim($validated['name']),
+            'code' => $validated['code'] ? strtoupper(trim($validated['code'])) : null,
+            'description' => $validated['description'] ?? null,
+            'discount_type' => $validated['discount_type'],
+            'discount_value' => $validated['discount_value'],
+            'applies_to' => $validated['applies_to'],
             'minimum_purchase' => $validated['minimum_purchase'] ?? null,
-            'max_uses'         => $validated['max_uses'] ?? null,
-            'starts_at'        => $validated['starts_at'] ?? null,
-            'expires_at'       => $validated['expires_at'] ?? null,
-            'is_active'        => $validated['is_active'] ?? true,
+            'max_uses' => $validated['max_uses'] ?? null,
+            'max_uses_per_customer' => $validated['max_uses_per_customer'] ?? null,
+            'starts_at' => $validated['starts_at'] ?? null,
+            'expires_at' => $validated['expires_at'] ?? null,
+            'is_active' => $validated['is_active'] ?? true,
             'show_on_storefront' => (bool) ($validated['show_on_storefront'] ?? false),
-            'channels'         => $validated['channels'] ?? 'both',
-            'banner_image'     => $this->resolveBanner($request, $validated, null),
-            'created_by'       => auth()->id(),
+            'channels' => $validated['channels'] ?? 'both',
+            'banner_image' => $this->resolveBanner($request, $validated, null),
+            'created_by' => auth()->id(),
         ]);
 
         // Attach products / categories
@@ -103,11 +105,11 @@ class PromoController extends Controller
         }
 
         ActivityLog::create([
-            'user_id'      => auth()->id(),
-            'action'       => 'promo_created',
+            'user_id' => auth()->id(),
+            'action' => 'promo_created',
             'subject_type' => Promo::class,
-            'subject_id'   => $promo->id,
-            'properties'   => ['name' => $promo->name, 'code' => $promo->code, 'ip' => $request->ip()],
+            'subject_id' => $promo->id,
+            'properties' => ['name' => $promo->name, 'code' => $promo->code, 'ip' => $request->ip()],
         ]);
 
         return back()->with('message', ['type' => 'success', 'text' => 'Promo created successfully.']);
@@ -118,29 +120,30 @@ class PromoController extends Controller
     public function update(Request $request, Promo $promo): RedirectResponse
     {
         $validated = $request->validate([
-            'name'             => ['required', 'string', 'max:255'],
-            'code'             => ['nullable', 'string', 'max:50', Rule::unique('promos', 'code')->ignore($promo->id)],
-            'description'      => ['nullable', 'string', 'max:1000'],
-            'discount_type'    => ['required', 'in:percent,fixed'],
-            'discount_value'   => ['required', 'numeric', 'min:0.01'],
-            'applies_to'       => ['required', 'in:all,specific_products,specific_categories'],
-            'product_ids'      => ['nullable', 'array'],
-            'product_ids.*'    => ['exists:products,id'],
-            'category_ids'     => ['nullable', 'array'],
-            'category_ids.*'   => ['exists:categories,id'],
+            'name' => ['required', 'string', 'max:255'],
+            'code' => ['nullable', 'string', 'max:50', Rule::unique('promos', 'code')->ignore($promo->id)],
+            'description' => ['nullable', 'string', 'max:1000'],
+            'discount_type' => ['required', 'in:percent,fixed'],
+            'discount_value' => ['required', 'numeric', 'min:0.01'],
+            'applies_to' => ['required', 'in:all,specific_products,specific_categories'],
+            'product_ids' => ['nullable', 'array'],
+            'product_ids.*' => ['exists:products,id'],
+            'category_ids' => ['nullable', 'array'],
+            'category_ids.*' => ['exists:categories,id'],
             'minimum_purchase' => ['nullable', 'numeric', 'min:0'],
-            'max_uses'         => ['nullable', 'integer', 'min:1'],
-            'starts_at'        => ['nullable', 'date'],
-            'expires_at'       => ['nullable', 'date', 'after_or_equal:starts_at'],
-            'is_active'        => ['nullable', 'boolean'],
+            'max_uses' => ['nullable', 'integer', 'min:1'],
+            'max_uses_per_customer' => ['nullable', 'integer', 'min:1'],
+            'starts_at' => ['nullable', 'date'],
+            'expires_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
+            'is_active' => ['nullable', 'boolean'],
             'show_on_storefront' => ['nullable', 'boolean'],
-            'channels'         => ['nullable', 'in:pos,online,both'],
-            'banner_image'     => ['nullable', 'string', 'max:255', 'regex:/^\/uploads\/[A-Za-z0-9_\-\/.]+$/', 'not_regex:/\.\./'],
-            'banner_upload'    => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:3072'],
-            'remove_banner'    => ['nullable', 'boolean'],
+            'channels' => ['nullable', 'in:pos,online,both'],
+            'banner_image' => ['nullable', 'string', 'max:255', 'regex:/^\/uploads\/[A-Za-z0-9_\-\/.]+$/', 'not_regex:/\.\./'],
+            'banner_upload' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:3072'],
+            'remove_banner' => ['nullable', 'boolean'],
         ], [
-            'code.unique'              => 'This promo code is already taken.',
-            'expires_at.after_or_equal'=> 'Expiry must be on or after the start date.',
+            'code.unique' => 'This promo code is already taken.',
+            'expires_at.after_or_equal' => 'Expiry must be on or after the start date.',
         ]);
 
         if ($validated['discount_type'] === 'percent' && $validated['discount_value'] > 100) {
@@ -148,20 +151,21 @@ class PromoController extends Controller
         }
 
         $promo->update([
-            'name'             => trim($validated['name']),
-            'code'             => $validated['code'] ? strtoupper(trim($validated['code'])) : null,
-            'description'      => $validated['description'] ?? null,
-            'discount_type'    => $validated['discount_type'],
-            'discount_value'   => $validated['discount_value'],
-            'applies_to'       => $validated['applies_to'],
+            'name' => trim($validated['name']),
+            'code' => $validated['code'] ? strtoupper(trim($validated['code'])) : null,
+            'description' => $validated['description'] ?? null,
+            'discount_type' => $validated['discount_type'],
+            'discount_value' => $validated['discount_value'],
+            'applies_to' => $validated['applies_to'],
             'minimum_purchase' => $validated['minimum_purchase'] ?? null,
-            'max_uses'         => $validated['max_uses'] ?? null,
-            'starts_at'        => $validated['starts_at'] ?? null,
-            'expires_at'       => $validated['expires_at'] ?? null,
-            'is_active'        => $validated['is_active'] ?? $promo->is_active,
+            'max_uses' => $validated['max_uses'] ?? null,
+            'max_uses_per_customer' => $validated['max_uses_per_customer'] ?? null,
+            'starts_at' => $validated['starts_at'] ?? null,
+            'expires_at' => $validated['expires_at'] ?? null,
+            'is_active' => $validated['is_active'] ?? $promo->is_active,
             'show_on_storefront' => (bool) ($validated['show_on_storefront'] ?? $promo->show_on_storefront),
-            'channels'         => $validated['channels'] ?? $promo->channels ?? 'both',
-            'banner_image'     => $this->resolveBanner($request, $validated, $promo),
+            'channels' => $validated['channels'] ?? $promo->channels ?? 'both',
+            'banner_image' => $this->resolveBanner($request, $validated, $promo),
         ]);
 
         // Re-sync pivot tables
@@ -177,11 +181,11 @@ class PromoController extends Controller
         }
 
         ActivityLog::create([
-            'user_id'      => auth()->id(),
-            'action'       => 'promo_updated',
+            'user_id' => auth()->id(),
+            'action' => 'promo_updated',
             'subject_type' => Promo::class,
-            'subject_id'   => $promo->id,
-            'properties'   => ['name' => $promo->name, 'code' => $promo->code, 'ip' => $request->ip()],
+            'subject_id' => $promo->id,
+            'properties' => ['name' => $promo->name, 'code' => $promo->code, 'ip' => $request->ip()],
         ]);
 
         return back()->with('message', ['type' => 'success', 'text' => 'Promo updated.']);
@@ -193,6 +197,7 @@ class PromoController extends Controller
     {
         $promo->update(['is_active' => ! $promo->is_active]);
         $label = $promo->is_active ? 'activated' : 'deactivated';
+
         return back()->with('message', ['type' => 'success', 'text' => "Promo {$label}."]);
     }
 
@@ -204,11 +209,11 @@ class PromoController extends Controller
         $promo->categories()->detach();
 
         ActivityLog::create([
-            'user_id'      => auth()->id(),
-            'action'       => 'promo_deleted',
+            'user_id' => auth()->id(),
+            'action' => 'promo_deleted',
             'subject_type' => Promo::class,
-            'subject_id'   => $promo->id,
-            'properties'   => ['name' => $promo->name, 'code' => $promo->code, 'ip' => $request->ip()],
+            'subject_id' => $promo->id,
+            'properties' => ['name' => $promo->name, 'code' => $promo->code, 'ip' => $request->ip()],
         ]);
 
         $promo->delete();
@@ -221,7 +226,7 @@ class PromoController extends Controller
     public function apply(Request $request): JsonResponse
     {
         $request->validate([
-            'code'     => ['required', 'string'],
+            'code' => ['required', 'string'],
             'subtotal' => ['required', 'numeric', 'min:0'],
         ]);
 
@@ -239,15 +244,15 @@ class PromoController extends Controller
         $discount = $promo->computeDiscount($subtotal);
 
         return response()->json([
-            'valid'          => true,
-            'promo_id'       => $promo->id,
-            'name'           => $promo->name,
-            'code'           => $promo->code,
-            'discount_type'  => $promo->discount_type,
+            'valid' => true,
+            'promo_id' => $promo->id,
+            'name' => $promo->name,
+            'code' => $promo->code,
+            'discount_type' => $promo->discount_type,
             'discount_value' => (float) $promo->discount_value,
-            'discount_amount'=> $discount,
-            'final_total'    => round($subtotal - $discount, 2),
-            'message'        => "Promo applied: {$promo->name} (−₱" . number_format($discount, 2) . ")",
+            'discount_amount' => $discount,
+            'final_total' => round($subtotal - $discount, 2),
+            'message' => "Promo applied: {$promo->name} (−₱".number_format($discount, 2).')',
         ]);
     }
 
@@ -265,7 +270,7 @@ class PromoController extends Controller
             if (! is_dir($dir)) {
                 mkdir($dir, 0755, true);
             }
-            $name = 'promo-'.now()->format('YmdHis').'-'.\Illuminate\Support\Str::random(6).'.'.$file->extension();
+            $name = 'promo-'.now()->format('YmdHis').'-'.Str::random(6).'.'.$file->extension();
             $file->move($dir, $name);
 
             return '/uploads/promos/'.$name;
@@ -285,31 +290,32 @@ class PromoController extends Controller
     private function mapPromo(Promo $p): array
     {
         return [
-            'id'               => $p->id,
-            'name'             => $p->name,
-            'code'             => $p->code,
-            'description'      => $p->description,
-            'discount_type'    => $p->discount_type,
-            'discount_value'   => (float) $p->discount_value,
-            'applies_to'       => $p->applies_to,
+            'id' => $p->id,
+            'name' => $p->name,
+            'code' => $p->code,
+            'description' => $p->description,
+            'discount_type' => $p->discount_type,
+            'discount_value' => (float) $p->discount_value,
+            'applies_to' => $p->applies_to,
             'minimum_purchase' => $p->minimum_purchase ? (float) $p->minimum_purchase : null,
-            'max_uses'         => $p->max_uses,
-            'uses_count'       => $p->uses_count,
-            'starts_at'        => $p->starts_at?->toDateTimeString(),
-            'expires_at'       => $p->expires_at?->toDateTimeString(),
-            'is_active'        => $p->is_active,
+            'max_uses' => $p->max_uses,
+            'max_uses_per_customer' => $p->max_uses_per_customer,
+            'uses_count' => $p->uses_count,
+            'starts_at' => $p->starts_at?->toDateTimeString(),
+            'expires_at' => $p->expires_at?->toDateTimeString(),
+            'is_active' => $p->is_active,
             'show_on_storefront' => (bool) $p->show_on_storefront,
-            'channels'         => $p->channels ?? 'both',
-            'banner_image'     => $p->banner_image,
-            'banner_url'       => $p->banner_url,
-            'status'           => $p->status,
-            'status_label'     => $p->status_label,
-            'product_ids'      => $p->products->pluck('id')->values(),
-            'product_names'    => $p->products->pluck('name')->values(),
-            'category_ids'     => $p->categories->pluck('id')->values(),
-            'category_names'   => $p->categories->pluck('name')->values(),
-            'created_by'       => $p->creator ? trim("{$p->creator->fname} {$p->creator->lname}") : null,
-            'created_at'       => $p->created_at?->toIso8601String(),
+            'channels' => $p->channels ?? 'both',
+            'banner_image' => $p->banner_image,
+            'banner_url' => $p->banner_url,
+            'status' => $p->status,
+            'status_label' => $p->status_label,
+            'product_ids' => $p->products->pluck('id')->values(),
+            'product_names' => $p->products->pluck('name')->values(),
+            'category_ids' => $p->categories->pluck('id')->values(),
+            'category_names' => $p->categories->pluck('name')->values(),
+            'created_by' => $p->creator ? trim("{$p->creator->fname} {$p->creator->lname}") : null,
+            'created_at' => $p->created_at?->toIso8601String(),
         ];
     }
 }

@@ -167,9 +167,30 @@ export const routes = {
         },
     },
 
+    // ── Employees — ID 45 / Attendance — ID 46 / public time clock ────────────
+    employees: {
+        index: () => route('employees.index'),
+        store: () => route('employees.store'),
+        update: (id: Id) => route('employees.update', { employee: id }),
+        destroy: (id: Id) => route('employees.destroy', { employee: id }),
+        enrollFace: (id: Id) => route('employees.face.store', { employee: id }),
+        face: (id: Id) => route('employees.face', { employee: id }),
+    },
+    attendance: {
+        index: () => route('attendance.index'),
+        location: (branchId: Id) => route('attendance.location', { branch: branchId }),
+        photo: (id: Id) => route('attendance.photo', { attendance: id }),
+    },
+    timeClock: {
+        show: () => route('time-clock'),
+        identify: () => route('time-clock.identify'),
+        punch: () => route('time-clock.punch'),
+    },
+
     // ── Expenses — ID 17 ──────────────────────────────────────────────────────
     expenses: {
         index: () => route('expenses.index'),
+        store: () => route('expenses.store'),
     },
 
     // ── Reports — IDs 18–21 (HTML views + direct PDF downloads) ───────────────
@@ -239,6 +260,10 @@ export const routes = {
     // ── Expense Categories — ID 27 ────────────────────────────────────────────
     expenseCategories: {
         index: () => route('expense-categories.index'),
+        store: () => route('expense-categories.store'),
+        update: (id: Id) => route('expense-categories.update', { category: id }),
+        toggle: (id: Id) => route('expense-categories.toggle', { category: id }),
+        destroy: (id: Id) => route('expense-categories.destroy', { category: id }),
     },
 
     // ── Stock Adjustments (Losses/Damages) — ID 31 ───────────────────────────

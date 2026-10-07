@@ -51,12 +51,19 @@ class SaleService
             $discPct = min((float) ($data['discount_percent'] ?? 0), $maxDisc);
             $discAmt = round($subtotal * ($discPct / 100), 2);
 
+            $customerId = $data['customer_id'] ?? $tableOrder?->customer_id;
+            $customer = $customerId
+                ? Customer::where('id', $customerId)->where('is_active', true)->lockForUpdate()->firstOrFail()
+                : null;
+
             // Promo discount — must be valid and usable at the counter
+            $promo = null;
             $promoAmt = 0.0;
             $promoLabel = null;
             if (! empty($data['promo_id'])) {
                 $promo = Promo::with(['products:id', 'categories:id'])->lockForUpdate()->find($data['promo_id']);
                 if ($promo && $promo->isValid() && $promo->availableOn('pos')) {
+                    $this->guardPerCustomerLimit($promo, $customer);
                     $promoAmt = $promo->computeDiscount($subtotal - $discAmt);
                     $promoLabel = $promo->name.($promo->code ? " [{$promo->code}]" : '');
                     if ($promoAmt > 0) {
@@ -68,11 +75,6 @@ class SaleService
             $afterDisc = round($subtotal - $discAmt - $promoAmt, 2);
             [$vatAmt, $vatRate] = $this->vatFor($afterDisc, $subtotal, $taxableSubtotal, $branchId);
             $serviceChargeAmt = $this->serviceChargeFor($afterDisc, $branchId);
-
-            $customerId = $data['customer_id'] ?? $tableOrder?->customer_id;
-            $customer = $customerId
-                ? Customer::where('id', $customerId)->where('is_active', true)->lockForUpdate()->firstOrFail()
-                : null;
 
             $loyalty = $customer
                 ? $this->loyalty->quote($customer, $afterDisc + $vatAmt + $serviceChargeAmt, (int) ($data['loyalty_points'] ?? 0), $branchId)
@@ -105,6 +107,7 @@ class SaleService
                 'cash_session_id' => $session?->id,
                 'table_order_id' => $tableOrder?->id,
                 'customer_id' => $customer?->id,
+                'promo_id' => $promoAmt > 0 ? $promo?->id : null,
                 'payment_method' => $method,
                 'payment_amount' => $tendered,
                 'amount_paid' => $totalDue,
@@ -212,6 +215,7 @@ class SaleService
                 'channel' => 'online',
                 'cash_session_id' => $session?->id,
                 'customer_id' => $order->customer_id,
+                'promo_id' => (float) $order->promo_discount > 0 ? $order->promo_id : null,
                 'payment_method' => 'cash',
                 'payment_amount' => $order->total,
                 'amount_paid' => $order->total,
@@ -464,5 +468,19 @@ class SaleService
         }
 
         return $order;
+    }
+
+    /** A promo limited per customer needs a known customer who has not used up their share. */
+    private function guardPerCustomerLimit(Promo $promo, ?Customer $customer): void
+    {
+        if (! $promo->isLimitedPerCustomer()) {
+            return;
+        }
+        if (! $customer) {
+            throw new RuntimeException("Select the customer first — \"{$promo->name}\" is limited per customer.");
+        }
+        if ($promo->isUsedUpBy($customer->id)) {
+            throw new RuntimeException("{$customer->name} has already used \"{$promo->name}\".");
+        }
     }
 }

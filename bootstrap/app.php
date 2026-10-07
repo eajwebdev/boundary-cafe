@@ -1,21 +1,23 @@
 <?php
 
-use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\CheckMenuAccess;
+use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\RestrictOrderTakerAccess;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
-use Inertia\Inertia;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
-        web: __DIR__ . '/../routes/web.php',
-        commands: __DIR__ . '/../routes/console.php',
-        channels: __DIR__ . '/../routes/channels.php',
+        web: __DIR__.'/../routes/web.php',
+        commands: __DIR__.'/../routes/console.php',
+        channels: __DIR__.'/../routes/channels.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
@@ -26,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'access' => CheckMenuAccess::class,
+            'order-taker' => RestrictOrderTakerAccess::class,
         ]);
 
         $middleware->redirectTo(
@@ -34,7 +37,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
                 if ($isCustomerArea) {
                     // Staff signed in on this browser go back to their own workspace.
-                    $staff = \Illuminate\Support\Facades\Auth::guard('web')->user();
+                    $staff = Auth::guard('web')->user();
                     if ($staff) {
                         return $staff->isWaiter() ? '/tables' : ($staff->isCashier() ? '/pos' : '/dashboard');
                     }
@@ -43,26 +46,27 @@ return Application::configure(basePath: dirname(__DIR__))
                 }
 
                 // A signed-in customer who wanders into staff pages is sent back to the storefront.
-                if (\Illuminate\Support\Facades\Auth::guard('customer')->check()) {
+                if (Auth::guard('customer')->check()) {
                     return '/';
                 }
 
                 return route('login');
             },
             users: function () {
-                $user = \Illuminate\Support\Facades\Auth::user();
+                $user = Auth::user();
                 if ($user && method_exists($user, 'isWaiter') && $user->isWaiter()) {
                     return '/tables';
                 }
                 if ($user && method_exists($user, 'isCashier') && $user->isCashier()) {
                     return '/pos';
                 }
+
                 return '/dashboard';
             }
         );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->respond(function (Response $response, \Throwable $e, Request $request) {
+        $exceptions->respond(function (Response $response, Throwable $e, Request $request) {
             $status = $response->getStatusCode();
 
             if (in_array($status, [403, 404, 405])) {
@@ -84,12 +88,12 @@ return Application::configure(basePath: dirname(__DIR__))
 
                     if (is_string($allowed)) {
                         $allowed = array_map('trim', explode(',', $allowed));
-                    } elseif (!is_array($allowed)) {
+                    } elseif (! is_array($allowed)) {
                         $allowed = [];
                     }
 
-                    if (!empty($allowed)) {
-                        $message .= ' Supported methods: ' . implode(', ', $allowed) . '.';
+                    if (! empty($allowed)) {
+                        $message .= ' Supported methods: '.implode(', ', $allowed).'.';
                     }
                 }
 

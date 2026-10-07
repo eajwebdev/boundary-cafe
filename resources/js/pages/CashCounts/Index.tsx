@@ -15,6 +15,7 @@ import {
     Building2,
 } from 'lucide-react';
 import { useState } from 'react';
+import { controlCls, PageHeader, Panel, Stat, StatStrip, StatusPill, useFlashToasts } from '@/components/AdminKit';
 import { Button } from '@/components/ui/button';
 import AdminLayout from '@/layouts/AdminLayout';
 import { cn } from '@/lib/utils';
@@ -35,6 +36,10 @@ interface OpenSession {
     gcash_system: number;
     card_system: number;
     bank_system: number;
+    /** Not sent by the server yet; treated as 0 when missing. */
+    remittance_bank?: number;
+    remittance_gcash?: number;
+    remittance_card?: number;
 }
 
 interface Branch {
@@ -164,6 +169,7 @@ function DenomRow({ denom, onInc, onDec, onSet }: { denom: Denomination; onInc: 
 export default function CashCountsIndex() {
     const { open_sessions, cash_counts, branches, selected_branch_id, is_admin, missed_counts, app } = usePage<PageProps>().props;
     const currency = app?.currency ?? '₱';
+    useFlashToasts();
 
     const handleBranchChange = (branchId: number) => {
         router.get('/cash-counts', { branch: branchId }, { preserveScroll: false, replace: true });
@@ -249,101 +255,86 @@ export default function CashCountsIndex() {
         <AdminLayout>
             <Head title="Cash Counts" />
 
-            <div className="mx-auto max-w-5xl space-y-6">
-                {/* Header */}
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                        <h1 className="flex items-center gap-2 text-xl font-bold text-foreground">
-                            <Calculator className="h-5 w-5 text-primary" /> Cash Counts
-                        </h1>
-                        <p className="mt-0.5 text-sm text-muted-foreground">
-                            Count cash denominations and reconcile GCash / Card before closing the session.
-                        </p>
-                    </div>
+            <div className="space-y-4">
+                <PageHeader title="Cash Counts" subtitle="Count the drawer and check GCash and card totals before closing a session.">
                     {is_admin && branches.length > 0 && (
-                        <div className="flex items-center gap-2">
-                            <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                            <select
-                                value={selected_branch_id}
-                                onChange={(e) => handleBranchChange(Number(e.target.value))}
-                                className="h-9 rounded-xl border border-border bg-background px-3 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
-                            >
-                                {branches.map((b) => (
-                                    <option key={b.id} value={b.id}>
-                                        {b.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
-                </div>
-
-                {/* ── Missed cash count warning ── */}
-                {missed_counts.length > 0 && (
-                    <div className="space-y-2 rounded-2xl border border-destructive/30 bg-destructive/8 p-4">
-                        <div className="flex items-center gap-2 text-destructive">
-                            <AlertTriangle className="h-4 w-4 shrink-0" />
-                            <p className="text-sm font-bold">
-                                {missed_counts.length === 1 ? '1 day missing a cash count' : `${missed_counts.length} days missing cash counts`}
-                            </p>
-                        </div>
-                        <p className="pl-6 text-xs text-muted-foreground">
-                            The following sessions had transactions but no closing count was recorded. A daily cash count is required for days with
-                            transactions.
-                        </p>
-                        <div className="space-y-1.5 pt-1 pl-6">
-                            {missed_counts.map((m) => (
-                                <div
-                                    key={m.id}
-                                    className="flex items-center justify-between rounded-lg border border-destructive/20 bg-background px-3 py-2 text-xs"
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <span className="font-mono font-bold text-foreground">{m.session_number}</span>
-                                        <span className="text-muted-foreground">
-                                            {new Date(m.date).toLocaleDateString('en-PH', {
-                                                timeZone: 'Asia/Manila',
-                                                month: 'short',
-                                                day: 'numeric',
-                                                year: 'numeric',
-                                            })}
-                                        </span>
-                                        <span className="text-muted-foreground">
-                                            · {m.sale_count} transaction{m.sale_count !== 1 ? 's' : ''}
-                                        </span>
-                                    </div>
-                                    <div className="flex shrink-0 items-center gap-2">
-                                        <span
-                                            className={cn(
-                                                'rounded-full px-2 py-0.5 text-[10px] font-bold',
-                                                m.status === 'open'
-                                                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                                                    : 'bg-muted text-muted-foreground',
-                                            )}
-                                        >
-                                            {m.status === 'open' ? '● Open' : 'Closed'}
-                                        </span>
-                                        {m.status === 'open' && open_sessions.find((s) => s.id === m.id) && (
-                                            <button onClick={() => setSessionId(m.id)} className="text-[10px] font-bold text-primary hover:underline">
-                                                Count now →
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
+                        <select
+                            value={selected_branch_id}
+                            onChange={(e) => handleBranchChange(Number(e.target.value))}
+                            className={cn(controlCls, 'h-9')}
+                            aria-label="Branch"
+                        >
+                            {branches.map((b) => (
+                                <option key={b.id} value={b.id}>
+                                    {b.name}
+                                </option>
                             ))}
-                        </div>
-                    </div>
+                        </select>
+                    )}
+                </PageHeader>
+
+                <StatStrip count={4}>
+                    <Stat icon={Banknote} label="Expected in drawer" value={session ? fmt(expectedCash, currency) : '—'} />
+                    <Stat icon={Calculator} label="Counted so far" value={fmt(cashCounted, currency)} />
+                    <Stat
+                        icon={TrendingUp}
+                        label="Over / short"
+                        value={session ? overShortLabel(Math.round(cashOverShort * 100) / 100) : '—'}
+                        tone={!session ? 'muted' : Math.abs(cashOverShort) < 0.005 ? 'success' : 'warning'}
+                    />
+                    <Stat
+                        icon={AlertTriangle}
+                        label="Days missing a count"
+                        value={missed_counts.length.toLocaleString()}
+                        tone={missed_counts.length > 0 ? 'warning' : undefined}
+                    />
+                </StatStrip>
+
+                {missed_counts.length > 0 && (
+                    <Panel
+                        flush
+                        icon={AlertTriangle}
+                        title={missed_counts.length === 1 ? '1 day is missing a cash count' : `${missed_counts.length} days are missing cash counts`}
+                        className="border-amber-500/40"
+                    >
+                        <p className="px-4 pt-2 text-xs text-muted-foreground">
+                            These sessions had sales but no closing count. Every day with sales needs one.
+                        </p>
+                        <ul className="divide-y divide-border">
+                            {missed_counts.map((m) => (
+                                <li key={m.id} className="flex flex-wrap items-center gap-2 px-4 py-2 text-xs">
+                                    <span className="font-mono font-bold">{m.session_number}</span>
+                                    <span className="text-muted-foreground">
+                                        {new Date(m.date).toLocaleDateString('en-PH', {
+                                            timeZone: 'Asia/Manila',
+                                            month: 'short',
+                                            day: 'numeric',
+                                            year: 'numeric',
+                                        })}{' '}
+                                        · {m.sale_count} sale{m.sale_count !== 1 ? 's' : ''}
+                                    </span>
+                                    <StatusPill tone={m.status === 'open' ? 'success' : 'muted'} className="ml-auto">
+                                        {m.status === 'open' ? 'Open' : 'Closed'}
+                                    </StatusPill>
+                                    {m.status === 'open' && open_sessions.find((s) => s.id === m.id) && (
+                                        <button onClick={() => setSessionId(m.id)} className="font-bold text-primary hover:underline">
+                                            Count now
+                                        </button>
+                                    )}
+                                </li>
+                            ))}
+                        </ul>
+                    </Panel>
                 )}
 
-                <div className="grid gap-6 lg:grid-cols-5">
+                <div className="grid gap-4 lg:grid-cols-5">
                     {/* ── LEFT: Form ── */}
-                    <div className="space-y-5 lg:col-span-3">
+                    <div className="space-y-4 lg:col-span-3">
                         {/* Session + type selectors */}
-                        <div className="space-y-4 rounded-2xl border border-border bg-card p-5">
+                        <div className="space-y-4 rounded-xl border border-border bg-card p-4">
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="mb-1.5 block text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                                        Session
-                                    </label>
+                                    <label className="mb-1.5 block text-[11px] font-semibold text-muted-foreground">Session</label>
                                     <select
                                         value={sessionId ?? ''}
                                         onChange={(e) => {
@@ -352,7 +343,7 @@ export default function CashCountsIndex() {
                                             const sel = open_sessions.find((s) => s.id === id);
                                             if (sel && !sel.is_mine && countType === 'closing') setCountType('midshift');
                                         }}
-                                        className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
+                                        className="h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                                     >
                                         {open_sessions.length === 0 ? (
                                             <option value="">No open sessions</option>
@@ -372,13 +363,11 @@ export default function CashCountsIndex() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="mb-1.5 block text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                                        Count Type
-                                    </label>
+                                    <label className="mb-1.5 block text-[11px] font-semibold text-muted-foreground">Count Type</label>
                                     <select
                                         value={countType}
                                         onChange={(e) => setCountType(e.target.value as 'closing' | 'midshift')}
-                                        className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
+                                        className="h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                                     >
                                         {open_sessions.find((s) => s.id === sessionId)?.is_mine === true && (
                                             <option value="closing">Closing Count (closes session)</option>
@@ -391,9 +380,7 @@ export default function CashCountsIndex() {
                             {/* Expected cash breakdown */}
                             {session && (
                                 <div className="space-y-1.5 rounded-xl bg-muted/30 p-3.5 text-sm">
-                                    <p className="mb-2 text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                                        Expected Cash in Drawer
-                                    </p>
+                                    <p className="mb-2 text-[11px] font-semibold text-muted-foreground">Expected Cash in Drawer</p>
                                     <div className="flex justify-between text-muted-foreground">
                                         <span className="flex items-center gap-1.5">
                                             <Banknote className="h-3 w-3" />
@@ -440,7 +427,7 @@ export default function CashCountsIndex() {
                                     {/* Non-cash payments — for reference only */}
                                     {(gcashSystem > 0 || cardSystem > 0 || session.bank_system > 0 || (session.remittance_bank ?? 0) > 0) && (
                                         <>
-                                            <p className="mb-1 border-t border-border pt-3 text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                                            <p className="mb-1 border-t border-border pt-3 text-[11px] font-semibold text-muted-foreground">
                                                 Not in drawer (reconcile separately)
                                             </p>
                                             {gcashSystem > 0 && (
@@ -483,8 +470,8 @@ export default function CashCountsIndex() {
                         </div>
 
                         {/* ── Cash denominations ── */}
-                        <div className="space-y-4 rounded-2xl border border-border bg-card p-5">
-                            <p className="flex items-center gap-1.5 text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                        <div className="space-y-4 rounded-xl border border-border bg-card p-4">
+                            <p className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
                                 <Banknote className="h-3.5 w-3.5" /> Bills
                             </p>
                             <div className="space-y-1.5">
@@ -503,7 +490,7 @@ export default function CashCountsIndex() {
                                 <span className="font-bold text-foreground tabular-nums">{fmt(billsTotal, currency)}</span>
                             </div>
 
-                            <p className="flex items-center gap-1.5 pt-2 text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                            <p className="flex items-center gap-1.5 pt-2 text-[11px] font-semibold text-muted-foreground">
                                 <Banknote className="h-3.5 w-3.5" /> Coins
                             </p>
                             <div className="space-y-1.5">
@@ -537,7 +524,7 @@ export default function CashCountsIndex() {
                             >
                                 <div className="flex items-end justify-between">
                                     <div>
-                                        <p className="mb-1 text-[10px] tracking-widest text-muted-foreground uppercase">Total Counted</p>
+                                        <p className="mb-1 text-[11px] font-semibold text-muted-foreground">Total Counted</p>
                                         <p
                                             className={cn(
                                                 'text-4xl font-black tabular-nums',
@@ -553,7 +540,7 @@ export default function CashCountsIndex() {
                                     </div>
                                     {session && (
                                         <div className="text-right">
-                                            <p className="mb-1 text-[10px] tracking-widest text-muted-foreground uppercase">Expected</p>
+                                            <p className="mb-1 text-[11px] font-semibold text-muted-foreground">Expected</p>
                                             <p className="text-xl font-bold text-foreground tabular-nums">{fmt(expectedCash, currency)}</p>
                                             {cashCounted > 0 && (
                                                 <p className={cn('mt-0.5 text-sm font-bold tabular-nums', overShortColor(cashOverShort))}>
@@ -569,7 +556,7 @@ export default function CashCountsIndex() {
                         {/* ── GCash reconciliation ── */}
                         {gcashSystem > 0 && (
                             <div className="space-y-3 rounded-2xl border border-blue-500/20 bg-blue-500/5 p-5">
-                                <p className="flex items-center gap-1.5 text-[10px] font-bold tracking-widest text-blue-600 uppercase dark:text-blue-400">
+                                <p className="flex items-center gap-1.5 text-xs font-bold text-blue-700 dark:text-blue-400">
                                     <Smartphone className="h-3.5 w-3.5" /> GCash Reconciliation
                                 </p>
                                 <div className="flex justify-between text-sm">
@@ -628,7 +615,7 @@ export default function CashCountsIndex() {
                         {/* ── Card / Bank reconciliation ── */}
                         {cardSystem > 0 && (
                             <div className="space-y-3 rounded-2xl border border-purple-500/20 bg-purple-500/5 p-5">
-                                <p className="flex items-center gap-1.5 text-[10px] font-bold tracking-widest text-purple-600 uppercase dark:text-purple-400">
+                                <p className="flex items-center gap-1.5 text-xs font-bold text-purple-700 dark:text-purple-400">
                                     <CreditCard className="h-3.5 w-3.5" /> Card / Bank Reconciliation
                                 </p>
                                 <div className="flex justify-between text-sm">
@@ -685,11 +672,9 @@ export default function CashCountsIndex() {
                         )}
 
                         {/* Notes + Submit */}
-                        <div className="space-y-4 rounded-2xl border border-border bg-card p-5">
+                        <div className="space-y-4 rounded-xl border border-border bg-card p-4">
                             <div>
-                                <label className="mb-1.5 block text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                                    Notes (optional)
-                                </label>
+                                <label className="mb-1.5 block text-[11px] font-semibold text-muted-foreground">Notes (optional)</label>
                                 <input
                                     value={notes}
                                     onChange={(e) => setNotes(e.target.value)}
@@ -715,11 +700,11 @@ export default function CashCountsIndex() {
 
                     {/* ── RIGHT: History ── */}
                     <div className="lg:col-span-2">
-                        <div className="sticky top-4 overflow-hidden rounded-2xl border border-border bg-card">
-                            <div className="border-b border-border px-5 py-4">
-                                <p className="text-sm font-bold text-foreground">Recent Counts</p>
-                            </div>
-                            <div className="max-h-[640px] divide-y divide-border overflow-y-auto">
+                        <div className="sticky top-4 overflow-hidden rounded-xl border border-border bg-card">
+                            <h2 className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-bold">
+                                <CheckCircle2 className="h-4 w-4 text-primary" /> Recent counts
+                            </h2>
+                            <div className="max-h-160 divide-y divide-border overflow-y-auto">
                                 {cash_counts.data.length === 0 ? (
                                     <div className="py-12 text-center text-sm text-muted-foreground">No counts yet</div>
                                 ) : (
@@ -727,7 +712,7 @@ export default function CashCountsIndex() {
                                         <Link
                                             key={c.id}
                                             href={`/cash-counts/${c.id}`}
-                                            className="block space-y-2 px-5 py-4 transition-colors hover:bg-muted/30"
+                                            className="block space-y-2 px-4 py-2.5 transition-colors hover:bg-muted/30"
                                         >
                                             <div className="flex items-start justify-between gap-2">
                                                 <div>

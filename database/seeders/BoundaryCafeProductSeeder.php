@@ -25,18 +25,34 @@ class BoundaryCafeProductSeeder extends Seeder
         ['Add-ons', 'Rice', 30], ['Add-ons', 'Pitcher Juice', 80], ['Add-ons', 'Bacon Bits', 100], ['Add-ons', 'Egg', 25], ['Add-ons', 'Hotdog', 35], ['Add-ons', 'Extra Espresso Shot', 40], ['Add-ons', 'Whipped Cream', 25], ['Add-ons', 'Flavor Syrup', 25],
     ];
 
+    /**
+     * Categories sold from counted stock. Everything else is made to order:
+     * its ingredients are deducted through a recipe (see BoundaryCafeRecipeSeeder).
+     */
+    private const STOCKED_CATEGORIES = ['Desserts'];
+
+    /** Opening slices per branch for stocked items. */
+    private const OPENING_STOCK = 30;
+
     public function run(): void
     {
         $categories = Category::pluck('id', 'name');
         $branches = Branch::whereIn('code', ['BC-TAG', 'BC-MAB', 'BC-MAIN'])->get();
         foreach ($this->menu as $index => [$category, $name, $price]) {
+            $isStocked = in_array($category, self::STOCKED_CATEGORIES, true);
             $product = Product::updateOrCreate(['barcode' => 'BC'.str_pad((string) ($index + 1), 5, '0', STR_PAD_LEFT)], [
                 'name' => $name, 'category_id' => $categories[$category], 'description' => "Boundary Cafe {$category} item. Seed price is an editable estimate.",
-                'product_img' => $this->productImage($category, $name), 'product_type' => 'standard', 'unit' => 'serving', 'status' => 'active', 'is_taxable' => true,
+                'product_img' => $this->productImage($category, $name), 'product_type' => $isStocked ? 'standard' : 'made_to_order',
+                'unit' => $isStocked ? 'slice' : 'serving', 'status' => 'active', 'is_taxable' => true,
             ]);
+            // Made-to-order items keep a stock row per branch only as their price; their own stock stays 0.
             foreach ($branches as $branch) {
                 $capital = round($price * .45, 2);
-                ProductStock::updateOrCreate(['product_id' => $product->id, 'branch_id' => $branch->id], ['stock' => 100, 'capital' => $capital, 'markup' => round((($price / $capital) - 1) * 100, 2)]);
+                ProductStock::updateOrCreate(['product_id' => $product->id, 'branch_id' => $branch->id], [
+                    'stock' => $isStocked ? self::OPENING_STOCK : 0,
+                    'capital' => $capital,
+                    'markup' => round((($price / $capital) - 1) * 100, 2),
+                ]);
             }
         }
         $this->command->info('Boundary Cafe menu seeded ('.count($this->menu).' items across 3 branches).');

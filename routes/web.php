@@ -1,42 +1,49 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-
-use App\Http\Controllers\LoginAuthController;
+use App\Http\Controllers\AiAssistantController;
+use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\BranchController;
-use App\Http\Controllers\SystemSettingsController;
-use App\Http\Controllers\UserController;
+use App\Http\Controllers\CashCountController;
+use App\Http\Controllers\CashSessionController;
+use App\Http\Controllers\Customer;
+use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DeliveryZoneController;
+use App\Http\Controllers\DiningTableController;
+use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\ExpenseCategoryController;
+use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\LoginAuthController;
+use App\Http\Controllers\LogsController;
+use App\Http\Controllers\LoyaltyController;
+use App\Http\Controllers\LoyaltyProgramController;
+use App\Http\Controllers\OnlineOrderController;
+use App\Http\Controllers\PettyCashController;
+use App\Http\Controllers\PettyCashFundController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\PromoController;
-use App\Http\Controllers\SupplierController;
-use App\Http\Controllers\LogsController;
-use App\Http\Controllers\CashSessionController;
-use App\Http\Controllers\CashCountController;
-use App\Http\Controllers\PettyCashController;
-use App\Http\Controllers\PettyCashFundController;
-use App\Http\Controllers\ExpenseController;
-use App\Http\Controllers\ExpenseCategoryController;
-use App\Http\Controllers\ReportController;
 use App\Http\Controllers\PurchaseController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\StockAdjustmentController;
-use App\Http\Controllers\AiAssistantController;
-use App\Http\Controllers\InventoryController;
-use App\Http\Controllers\StockTransferController;
 use App\Http\Controllers\StockCountController;
-use App\Http\Controllers\CustomerController;
-use App\Http\Controllers\LoyaltyController;
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\DiningTableController;
+use App\Http\Controllers\StockTransferController;
+use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\SystemSettingsController;
 use App\Http\Controllers\TableOrderController;
-use App\Http\Controllers\OnlineOrderController;
-use App\Http\Controllers\DeliveryZoneController;
-use App\Http\Controllers\LoyaltyProgramController;
-use App\Http\Controllers\Customer;
+use App\Http\Controllers\TimeClockController;
+use App\Http\Controllers\UserController;
+use Illuminate\Support\Facades\Route;
 
 // ─── PUBLIC STOREFRONT (customer ordering app) ───────────────────────────────
 Route::get('/', [Customer\StorefrontController::class, 'index'])->name('home');
 Route::get('/loyalty/card/{token}', [LoyaltyController::class, 'card'])->name('loyalty.card');
+
+// Employee time clock (public; employees prove who they are with code + PIN, GPS and face)
+Route::get('/time-clock', [TimeClockController::class, 'show'])->name('time-clock');
+Route::post('/time-clock/identify', [TimeClockController::class, 'identify'])->middleware('throttle:20,1')->name('time-clock.identify');
+Route::post('/time-clock/punch', [TimeClockController::class, 'punch'])->middleware('throttle:20,1')->name('time-clock.punch');
 
 // Staff sign-in
 Route::get('/login', [LoginAuthController::class, 'getLogin'])->name('login');
@@ -77,7 +84,7 @@ Route::middleware('auth:customer')->group(function () {
 });
 
 // ─── STAFF (web guard) ───────────────────────────────────────────────────────
-Route::middleware('auth:web')->group(function () {
+Route::middleware(['auth:web', 'order-taker'])->group(function () {
 
     Route::post('/logout', [LoginAuthController::class, 'postLogout'])->name('logout.post');
 
@@ -135,6 +142,23 @@ Route::middleware('auth:web')->group(function () {
         Route::post('/', 'store')->name('store');
         Route::patch('/{diningTable}', 'update')->name('update');
         Route::delete('/{diningTable}', 'destroy')->name('destroy');
+    });
+
+    // Employees — ID 45
+    Route::middleware('access:45')->prefix('employees')->name('employees.')->controller(EmployeeController::class)->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::post('/', 'store')->name('store');
+        Route::patch('/{employee}', 'update')->name('update');
+        Route::delete('/{employee}', 'destroy')->name('destroy');
+        Route::post('/{employee}/face', 'enrollFace')->name('face.store');
+        Route::get('/{employee}/face', 'face')->name('face');
+    });
+
+    // Attendance log + branch clock-in areas — ID 46
+    Route::middleware('access:46')->prefix('attendance')->name('attendance.')->controller(AttendanceController::class)->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::patch('/branches/{branch}/location', 'updateLocation')->name('location');
+        Route::get('/{attendance}/photo', 'photo')->name('photo');
     });
 
     // Delivery Zone & online ordering settings — ID 43
@@ -293,12 +317,12 @@ Route::middleware('auth:web')->group(function () {
 
     // Stock Count (Physical Inventory) — ID 36
     Route::middleware('access:36')->prefix('stock-count')->name('stock-count.')->controller(StockCountController::class)->group(function () {
-        Route::get('/',                      'index')->name('index');
-        Route::post('/start',                'start')->name('start');
-        Route::get('/{session}',             'show')->name('show');
-        Route::patch('/{session}/save',      'save')->name('save');
-        Route::post('/{session}/commit',     'commit')->name('commit');
-        Route::delete('/{session}',          'cancel')->name('cancel');
+        Route::get('/', 'index')->name('index');
+        Route::post('/start', 'start')->name('start');
+        Route::get('/{session}', 'show')->name('show');
+        Route::patch('/{session}/save', 'save')->name('save');
+        Route::post('/{session}/commit', 'commit')->name('commit');
+        Route::delete('/{session}', 'cancel')->name('cancel');
     });
 
     // Customers — ID 39

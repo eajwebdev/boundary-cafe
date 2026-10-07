@@ -8,7 +8,6 @@ use App\Models\SystemSetting;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -18,6 +17,7 @@ class CustomerController extends Controller
     private function branchId(): ?int
     {
         $user = Auth::user();
+
         return $user->isAdmin() ? request()->integer('branch_id') ?: $user->branch_id : $user->branch_id;
     }
 
@@ -25,11 +25,16 @@ class CustomerController extends Controller
     {
         $branchId = $this->branchId();
 
+        $inBranch = fn ($q) => $q->when($branchId, fn ($q) => $q->where(fn ($inner) => $inner->where('branch_id', $branchId)->orWhereNull('branch_id')));
+        $unpaidCredit = fn ($q) => $q->where('status', 'completed')->whereIn('payment_status', ['unpaid', 'partial'])->where('balance_due', '>', 0);
+
         $customers = Customer::query()
+            ->select('customers.*')
+            ->selectRaw('password IS NOT NULL as has_online_account')
             ->withSum(['sales as total_purchases' => fn ($q) => $q->where('status', 'completed')], 'total')
-            ->withSum(['sales as credit_balance' => fn ($q) => $q->where('status', 'completed')->whereIn('payment_status', ['unpaid', 'partial'])], 'balance_due')
+            ->withSum(['sales as credit_balance' => $unpaidCredit], 'balance_due')
             ->withCount(['sales as transactions_count' => fn ($q) => $q->where('status', 'completed')])
-            ->when($branchId, fn ($q) => $q->where(fn ($inner) => $inner->where('branch_id', $branchId)->orWhereNull('branch_id')))
+            ->tap($inBranch)
             ->when($request->filled('search'), function ($q) use ($request) {
                 $s = $request->search;
                 $q->where(fn ($inner) => $inner
@@ -41,10 +46,38 @@ class CustomerController extends Controller
             ->paginate(25)
             ->withQueryString();
 
+        $owing = Customer::query()
+            ->tap($inBranch)
+            ->whereHas('sales', $unpaidCredit)
+            ->withSum(['sales as credit_balance' => $unpaidCredit], 'balance_due')
+            ->orderByDesc('credit_balance')
+            ->limit(6)
+            ->get(['id', 'name', 'customer_number'])
+            ->map(fn (Customer $c) => [
+                'id' => $c->id,
+                'name' => $c->name,
+                'customer_number' => $c->customer_number,
+                'credit_balance' => round((float) $c->credit_balance, 2),
+            ]);
+
+        $all = Customer::query()->tap($inBranch);
+
         return Inertia::render('Customers/Index', [
             'customers' => $customers,
-            'filters'   => $request->only('search'),
-            'currency'  => SystemSetting::currencySymbol(),
+            'stats' => [
+                'total' => (clone $all)->count(),
+                'active' => (clone $all)->where('is_active', true)->count(),
+                'online_accounts' => (clone $all)->whereNotNull('password')->count(),
+                'loyalty_points' => (int) (clone $all)->sum('loyalty_points'),
+                'owing_count' => (clone $all)->whereHas('sales', $unpaidCredit)->count(),
+                'credit_outstanding' => round((float) Sale::query()
+                    ->whereIn('customer_id', (clone $all)->select('id'))
+                    ->tap($unpaidCredit)
+                    ->sum('balance_due'), 2),
+            ],
+            'owing' => $owing,
+            'filters' => $request->only('search'),
+            'currency' => SystemSetting::currencySymbol(),
         ]);
     }
 
@@ -71,10 +104,12 @@ class CustomerController extends Controller
 
         if ($customer->sales()->exists() || $customer->payments()->exists()) {
             $customer->update(['is_active' => false]);
+
             return back()->with('success', 'Customer has history, so it was archived.');
         }
 
         $customer->delete();
+
         return back()->with('success', 'Customer deleted.');
     }
 
@@ -97,18 +132,18 @@ class CustomerController extends Controller
             ->latest()
             ->paginate(15)
             ->through(fn (Sale $sale) => [
-                'id'              => $sale->id,
-                'receipt_number'  => $sale->receipt_number,
-                'created_at'      => $sale->created_at?->toIso8601String(),
-                'total'           => (float) $sale->total,
-                'amount_paid'     => (float) $sale->amount_paid,
-                'balance_due'     => (float) $sale->balance_due,
-                'payment_method'  => $sale->payment_method,
-                'payment_status'  => $sale->payment_status,
-                'due_date'        => $sale->due_date?->toDateString(),
-                'notes'           => $sale->credit_notes ?: $sale->notes,
-                'cashier'         => $sale->user ? trim("{$sale->user->fname} {$sale->user->lname}") : null,
-                'items'           => $sale->items->map(fn ($item) => [
+                'id' => $sale->id,
+                'receipt_number' => $sale->receipt_number,
+                'created_at' => $sale->created_at?->toIso8601String(),
+                'total' => (float) $sale->total,
+                'amount_paid' => (float) $sale->amount_paid,
+                'balance_due' => (float) $sale->balance_due,
+                'payment_method' => $sale->payment_method,
+                'payment_status' => $sale->payment_status,
+                'due_date' => $sale->due_date?->toDateString(),
+                'notes' => $sale->credit_notes ?: $sale->notes,
+                'cashier' => $sale->user ? trim("{$sale->user->fname} {$sale->user->lname}") : null,
+                'items' => $sale->items->map(fn ($item) => [
                     'name' => $item->product?->name ?? '(deleted)',
                     'variant_name' => $item->variant?->name,
                     'qty' => (float) $item->quantity,
@@ -136,8 +171,8 @@ class CustomerController extends Controller
                 'last_login_at' => $customer->last_login_at?->toIso8601String(),
                 'online_orders_count' => $customer->onlineOrders()->count(),
             ],
-            'sales'       => $sales,
-            'currency'    => SystemSetting::currencySymbol(),
+            'sales' => $sales,
+            'currency' => SystemSetting::currencySymbol(),
             'loyaltyTransactions' => $loyaltyTransactions,
         ]);
     }
@@ -150,19 +185,23 @@ class CustomerController extends Controller
         ]);
 
         return $request->validate([
-            'name'           => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:255'],
             'contact_number' => ['nullable', 'string', 'max:40', Rule::unique('customers', 'contact_number')->ignore($customer?->id)],
-            'email'          => ['nullable', 'email', 'max:255', Rule::unique('customers', 'email')->ignore($customer?->id)],
-            'address'        => ['nullable', 'string', 'max:1000'],
-            'notes'          => ['nullable', 'string', 'max:1000'],
-            'is_active'      => ['sometimes', 'boolean'],
+            'email' => ['nullable', 'email', 'max:255', Rule::unique('customers', 'email')->ignore($customer?->id)],
+            'address' => ['nullable', 'string', 'max:1000'],
+            'notes' => ['nullable', 'string', 'max:1000'],
+            'is_active' => ['sometimes', 'boolean'],
         ]);
     }
 
     private function authorizeCustomer(Customer $customer): void
     {
         $user = Auth::user();
-        if ($user->isAdmin()) return;
-        if ($customer->branch_id && $customer->branch_id !== $user->branch_id) abort(403);
+        if ($user->isAdmin()) {
+            return;
+        }
+        if ($customer->branch_id && $customer->branch_id !== $user->branch_id) {
+            abort(403);
+        }
     }
 }

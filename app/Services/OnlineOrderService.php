@@ -298,7 +298,7 @@ class OnlineOrderService
         $taxable = round(collect($lines)->where('is_taxable', true)->sum('total'), 2);
 
         // ── Promo ──
-        [$promo, $promoDiscount, $promoError] = $this->resolvePromo($input['promo_code'] ?? null, $lines, $subtotal);
+        [$promo, $promoDiscount, $promoError] = $this->resolvePromo($customer, $input['promo_code'] ?? null, $lines, $subtotal);
         $afterPromo = round($subtotal - $promoDiscount, 2);
         [$vat] = $this->sales->vatFor($afterPromo, $subtotal, $taxable, $branch->id);
 
@@ -517,7 +517,7 @@ class OnlineOrderService
     // ── Internals ─────────────────────────────────────────────────────────
 
     /** @return array{0: ?Promo, 1: float, 2: ?string} */
-    private function resolvePromo(?string $code, array $lines, float $subtotal): array
+    private function resolvePromo(Customer $customer, ?string $code, array $lines, float $subtotal): array
     {
         if (! Promo::tableExists() || $subtotal <= 0) {
             return [null, 0.0, null];
@@ -528,6 +528,11 @@ class OnlineOrderService
             $promo = Promo::with(['products:id', 'categories:id'])->byCode($code)->first();
             if (! $promo || ! $promo->isValid() || ! $promo->availableOn('online')) {
                 return [null, 0.0, 'That promo code is invalid or has expired.'];
+            }
+            if ($promo->isUsedUpBy($customer->id)) {
+                return [null, 0.0, $promo->max_uses_per_customer === 1
+                    ? 'You have already used this promo code.'
+                    : "You have already used this promo code {$promo->max_uses_per_customer} times."];
             }
             $discount = $this->promoDiscount($promo, $lines, $subtotal);
             if ($discount <= 0) {
@@ -543,6 +548,9 @@ class OnlineOrderService
         $best = null;
         $bestDiscount = 0.0;
         foreach (Promo::with(['products:id', 'categories:id'])->onStorefront()->where(fn ($q) => $q->whereNull('code')->orWhere('code', ''))->get() as $promo) {
+            if ($promo->isUsedUpBy($customer->id)) {
+                continue;
+            }
             $discount = $this->promoDiscount($promo, $lines, $subtotal);
             if ($discount > $bestDiscount) {
                 [$best, $bestDiscount] = [$promo, $discount];

@@ -30,33 +30,34 @@ class UserController extends Controller
 
     public function index(): Response
     {
-        $actor   = Auth::user();
+        $actor = Auth::user();
         $isSuper = $actor->isSuperAdmin();
 
         $users = User::with('branch:id,name,code,business_type')
-            ->when($this->scopedBranchId(), fn($q, $id) => $q->where('branch_id', $id))
+            ->when($this->scopedBranchId(), fn ($q, $id) => $q->where('branch_id', $id))
             ->latest('created_at')
             ->get()
             ->map(fn (User $u) => [
-                'id'               => $u->id,
-                'fname'            => $u->fname,
-                'lname'            => $u->lname,
-                'full_name'        => $u->full_name,
-                'username'         => $u->username,
-                'role'             => $u->role,
-                'role_label'       => $u->role_label,
-                'branch_id'        => $u->branch_id,
-                'branch'           => $u->branch ? [
-                    'id'            => $u->branch->id,
-                    'name'          => $u->branch->name,
-                    'code'          => $u->branch->code,
+                'id' => $u->id,
+                'fname' => $u->fname,
+                'lname' => $u->lname,
+                'full_name' => $u->full_name,
+                'username' => $u->username,
+                'role' => $u->role,
+                'role_label' => $u->role_label,
+                'branch_id' => $u->branch_id,
+                'branch' => $u->branch ? [
+                    'id' => $u->branch->id,
+                    'name' => $u->branch->name,
+                    'code' => $u->branch->code,
                     'business_type' => $u->branch->business_type,
                 ] : null,
-                'access'           => $u->access ?? [],
-                'pos_layout'       => $u->pos_layout ?? 'grid',
+                // What the access checkboxes should show: saved access, or the role's defaults.
+                'access' => $u->accessForForm(),
+                'pos_layout' => $u->pos_layout ?? 'grid',
                 'pos_layout_label' => $u->pos_layout_label,
-                'created_at'       => $u->created_at?->toIso8601String(),
-                'is_self'          => $u->id === $actor->id,
+                'created_at' => $u->created_at?->toIso8601String(),
+                'is_self' => $u->id === $actor->id,
             ]);
 
         // Roles the actor can assign
@@ -74,19 +75,19 @@ class UserController extends Controller
         );
 
         return Inertia::render('Users/Index', [
-            'users'            => $users,
-            'branches'         => Branch::orderBy('name')
+            'users' => $users,
+            'branches' => Branch::orderBy('name')
                 ->get(['id', 'name', 'code', 'business_type'])
                 ->map(fn ($b) => [
-                    'id'            => $b->id,
-                    'name'          => $b->name,
-                    'code'          => $b->code,
+                    'id' => $b->id,
+                    'name' => $b->name,
+                    'code' => $b->code,
                     'business_type' => $b->business_type,
                 ]),
-            'roles'            => $assignableRoles,
-            'menus'            => $grantableMenus,
-            'menuIds'          => MenuHelper::ids(),
-            'is_super_admin'   => $isSuper,
+            'roles' => $assignableRoles,
+            'menus' => $grantableMenus,
+            'menuIds' => MenuHelper::ids(),
+            'is_super_admin' => $isSuper,
             'is_administrator' => $actor->isAdministrator(),
         ]);
     }
@@ -95,7 +96,7 @@ class UserController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $actor   = Auth::user();
+        $actor = Auth::user();
         $isSuper = $actor->isSuperAdmin();
 
         if (! $actor->isAdmin()) {
@@ -107,44 +108,44 @@ class UserController extends Controller
             : ['manager', 'cashier', 'waiter'];
 
         $validated = $request->validate([
-            'fname'      => ['required', 'string', 'max:255'],
-            'lname'      => ['required', 'string', 'max:255'],
-            'username'   => ['required', 'string', 'max:255', 'unique:users,username'],
-            'password'   => ['required', 'string', 'min:6'],
-            'role'       => ['required', 'string', 'in:' . implode(',', $allowedRoles)],
-            'branch_id'  => ['required', 'exists:branches,id'],
-            'access'     => ['nullable', 'array'],
-            'access.*'   => ['string', 'in:' . implode(',', MenuHelper::ids())],
-            'pos_layout' => ['nullable', 'string', 'in:' . implode(',', User::POS_LAYOUTS)],
+            'fname' => ['required', 'string', 'max:255'],
+            'lname' => ['required', 'string', 'max:255'],
+            'username' => ['required', 'string', 'max:255', 'unique:users,username'],
+            'password' => ['required', 'string', 'min:6'],
+            'role' => ['required', 'string', 'in:'.implode(',', $allowedRoles)],
+            'branch_id' => ['required', 'exists:branches,id'],
+            'access' => ['nullable', 'array'],
+            'access.*' => ['string', 'in:'.implode(',', MenuHelper::ids())],
+            'pos_layout' => ['nullable', 'string', 'in:'.implode(',', User::POS_LAYOUTS)],
         ], [
-            'username.unique'    => 'This username is already taken.',
-            'password.min'       => 'Password must be at least 6 characters.',
+            'username.unique' => 'This username is already taken.',
+            'password.min' => 'Password must be at least 6 characters.',
             'branch_id.required' => 'Please select a branch.',
-            'branch_id.exists'   => 'Selected branch does not exist.',
+            'branch_id.exists' => 'Selected branch does not exist.',
         ]);
 
         // Strip super-admin-only menus if not super admin
-        $access = $this->sanitizeAccess($validated['access'] ?? [], $isSuper);
+        $access = $this->sanitizeAccess($validated['access'] ?? [], $isSuper, $validated['role']);
 
         $user = User::create([
-            'fname'      => trim($validated['fname']),
-            'lname'      => trim($validated['lname']),
-            'username'   => trim($validated['username']),
-            'password'   => Hash::make($validated['password']),
-            'role'       => $validated['role'],
-            'branch_id'  => $validated['branch_id'],
-            'access'     => $access,
+            'fname' => trim($validated['fname']),
+            'lname' => trim($validated['lname']),
+            'username' => trim($validated['username']),
+            'password' => Hash::make($validated['password']),
+            'role' => $validated['role'],
+            'branch_id' => $validated['branch_id'],
+            'access' => $access,
             'pos_layout' => $validated['pos_layout'] ?? 'grid',
         ]);
 
         ActivityLog::create([
-            'user_id'      => $actor->id,
-            'action'       => 'user_created',
+            'user_id' => $actor->id,
+            'action' => 'user_created',
             'subject_type' => User::class,
-            'subject_id'   => $user->id,
-            'properties'   => [
-                'new_data'   => $user->only(['fname', 'lname', 'username', 'role', 'branch_id', 'access']),
-                'ip'         => $request->ip(),
+            'subject_id' => $user->id,
+            'properties' => [
+                'new_data' => $user->only(['fname', 'lname', 'username', 'role', 'branch_id', 'access']),
+                'ip' => $request->ip(),
                 'user_agent' => $request->userAgent(),
             ],
         ]);
@@ -156,7 +157,7 @@ class UserController extends Controller
 
     public function update(Request $request, User $user): RedirectResponse
     {
-        $actor   = Auth::user();
+        $actor = Auth::user();
         $isSuper = $actor->isSuperAdmin();
 
         if (! $actor->isAdmin()) {
@@ -173,30 +174,30 @@ class UserController extends Controller
             : ['manager', 'cashier', 'waiter'];
 
         $validated = $request->validate([
-            'fname'      => ['required', 'string', 'max:255'],
-            'lname'      => ['required', 'string', 'max:255'],
-            'username'   => ['required', 'string', 'max:255', Rule::unique('users', 'username')->ignore($user->id)],
-            'password'   => ['nullable', 'string', 'min:6'],
-            'role'       => ['required', 'string', 'in:' . implode(',', $allowedRoles)],
-            'branch_id'  => ['required', 'exists:branches,id'],
-            'access'     => ['nullable', 'array'],
-            'access.*'   => ['string', 'in:' . implode(',', MenuHelper::ids())],
-            'pos_layout' => ['nullable', 'string', 'in:' . implode(',', User::POS_LAYOUTS)],
+            'fname' => ['required', 'string', 'max:255'],
+            'lname' => ['required', 'string', 'max:255'],
+            'username' => ['required', 'string', 'max:255', Rule::unique('users', 'username')->ignore($user->id)],
+            'password' => ['nullable', 'string', 'min:6'],
+            'role' => ['required', 'string', 'in:'.implode(',', $allowedRoles)],
+            'branch_id' => ['required', 'exists:branches,id'],
+            'access' => ['nullable', 'array'],
+            'access.*' => ['string', 'in:'.implode(',', MenuHelper::ids())],
+            'pos_layout' => ['nullable', 'string', 'in:'.implode(',', User::POS_LAYOUTS)],
         ], [
-            'username.unique'    => 'This username is already taken.',
-            'password.min'       => 'Password must be at least 6 characters.',
+            'username.unique' => 'This username is already taken.',
+            'password.min' => 'Password must be at least 6 characters.',
             'branch_id.required' => 'Please select a branch.',
         ]);
 
-        $access = $this->sanitizeAccess($validated['access'] ?? [], $isSuper);
+        $access = $this->sanitizeAccess($validated['access'] ?? [], $isSuper, $validated['role']);
 
         $updateData = [
-            'fname'      => trim($validated['fname']),
-            'lname'      => trim($validated['lname']),
-            'username'   => trim($validated['username']),
-            'role'       => $validated['role'],
-            'branch_id'  => $validated['branch_id'],
-            'access'     => $access,
+            'fname' => trim($validated['fname']),
+            'lname' => trim($validated['lname']),
+            'username' => trim($validated['username']),
+            'role' => $validated['role'],
+            'branch_id' => $validated['branch_id'],
+            'access' => $access,
             'pos_layout' => $validated['pos_layout'] ?? $user->pos_layout ?? 'grid',
         ];
 
@@ -204,30 +205,36 @@ class UserController extends Controller
             $updateData['password'] = Hash::make($validated['password']);
         }
 
-        $oldData   = $user->only(['fname', 'lname', 'username', 'role', 'branch_id', 'access', 'pos_layout']);
+        $oldData = $user->only(['fname', 'lname', 'username', 'role', 'branch_id', 'access', 'pos_layout']);
         $scalarOld = array_intersect_key($oldData, array_flip(['fname', 'lname', 'username', 'role', 'branch_id', 'pos_layout']));
         $scalarNew = array_intersect_key($updateData, array_flip(['fname', 'lname', 'username', 'role', 'branch_id', 'pos_layout']));
-        $changed   = array_keys(array_diff_assoc($scalarNew, $scalarOld));
+        $changed = array_keys(array_diff_assoc($scalarNew, $scalarOld));
 
-        $accessOld = $oldData['access'] ?? []; sort($accessOld);
-        $accessNew = $access; sort($accessNew);
-        if ($accessOld !== $accessNew) $changed[] = 'access';
-        if (! empty($validated['password'])) $changed[] = 'password';
+        $accessOld = $oldData['access'] ?? [];
+        sort($accessOld);
+        $accessNew = $access;
+        sort($accessNew);
+        if ($accessOld !== $accessNew) {
+            $changed[] = 'access';
+        }
+        if (! empty($validated['password'])) {
+            $changed[] = 'password';
+        }
 
         if (! empty($changed)) {
             $user->update($updateData);
 
             ActivityLog::create([
-                'user_id'      => $actor->id,
-                'action'       => 'user_updated',
+                'user_id' => $actor->id,
+                'action' => 'user_updated',
                 'subject_type' => User::class,
-                'subject_id'   => $user->id,
-                'properties'   => [
-                    'old_data'       => $oldData,
-                    'new_data'       => array_diff_key($updateData, ['password' => '']),
+                'subject_id' => $user->id,
+                'properties' => [
+                    'old_data' => $oldData,
+                    'new_data' => array_diff_key($updateData, ['password' => '']),
                     'changed_fields' => $changed,
-                    'ip'             => $request->ip(),
-                    'user_agent'     => $request->userAgent(),
+                    'ip' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
                 ],
             ]);
         }
@@ -253,16 +260,16 @@ class UserController extends Controller
         $oldData = $user->only(['fname', 'lname', 'username', 'role', 'branch_id', 'access']);
 
         ActivityLog::create([
-            'user_id'      => $actor->id,
-            'action'       => 'user_deleted',
+            'user_id' => $actor->id,
+            'action' => 'user_deleted',
             'subject_type' => User::class,
-            'subject_id'   => $user->id,
-            'properties'   => [
+            'subject_id' => $user->id,
+            'properties' => [
                 'deleted_user' => $user->full_name,
-                'old_data'     => $oldData,
-                'reason'       => $request->input('reason', 'No reason provided'),
-                'ip'           => $request->ip(),
-                'user_agent'   => $request->userAgent(),
+                'old_data' => $oldData,
+                'reason' => $request->input('reason', 'No reason provided'),
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
             ],
         ]);
 
@@ -275,10 +282,17 @@ class UserController extends Controller
 
     /**
      * Strip super-admin-only menu IDs from access list when actor is not super admin.
+     * Order takers (waiters) are always saved with table ordering only.
      */
-    private function sanitizeAccess(array $access, bool $isSuper): array
+    private function sanitizeAccess(array $access, bool $isSuper, string $role): array
     {
-        if ($isSuper) return $access;
+        if ($role === User::ROLE_WAITER) {
+            return User::ORDER_TAKER_MENUS;
+        }
+
+        if ($isSuper) {
+            return $access;
+        }
 
         return array_values(
             array_filter($access, fn ($id) => ! in_array((string) $id, self::SUPER_ADMIN_ONLY_MENUS))
@@ -295,8 +309,11 @@ class UserController extends Controller
             foreach (self::SUPER_ADMIN_ONLY_MENUS as $id) {
                 unset($grouped[$group][$id]);
             }
-            if (empty($grouped[$group])) unset($grouped[$group]);
+            if (empty($grouped[$group])) {
+                unset($grouped[$group]);
+            }
         }
+
         return $grouped;
     }
 
@@ -313,6 +330,7 @@ class UserController extends Controller
                 $enabled[] = (string) $id;
             }
         }
+
         return $enabled;
     }
 
@@ -327,8 +345,11 @@ class UserController extends Controller
                     unset($grouped[$group][$id]);
                 }
             }
-            if (empty($grouped[$group])) unset($grouped[$group]);
+            if (empty($grouped[$group])) {
+                unset($grouped[$group]);
+            }
         }
+
         return $grouped;
     }
 }

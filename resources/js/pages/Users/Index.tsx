@@ -23,8 +23,12 @@ import {
     Scissors,
     Monitor,
     Smartphone,
+    Users as UsersIcon,
+    ShieldCheck,
+    Briefcase,
 } from 'lucide-react';
 import { useState, useMemo } from 'react';
+import { Chip, controlCls, EmptyRow, PageHeader, Panel, Stat, StatStrip, StatusPill, thCls, useFlashToasts } from '@/components/AdminKit';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AdminLayout from '@/layouts/AdminLayout';
@@ -173,14 +177,14 @@ const branchTypeBadge: Record<string, string> = {
 };
 
 const layoutBadgeColor: Record<string, string> = {
-    grid: 'bg-slate-500/15 text-slate-400 border border-slate-500/20',
-    tablet: 'bg-blue-500/15 text-blue-400 border border-blue-500/20',
-    grocery: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20',
-    cafe: 'bg-purple-500/15 text-purple-400 border border-purple-500/20',
-    restaurant: 'bg-orange-500/15 text-orange-400 border border-orange-500/20',
-    salon: 'bg-pink-500/15 text-pink-400 border border-pink-500/20',
-    kiosk: 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20',
-    mobile: 'bg-rose-500/15 text-rose-400 border border-rose-500/20',
+    grid: 'bg-slate-500/10 text-slate-700 dark:text-slate-400',
+    tablet: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
+    grocery: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+    cafe: 'bg-purple-500/10 text-purple-700 dark:text-purple-400',
+    restaurant: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+    salon: 'bg-pink-500/10 text-pink-700 dark:text-pink-400',
+    kiosk: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-400',
+    mobile: 'bg-rose-500/10 text-rose-700 dark:text-rose-400',
 };
 
 // ─── Access checkbox grid ─────────────────────────────────────────────────────
@@ -412,7 +416,7 @@ function UserDrawer({
                   password: '',
                   role: user.role,
                   branch_id: String(user.branch_id ?? ''),
-                  access: user.access,
+                  access: user.access.map(String),
                   pos_layout: user.pos_layout ?? 'grid',
               }
             : { ...EMPTY_FORM },
@@ -648,7 +652,21 @@ function UserDrawer({
                     )}
 
                     {/* ── Menu Access tab ──────────────────────── */}
-                    {tab === 'access' && <AccessGrid menus={menus} value={form.access} onChange={(ids) => set('access', ids)} />}
+                    {tab === 'access' &&
+                        (form.role === 'waiter' ? (
+                            <div className="flex items-start gap-3 rounded-xl border border-border bg-muted/30 p-4">
+                                <UtensilsCrossed className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                                <div>
+                                    <p className="text-sm font-semibold text-foreground">Order taker — table ordering only</p>
+                                    <p className="mt-0.5 text-xs text-muted-foreground">
+                                        This account can only take table orders. Other menus can't be granted to an order taker; change the role to
+                                        give wider access.
+                                    </p>
+                                </div>
+                            </div>
+                        ) : (
+                            <AccessGrid menus={menus} value={form.access} onChange={(ids) => set('access', ids)} />
+                        ))}
 
                     {/* ── POS Settings tab ─────────────────────── */}
                     {tab === 'pos' && (
@@ -746,6 +764,7 @@ function DeleteDialog({ user, onClose }: { user: UserRow; onClose: () => void })
 
 export default function UsersIndex() {
     const { users, branches, roles, menus, menuIds, auth } = usePage<PageProps>().props;
+    useFlashToasts();
 
     const [search, setSearch] = useState('');
     const [roleFilter, setRoleFilter] = useState('');
@@ -770,167 +789,131 @@ export default function UsersIndex() {
 
     const hasFilters = search || roleFilter || branchFilter || layoutFilter;
 
+    const countRole = (...roleKeys: string[]) => users.filter((u) => roleKeys.includes(u.role)).length;
+
     return (
         <AdminLayout>
-            <div className="mx-auto max-w-[1400px] space-y-5">
-                {/* Header */}
-                <div className="flex items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-xl font-bold text-foreground">User Management</h1>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                            {users.length} user{users.length !== 1 ? 's' : ''} across {branches.length} branch{branches.length !== 1 ? 'es' : ''}
-                        </p>
-                    </div>
+            <div className="space-y-4">
+                <PageHeader title="Users" subtitle="Staff accounts, their role, branch and what they can open.">
                     {canManage && (
-                        <Button className="h-9 gap-2 font-semibold" onClick={() => setDrawer({ mode: 'create', user: null })}>
+                        <Button size="sm" className="h-9 gap-1.5" onClick={() => setDrawer({ mode: 'create', user: null })}>
                             <Plus className="h-4 w-4" /> Add user
                         </Button>
                     )}
-                </div>
+                </PageHeader>
 
-                {/* Filters */}
-                <div className="rounded-xl border border-border bg-card p-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <div className="relative min-w-[200px] flex-1">
-                            <Search className="absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <StatStrip count={5}>
+                    <Stat icon={UsersIcon} label="Accounts" value={users.length.toLocaleString()} />
+                    <Stat icon={ShieldCheck} label="Admins" value={countRole('super_admin', 'administrator').toLocaleString()} />
+                    <Stat icon={Briefcase} label="Managers" value={countRole('manager').toLocaleString()} />
+                    <Stat icon={Monitor} label="Cashiers" value={countRole('cashier').toLocaleString()} />
+                    <Stat icon={UtensilsCrossed} label="Order takers" value={countRole('waiter').toLocaleString()} />
+                </StatStrip>
+
+                <Panel
+                    flush
+                    icon={UsersIcon}
+                    title="All users"
+                    actions={
+                        <div className="relative w-full sm:w-64">
+                            <Search className="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                             <input
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                placeholder="Search by name or username…"
-                                className="h-9 w-full rounded-lg border border-border bg-background pr-9 pl-9 text-sm text-foreground placeholder:text-muted-foreground focus:ring-1 focus:ring-primary focus:outline-none"
+                                placeholder="Name or username"
+                                className={cn(controlCls, 'w-full pr-8 pl-8')}
                             />
                             {search && (
                                 <button
                                     onClick={() => setSearch('')}
-                                    className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                    className="absolute top-1/2 right-2.5 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                    aria-label="Clear search"
                                 >
                                     <X className="h-3.5 w-3.5" />
                                 </button>
                             )}
                         </div>
-                        <select
-                            value={roleFilter}
-                            onChange={(e) => setRoleFilter(e.target.value)}
-                            className="h-9 min-w-[140px] rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
-                        >
-                            <option value="">All roles</option>
-                            {Object.entries(roles).map(([val, label]) => (
-                                <option key={val} value={val}>
-                                    {label}
-                                </option>
-                            ))}
-                        </select>
-                        <select
-                            value={branchFilter}
-                            onChange={(e) => setBranchFilter(e.target.value)}
-                            className="h-9 min-w-[140px] rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
-                        >
-                            <option value="">All branches</option>
-                            {branches.map((b) => (
-                                <option key={b.id} value={String(b.id)}>
-                                    {b.name}
-                                </option>
-                            ))}
-                        </select>
-                        <select
-                            value={layoutFilter}
-                            onChange={(e) => setLayoutFilter(e.target.value)}
-                            className="h-9 min-w-[150px] rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
-                        >
-                            <option value="">All POS layouts</option>
-                            {POS_LAYOUTS.map((l) => (
-                                <option key={l.value} value={l.value}>
-                                    {l.label}
-                                </option>
-                            ))}
-                        </select>
-                        {hasFilters && (
-                            <button
-                                onClick={() => {
-                                    setSearch('');
-                                    setRoleFilter('');
-                                    setBranchFilter('');
-                                    setLayoutFilter('');
-                                }}
-                                className="flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
+                    }
+                >
+                    <div className="flex flex-wrap items-center gap-1.5 border-b border-border bg-muted/20 px-4 py-2">
+                        <Chip active={roleFilter === ''} onClick={() => setRoleFilter('')}>
+                            All roles
+                        </Chip>
+                        {Object.entries(roles).map(([role, label]) => (
+                            <Chip key={role} active={roleFilter === role} onClick={() => setRoleFilter(roleFilter === role ? '' : role)}>
+                                {label} <span className="opacity-60">{countRole(role)}</span>
+                            </Chip>
+                        ))}
+                        <div className="ml-auto flex flex-wrap gap-1.5">
+                            <select
+                                value={branchFilter}
+                                onChange={(e) => setBranchFilter(e.target.value)}
+                                className={cn(controlCls, 'h-7 text-xs')}
+                                aria-label="Branch"
                             >
-                                <X className="h-3.5 w-3.5" />
-                                Clear
-                            </button>
-                        )}
-                        <span className="ml-auto text-xs text-muted-foreground">
-                            {filtered.length} result{filtered.length !== 1 ? 's' : ''}
-                        </span>
-                    </div>
-                </div>
-
-                {/* Summary cards */}
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    {Object.entries(roles).map(([role, label]) => {
-                        const count = users.filter((u) => u.role === role).length;
-                        return (
-                            <button
-                                key={role}
-                                onClick={() => setRoleFilter(roleFilter === role ? '' : role)}
-                                className={cn(
-                                    'rounded-xl border bg-card p-4 text-left transition-all hover:shadow-sm',
-                                    roleFilter === role ? 'border-primary bg-primary/5' : 'border-border',
-                                )}
+                                <option value="">All branches</option>
+                                {branches.map((b) => (
+                                    <option key={b.id} value={String(b.id)}>
+                                        {b.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <select
+                                value={layoutFilter}
+                                onChange={(e) => setLayoutFilter(e.target.value)}
+                                className={cn(controlCls, 'h-7 text-xs')}
+                                aria-label="POS layout"
                             >
-                                <p
-                                    className={cn(
-                                        'text-[10px] font-bold tracking-wider uppercase',
-                                        roleBadgeColor[role]?.split(' ')[1] ?? 'text-muted-foreground',
-                                    )}
+                                <option value="">Any POS layout</option>
+                                {POS_LAYOUTS.map((l) => (
+                                    <option key={l.value} value={l.value}>
+                                        {l.label}
+                                    </option>
+                                ))}
+                            </select>
+                            {hasFilters && (
+                                <button
+                                    onClick={() => {
+                                        setSearch('');
+                                        setRoleFilter('');
+                                        setBranchFilter('');
+                                        setLayoutFilter('');
+                                    }}
+                                    className="h-7 rounded-lg px-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
                                 >
-                                    {label}
-                                </p>
-                                <p className="mt-1 text-2xl font-bold text-foreground tabular-nums">{count}</p>
-                            </button>
-                        );
-                    })}
-                </div>
+                                    Clear
+                                </button>
+                            )}
+                        </div>
+                    </div>
 
-                {/* Table */}
-                <div className="overflow-hidden rounded-xl border border-border bg-card">
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-border bg-muted/30">
-                                    {['User', 'Role', 'Branch', 'POS Layout', 'Access', 'Joined', ''].map((h, i) => (
-                                        <th
-                                            key={i}
-                                            className={cn(
-                                                'px-4 py-3 text-[10px] font-bold tracking-widest text-muted-foreground uppercase',
-                                                i === 0 ? 'text-left' : i === 6 ? 'w-10 text-right' : 'text-left',
-                                                i === 2 ? 'hidden md:table-cell' : '',
-                                                i === 3 ? 'hidden sm:table-cell' : '',
-                                                i === 4 ? 'hidden lg:table-cell' : '',
-                                                i === 5 ? 'hidden sm:table-cell' : '',
-                                            )}
-                                        >
-                                            {h}
-                                        </th>
-                                    ))}
+                            <thead className="border-b border-border">
+                                <tr>
+                                    <th className={thCls}>User</th>
+                                    <th className={thCls}>Role</th>
+                                    <th className={cn(thCls, 'hidden md:table-cell')}>Branch</th>
+                                    <th className={cn(thCls, 'hidden sm:table-cell')}>POS layout</th>
+                                    <th className={cn(thCls, 'hidden lg:table-cell')}>Menu access</th>
+                                    <th className={cn(thCls, 'hidden sm:table-cell')}>Joined</th>
+                                    <th className="w-20" />
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
                                 {filtered.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={7} className="px-4 py-12 text-center text-sm text-muted-foreground">
-                                            No users found
-                                        </td>
-                                    </tr>
+                                    <EmptyRow colSpan={7} icon={UsersIcon}>
+                                        {hasFilters ? 'No users match these filters.' : 'No users yet.'}
+                                    </EmptyRow>
                                 ) : (
                                     filtered.map((user) => {
                                         const layoutDef = getPosLayoutDef(user.pos_layout);
                                         const LayoutIcon = layoutDef.icon;
                                         return (
-                                            <tr key={user.id} className="group transition-colors hover:bg-muted/20">
-                                                {/* User */}
-                                                <td className="px-4 py-3">
-                                                    <div className="flex items-center gap-3">
-                                                        <div
+                                            <tr key={user.id} className="hover:bg-muted/30">
+                                                <td className="px-4 py-2">
+                                                    <div className="flex items-center gap-2.5">
+                                                        <span
                                                             className={cn(
                                                                 'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black',
                                                                 roleBadgeColor[user.role] ?? 'bg-muted text-muted-foreground',
@@ -938,110 +921,77 @@ export default function UsersIndex() {
                                                         >
                                                             {user.fname.charAt(0)}
                                                             {user.lname.charAt(0)}
-                                                        </div>
+                                                        </span>
                                                         <div className="min-w-0">
-                                                            <div className="flex items-center gap-2">
-                                                                <p className="truncate text-sm font-semibold text-foreground">{user.full_name}</p>
-                                                                {user.is_self && (
-                                                                    <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary">
-                                                                        you
-                                                                    </span>
-                                                                )}
-                                                            </div>
+                                                            <p className="flex items-center gap-1.5 truncate font-semibold">
+                                                                {user.full_name}
+                                                                {user.is_self && <StatusPill tone="primary">you</StatusPill>}
+                                                            </p>
                                                             <p className="font-mono text-[11px] text-muted-foreground">{user.username}</p>
                                                         </div>
                                                     </div>
                                                 </td>
-
-                                                {/* Role */}
-                                                <td className="px-4 py-3">
+                                                <td className="px-4 py-2">
                                                     <span
                                                         className={cn(
-                                                            'rounded-full px-2 py-1 text-[10px] font-bold',
+                                                            'rounded-full px-2 py-0.5 text-[11px] font-bold',
                                                             roleBadgeColor[user.role] ?? 'bg-muted text-muted-foreground',
                                                         )}
                                                     >
                                                         {user.role_label}
                                                     </span>
                                                 </td>
-
-                                                {/* Branch */}
-                                                <td className="hidden px-4 py-3 md:table-cell">
+                                                <td className="hidden px-4 py-2 md:table-cell">
                                                     {user.branch ? (
-                                                        <div>
-                                                            <p className="text-sm font-medium text-foreground">{user.branch.name}</p>
-                                                            <div className="mt-0.5 flex items-center gap-1.5">
-                                                                <span className="font-mono text-[10px] text-muted-foreground">
-                                                                    {user.branch.code}
-                                                                </span>
-                                                                <span
-                                                                    className={cn(
-                                                                        'rounded-sm px-1 py-0.5 text-[9px] font-bold capitalize',
-                                                                        branchTypeBadge[user.branch.business_type] ??
-                                                                            'bg-muted text-muted-foreground',
-                                                                    )}
-                                                                >
-                                                                    {user.branch.business_type}
-                                                                </span>
-                                                            </div>
-                                                        </div>
+                                                        <>
+                                                            <p className="font-semibold">{user.branch.name}</p>
+                                                            <p className="font-mono text-[11px] text-muted-foreground">{user.branch.code}</p>
+                                                        </>
                                                     ) : (
-                                                        <span className="text-xs text-muted-foreground">—</span>
+                                                        <span className="text-xs text-muted-foreground">All branches</span>
                                                     )}
                                                 </td>
-
-                                                {/* POS Layout — new column */}
-                                                <td className="hidden px-4 py-3 sm:table-cell">
-                                                    <button
-                                                        onClick={() => canManage && setDrawer({ mode: 'edit', user })}
-                                                        title="Click to change POS layout"
+                                                <td className="hidden px-4 py-2 sm:table-cell">
+                                                    <span
                                                         className={cn(
-                                                            'group/layout flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 transition-all',
-                                                            layoutBadgeColor[user.pos_layout] ?? 'border-border bg-muted text-muted-foreground',
-                                                            canManage && 'cursor-pointer hover:ring-1 hover:ring-primary/40',
+                                                            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold',
+                                                            layoutBadgeColor[user.pos_layout] ?? 'bg-muted text-muted-foreground',
                                                         )}
                                                     >
-                                                        <LayoutIcon className="h-3 w-3 shrink-0" />
-                                                        <span className="text-[10px] font-bold">{layoutDef.label.split(' / ')[0]}</span>
-                                                    </button>
+                                                        <LayoutIcon className="h-3 w-3" /> {layoutDef.label.split(' / ')[0]}
+                                                    </span>
                                                 </td>
-
-                                                {/* Access count */}
-                                                <td className="hidden px-4 py-3 lg:table-cell">
+                                                <td className="hidden px-4 py-2 lg:table-cell">
                                                     <div className="flex items-center gap-2">
-                                                        <div className="h-1.5 w-20 flex-1 overflow-hidden rounded-full bg-muted">
+                                                        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
                                                             <div
-                                                                className="h-full rounded-full bg-primary transition-all"
+                                                                className="h-full rounded-full bg-primary"
                                                                 style={{ width: `${Math.min(100, (user.access.length / menuIds.length) * 100)}%` }}
                                                             />
                                                         </div>
-                                                        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                                                        <span className="text-xs text-muted-foreground tabular-nums">
                                                             {user.access.length}/{menuIds.length}
                                                         </span>
                                                     </div>
                                                 </td>
-
-                                                {/* Joined */}
-                                                <td className="hidden px-4 py-3 sm:table-cell">
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {user.created_at ? format(new Date(user.created_at), 'MMM d, yyyy') : '—'}
-                                                    </p>
+                                                <td className="hidden px-4 py-2 text-xs text-muted-foreground sm:table-cell">
+                                                    {user.created_at ? format(new Date(user.created_at), 'MMM d, yyyy') : '—'}
                                                 </td>
-
-                                                {/* Actions */}
-                                                <td className="px-4 py-3 text-right">
+                                                <td className="px-2 py-2">
                                                     {canManage && (
-                                                        <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                                                        <div className="flex justify-end gap-0.5">
                                                             <button
                                                                 onClick={() => setDrawer({ mode: 'edit', user })}
-                                                                className="flex h-7 w-7 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                                                className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                                                                aria-label={`Edit ${user.full_name}`}
                                                             >
                                                                 <Edit2 className="h-3.5 w-3.5" />
                                                             </button>
                                                             {!user.is_self && (
                                                                 <button
                                                                     onClick={() => setDeleteTarget(user)}
-                                                                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-destructive/30 hover:text-destructive"
+                                                                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                                                    aria-label={`Delete ${user.full_name}`}
                                                                 >
                                                                     <Trash2 className="h-3.5 w-3.5" />
                                                                 </button>
@@ -1056,7 +1006,7 @@ export default function UsersIndex() {
                             </tbody>
                         </table>
                     </div>
-                </div>
+                </Panel>
             </div>
 
             {drawer && (
