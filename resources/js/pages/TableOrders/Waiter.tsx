@@ -4,6 +4,8 @@ import {
     ArrowRight,
     Check,
     Clock,
+    LayoutGrid,
+    List as ListIcon,
     LogOut,
     MessageSquarePlus,
     Minus,
@@ -476,6 +478,7 @@ function OrderTaker({
     const [lines, setLines] = useState<Line[]>([]);
     const [query, setQuery] = useState('');
     const [cat, setCat] = useState<number | null>(null);
+    const [menuLayout, setMenuLayout] = useMenuLayout();
     const [variantFor, setVariantFor] = useState<Product | null>(null);
     const [reviewOpen, setReviewOpen] = useState(false);
     const [covers, setCovers] = useState(0);
@@ -582,25 +585,54 @@ function OrderTaker({
                 )}
 
                 <div className="sticky top-16 z-20 space-y-3 bg-shop-bg/90 px-4 pt-4 pb-3 backdrop-blur-xl lg:px-0">
-                    <div className="relative">
-                        <Search className="pointer-events-none absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-shop-muted" />
-                        <input
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                            placeholder="Search the menu"
-                            type="search"
-                            className="shadow-shop-sm h-12 w-full rounded-2xl border-0 bg-shop-surface pr-10 pl-12 text-base ring-1 ring-shop-line outline-none placeholder:text-shop-muted focus:ring-2 focus:ring-shop-accent"
-                        />
-                        {query && (
-                            <button
-                                type="button"
-                                onClick={() => setQuery('')}
-                                className="absolute top-1/2 right-2 flex h-9 w-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-shop-muted hover:bg-shop-sunken"
-                                aria-label="Clear search"
-                            >
-                                <X className="h-4 w-4" />
-                            </button>
-                        )}
+                    <div className="flex gap-2">
+                        <div className="relative min-w-0 flex-1">
+                            <Search className="pointer-events-none absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-shop-muted" />
+                            <input
+                                value={query}
+                                onChange={(e) => setQuery(e.target.value)}
+                                placeholder="Search the menu"
+                                type="search"
+                                className="shadow-shop-sm h-12 w-full rounded-2xl border-0 bg-shop-surface pr-10 pl-12 text-base ring-1 ring-shop-line outline-none placeholder:text-shop-muted focus:ring-2 focus:ring-shop-accent"
+                            />
+                            {query && (
+                                <button
+                                    type="button"
+                                    onClick={() => setQuery('')}
+                                    className="absolute top-1/2 right-2 flex h-9 w-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-shop-muted hover:bg-shop-sunken"
+                                    aria-label="Clear search"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                            )}
+                        </div>
+                        <div
+                            className="shadow-shop-sm flex h-12 shrink-0 items-center gap-1 rounded-2xl bg-shop-surface p-1 ring-1 ring-shop-line"
+                            role="group"
+                            aria-label="Menu layout"
+                        >
+                            {(
+                                [
+                                    ['list', ListIcon, 'List view'],
+                                    ['grid', LayoutGrid, 'Grid view'],
+                                ] as const
+                            ).map(([value, Icon, label]) => (
+                                <button
+                                    key={value}
+                                    type="button"
+                                    onClick={() => setMenuLayout(value)}
+                                    aria-pressed={menuLayout === value}
+                                    aria-label={label}
+                                    title={label}
+                                    className={cn(
+                                        'flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl transition-colors',
+                                        menuLayout === value ? 'bg-shop-ink text-shop-bg' : 'text-shop-muted hover:bg-shop-sunken',
+                                    )}
+                                >
+                                    <Icon className="h-5 w-5" />
+                                </button>
+                            ))}
+                        </div>
                     </div>
                     <div className="bc-rail -mx-4 flex gap-2 overflow-x-auto px-4 lg:mx-0 lg:flex-wrap lg:px-0">
                         <Chip active={cat === null} onClick={() => setCat(null)}>
@@ -614,12 +646,67 @@ function OrderTaker({
                     </div>
                 </div>
 
-                <ul className="grid grid-cols-2 gap-3 px-4 pt-1 sm:grid-cols-3 lg:px-0 xl:grid-cols-4">
+                <ul
+                    className={cn(
+                        'grid px-4 pt-1 lg:px-0',
+                        menuLayout === 'list' ? 'grid-cols-1 gap-2 md:grid-cols-2' : 'grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4',
+                    )}
+                >
                     {list.map((p) => {
                         const q = qtyOf(p.id);
                         const hasOptions = p.variants.length > 0;
                         const baseKey = `${p.id}-base`;
                         const baseQty = lines.find((l) => l.key === baseKey && !l.note)?.quantity ?? 0;
+                        const qtyControl = (
+                            <QtyControl
+                                size="sm"
+                                qty={hasOptions ? 0 : baseQty}
+                                label={p.name}
+                                onAdd={() => (hasOptions ? setVariantFor(p) : add(p))}
+                                onRemove={hasOptions ? undefined : () => removeOne(baseKey)}
+                                className="ml-auto"
+                            />
+                        );
+                        if (menuLayout === 'list') {
+                            return (
+                                <li
+                                    key={p.id}
+                                    className={cn(
+                                        'shadow-shop-sm relative flex items-center gap-3 rounded-[20px] bg-shop-surface p-1.5 pr-3 ring-1 transition-shadow duration-300 ease-shop',
+                                        q > 0 ? 'ring-2 ring-shop-accent' : 'ring-shop-line',
+                                    )}
+                                >
+                                    <button
+                                        type="button"
+                                        onClick={() => (hasOptions ? setVariantFor(p) : add(p))}
+                                        className="group flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
+                                        aria-label={`Add ${p.name}`}
+                                    >
+                                        <span className="relative shrink-0">
+                                            <ProductImage src={p.image} alt="" className="h-18 w-18 rounded-[14px]" />
+                                            {q > 0 && (
+                                                <span
+                                                    key={q}
+                                                    className="bc-bump shadow-shop-md absolute -top-1 -left-1 rounded-full bg-shop-ink px-2 py-0.5 text-[11px] font-bold text-shop-bg tabular-nums"
+                                                >
+                                                    ×{q}
+                                                </span>
+                                            )}
+                                        </span>
+                                        <span className="min-w-0 flex-1">
+                                            <span className="line-clamp-2 text-[15px] leading-snug font-semibold">{p.name}</span>
+                                            <span className="mt-0.5 flex items-baseline gap-2">
+                                                <Price value={p.price} className="font-display text-base font-bold" />
+                                                {hasOptions && (
+                                                    <span className="text-[11px] font-medium text-shop-muted">{p.variants.length} options</span>
+                                                )}
+                                            </span>
+                                        </span>
+                                    </button>
+                                    {qtyControl}
+                                </li>
+                            );
+                        }
                         return (
                             <li
                                 key={p.id}
@@ -654,14 +741,7 @@ function OrderTaker({
                                         <Price value={p.price} className="font-display text-base font-bold" />
                                         {hasOptions && <p className="text-[11px] font-medium text-shop-muted">{p.variants.length} options</p>}
                                     </div>
-                                    <QtyControl
-                                        size="sm"
-                                        qty={hasOptions ? 0 : baseQty}
-                                        label={p.name}
-                                        onAdd={() => (hasOptions ? setVariantFor(p) : add(p))}
-                                        onRemove={hasOptions ? undefined : () => removeOne(baseKey)}
-                                        className="ml-auto"
-                                    />
+                                    {qtyControl}
                                 </div>
                             </li>
                         );
@@ -1007,6 +1087,38 @@ function Ticket({
             </div>
         </>
     );
+}
+
+type MenuLayout = 'list' | 'grid';
+
+/**
+ * The waiter's preferred menu layout, remembered per device. Defaults to a
+ * compact list on phones and a picture grid on tablets and larger.
+ */
+function useMenuLayout(): [MenuLayout, (layout: MenuLayout) => void] {
+    const [layout, setLayout] = useState<MenuLayout>(() => {
+        if (typeof window === 'undefined') {
+            return 'grid';
+        }
+        try {
+            const saved = window.localStorage.getItem('bc-waiter-menu-layout');
+            if (saved === 'list' || saved === 'grid') {
+                return saved;
+            }
+        } catch {
+            /* ignore */
+        }
+        return window.matchMedia('(min-width: 640px)').matches ? 'grid' : 'list';
+    });
+    const choose = (next: MenuLayout) => {
+        setLayout(next);
+        try {
+            window.localStorage.setItem('bc-waiter-menu-layout', next);
+        } catch {
+            /* ignore */
+        }
+    };
+    return [layout, choose];
 }
 
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {

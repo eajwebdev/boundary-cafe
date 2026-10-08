@@ -119,6 +119,7 @@ const MENU = {
     LOYALTY_PROGRAM: '44',
     EMPLOYEES: '45',
     ATTENDANCE: '46',
+    Z_READING: '47',
 } as const;
 
 /** Polls the number of new (pending) online orders for the sidebar badge. */
@@ -290,7 +291,7 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
     };
 
     // Cash group active
-    const cashActive = ['/cash-sessions', '/cash-counts', '/petty-cash', '/expenses'].some(isActive);
+    const cashActive = ['/cash-sessions', '/cash-counts', '/z-readings', '/petty-cash', '/expenses'].some(isActive);
     // Reports group active
     const reportsActive = ['/reports', '/logs', '/stock-adjustments'].some(isActive);
 
@@ -442,7 +443,11 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
                                     )}
 
                                     {/* ── CASH ──────────────────────────── */}
-                                    {(has(MENU.CASH_SESSIONS) || has(MENU.CASH_COUNTS) || has(MENU.PETTY_CASH) || has(MENU.EXPENSES)) && (
+                                    {(has(MENU.CASH_SESSIONS) ||
+                                        has(MENU.CASH_COUNTS) ||
+                                        has(MENU.Z_READING) ||
+                                        has(MENU.PETTY_CASH) ||
+                                        has(MENU.EXPENSES)) && (
                                         <>
                                             <SidebarSectionLabel label="Cash" />
 
@@ -452,6 +457,9 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
                                                 )}
                                                 {has(MENU.CASH_COUNTS) && (
                                                     <SubLink href="/cash-counts" label="Cash Counts" active={isActive('/cash-counts')} />
+                                                )}
+                                                {has(MENU.Z_READING) && (
+                                                    <SubLink href="/z-readings" label="Z-Reading" active={isActive('/z-readings')} />
                                                 )}
                                                 {has(MENU.PETTY_CASH) && (
                                                     <SubLink href="/petty-cash" label="Petty Cash" active={isActive('/petty-cash')} />

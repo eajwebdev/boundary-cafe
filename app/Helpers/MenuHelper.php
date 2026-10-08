@@ -50,6 +50,7 @@ class MenuHelper
             '44' => 'Loyalty Program',
             '45' => 'Employees',
             '46' => 'Attendance',
+            '47' => 'Z-Reading',
         ];
     }
 
@@ -113,6 +114,7 @@ class MenuHelper
             'Cash' => [
                 '14' => 'Cash Sessions',
                 '15' => 'Cash Counts',
+                '47' => 'Z-Reading',
                 '16' => 'Petty Cash',
                 '17' => 'Expenses',
             ],

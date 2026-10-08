@@ -214,7 +214,7 @@ function AccessGrid({ menus, value, onChange }: { menus: Record<string, MenuGrou
         { label: 'All access', ids: Object.values(menus).flatMap((g) => Object.keys(g)) },
         {
             label: 'Manager preset',
-            ids: ['1', '2', '3', '4', '5', '6', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '29'],
+            ids: ['1', '2', '3', '4', '5', '6', '11', '12', '13', '14', '15', '16', '17', '47', '18', '19', '20', '21', '22', '29'],
         },
         { label: 'Cashier preset', ids: ['1', '2', '4', '14', '15', '16'] },
         { label: 'Clear all', ids: [] },

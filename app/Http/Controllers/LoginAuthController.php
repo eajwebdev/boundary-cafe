@@ -3,11 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\ActivityLog;
-use App\Models\Branch;
 use App\Models\SystemSetting;
 use App\Models\User;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
@@ -16,8 +15,18 @@ use Inertia\Response;
 
 class LoginAuthController extends Controller
 {
-    private const MAX_ATTEMPTS   = 5;
-    private const DECAY_SECONDS  = 300;
+    private const DEMO_ACCOUNTS = [
+        'admin' => User::ROLE_ADMINISTRATOR,
+        'manager' => User::ROLE_MANAGER,
+        'cashier' => User::ROLE_CASHIER,
+        'cashier_tag' => User::ROLE_CASHIER,
+        'cashier_mab' => User::ROLE_CASHIER,
+        'waiter' => User::ROLE_WAITER,
+    ];
+
+    private const MAX_ATTEMPTS = 5;
+
+    private const DECAY_SECONDS = 300;
 
     public function getLogin(): Response|RedirectResponse
     {
@@ -25,51 +34,41 @@ class LoginAuthController extends Controller
             return redirect()->to($this->defaultRouteFor(Auth::user()));
         }
 
-        $isDemo = filter_var(env('DEMO', false), FILTER_VALIDATE_BOOLEAN) || (bool) config('app.demo', false);
+        $isDemo = (bool) config('app.demo');
 
         $demoUsers = [];
         if ($isDemo) {
-            $branch = Branch::first();
-            $users = User::where('role', '!=', User::ROLE_SUPER_ADMIN)
-                ->where('username', '!=', 'superadmin')
+            $users = User::whereIn('username', array_keys(self::DEMO_ACCOUNTS))
+                ->where('role', '!=', User::ROLE_SUPER_ADMIN)
+                ->with('branch')
                 ->orderBy('id')
-                ->get();
-            $demoUsers = $users->map(function ($u) use ($branch) {
-                $roleLabel = match($u->role) {
-                    User::ROLE_SUPER_ADMIN   => 'Super Admin',
+                ->get()
+                ->filter(fn (User $user): bool => self::DEMO_ACCOUNTS[$user->username] === $user->role);
+            $demoUsers = $users->map(function ($u) {
+                $roleLabel = match ($u->role) {
                     User::ROLE_ADMINISTRATOR => 'Administrator',
-                    User::ROLE_MANAGER       => 'Store Manager',
-                    User::ROLE_CASHIER       => 'Cashier',
-                    User::ROLE_WAITER        => 'Waiter / Server',
-                    default                  => ucfirst(str_replace('_', ' ', $u->role)),
-                };
-
-                $password = match($u->username) {
-                    'superadmin' => 'superadmin123',
-                    'admin'      => 'admin123',
-                    'manager'    => 'manager123',
-                    'cashier'    => 'cashier123',
-                    'waiter'     => 'waiter123',
-                    default      => str_starts_with($u->username, 'cashier') ? 'cashier123' : 'password',
+                    User::ROLE_MANAGER => 'Store Manager',
+                    User::ROLE_CASHIER => 'Cashier',
+                    User::ROLE_WAITER => 'Waiter / Server',
+                    default => ucfirst(str_replace('_', ' ', $u->role)),
                 };
 
                 return [
-                    'id'         => $u->id,
-                    'name'       => trim($u->fname . ' ' . $u->lname),
-                    'username'   => $u->username,
-                    'password'   => $password,
-                    'role'       => $u->role,
+                    'id' => $u->id,
+                    'name' => trim($u->fname.' '.$u->lname),
+                    'username' => $u->username,
+                    'role' => $u->role,
                     'role_label' => $roleLabel,
-                    'branch'     => $branch ? $branch->name : 'Main Store',
+                    'branch' => $u->branch?->name ?? 'Main Store',
                 ];
             })->values();
         }
 
         return Inertia::render('Login', [
             'business_name' => SystemSetting::businessName(),
-            'logo_url'      => SystemSetting::logoUrl(),
-            'is_demo'       => $isDemo,
-            'demo_users'    => $demoUsers,
+            'logo_url' => SystemSetting::logoUrl(),
+            'is_demo' => $isDemo,
+            'demo_users' => $demoUsers,
         ]);
     }
 
@@ -81,10 +80,9 @@ class LoginAuthController extends Controller
         ]);
 
         $throttleKey = $this->throttleKey($request);
-        $isDemo = filter_var(env('DEMO', false), FILTER_VALIDATE_BOOLEAN) || (bool) config('app.demo', false);
-
-        if (! $isDemo && RateLimiter::tooManyAttempts($throttleKey, self::MAX_ATTEMPTS)) {
+        if (RateLimiter::tooManyAttempts($throttleKey, self::MAX_ATTEMPTS)) {
             $seconds = RateLimiter::availableIn($throttleKey);
+
             return back()->withErrors([
                 'username' => "Too many login attempts. Please try again in {$seconds} seconds.",
             ]);
@@ -95,40 +93,21 @@ class LoginAuthController extends Controller
             $request->boolean('remember')
         );
 
-        // Demo fallback password matching
-        if (! $authenticated && $isDemo) {
-            $user = User::where('username', $request->username)->first();
-            if ($user) {
-                $validPasswords = [
-                    'password',
-                    'admin123',
-                    'superadmin123',
-                    'manager123',
-                    'cashier123',
-                    'waiter123',
-                ];
-                if (in_array($request->password, $validPasswords, true)) {
-                    Auth::login($user, $request->boolean('remember'));
-                    $authenticated = true;
-                }
-            }
-        }
-
         if (! $authenticated) {
             RateLimiter::hit($throttleKey, self::DECAY_SECONDS);
 
             ActivityLog::create([
-                'user_id'    => null,
-                'action'     => 'login_failed',
+                'user_id' => null,
+                'action' => 'login_failed',
                 'properties' => [
-                    'username'   => $request->username,
-                    'ip'         => $request->ip(),
+                    'username' => $request->username,
+                    'ip' => $request->ip(),
                     'user_agent' => $request->userAgent(),
                 ],
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent(),
-                'method'     => $request->method(),
-                'url'        => $request->fullUrl(),
+                'method' => $request->method(),
+                'url' => $request->fullUrl(),
             ]);
 
             return back()->withErrors([
@@ -142,21 +121,60 @@ class LoginAuthController extends Controller
         $user = Auth::user();
 
         ActivityLog::create([
-            'user_id'      => $user->id,
-            'action'       => 'login',
+            'user_id' => $user->id,
+            'action' => 'login',
             'subject_type' => get_class($user),
-            'subject_id'   => $user->id,
-            'properties'   => [
-                'username'   => $user->username,
-                'role'       => $user->role,
-                'branch_id'  => $user->branch_id,
-                'ip'         => $request->ip(),
+            'subject_id' => $user->id,
+            'properties' => [
+                'username' => $user->username,
+                'role' => $user->role,
+                'branch_id' => $user->branch_id,
+                'ip' => $request->ip(),
                 'user_agent' => $request->userAgent(),
             ],
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
-            'method'     => $request->method(),
-            'url'        => $request->fullUrl(),
+            'method' => $request->method(),
+            'url' => $request->fullUrl(),
+        ]);
+
+        return redirect()->to($this->defaultRouteFor($user));
+    }
+
+    public function postDemoLogin(Request $request): RedirectResponse
+    {
+        abort_unless(config('app.demo'), 404);
+
+        $validated = $request->validate([
+            'username' => ['required', 'string'],
+        ]);
+
+        abort_unless(isset(self::DEMO_ACCOUNTS[$validated['username']]), 404);
+
+        $user = User::where('username', $validated['username'])
+            ->where('role', self::DEMO_ACCOUNTS[$validated['username']])
+            ->firstOrFail();
+
+        Auth::login($user);
+        $request->session()->regenerate();
+
+        ActivityLog::create([
+            'user_id' => $user->id,
+            'action' => 'login',
+            'subject_type' => get_class($user),
+            'subject_id' => $user->id,
+            'properties' => [
+                'username' => $user->username,
+                'role' => $user->role,
+                'branch_id' => $user->branch_id,
+                'demo' => true,
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ],
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'method' => $request->method(),
+            'url' => $request->fullUrl(),
         ]);
 
         return redirect()->to($this->defaultRouteFor($user));
@@ -168,19 +186,19 @@ class LoginAuthController extends Controller
 
         if ($user) {
             ActivityLog::create([
-                'user_id'      => $user->id,
-                'action'       => 'logout',
+                'user_id' => $user->id,
+                'action' => 'logout',
                 'subject_type' => get_class($user),
-                'subject_id'   => $user->id,
-                'properties'   => [
-                    'username'   => $user->username,
-                    'ip'         => $request->ip(),
+                'subject_id' => $user->id,
+                'properties' => [
+                    'username' => $user->username,
+                    'ip' => $request->ip(),
                     'user_agent' => $request->userAgent(),
                 ],
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent(),
-                'method'     => $request->method(),
-                'url'        => $request->fullUrl(),
+                'method' => $request->method(),
+                'url' => $request->fullUrl(),
             ]);
         }
 
@@ -193,10 +211,10 @@ class LoginAuthController extends Controller
 
     private function throttleKey(Request $request): string
     {
-        return Str::lower($request->input('username')) . '|' . $request->ip();
+        return Str::lower($request->input('username')).'|'.$request->ip();
     }
 
-    private function defaultRouteFor(\App\Models\User $user): string
+    private function defaultRouteFor(User $user): string
     {
         if ($user->isSuperAdmin()) {
             return route('dashboard');
@@ -219,10 +237,10 @@ class LoginAuthController extends Controller
         }
 
         $routeMap = [
-            '2'  => 'pos.index',
+            '2' => 'pos.index',
             '40' => 'online-orders.index',
             '41' => 'table-orders.index',
-            '6'  => 'products.index',
+            '6' => 'products.index',
             '14' => 'cash-sessions.index',
             '18' => 'reports.daily',
             '22' => 'logs.index',
@@ -231,7 +249,11 @@ class LoginAuthController extends Controller
 
         foreach ($routeMap as $menuId => $routeName) {
             if (in_array($menuId, $access)) {
-                try { return route($routeName); } catch (\Exception) { continue; }
+                try {
+                    return route($routeName);
+                } catch (\Exception) {
+                    continue;
+                }
             }
         }
 

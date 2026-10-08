@@ -11,12 +11,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { routes } from '@/routes';
+import { postDemoLogin } from '@/actions/App/Http/Controllers/LoginAuthController';
 
 interface DemoUser {
     id: number;
     name: string;
     username: string;
-    password?: string;
     role: string;
     role_label: string;
     branch: string;
@@ -66,15 +66,14 @@ export default function Login({
 
     const handleQuickLogin = (user: DemoUser) => {
         setLoggingInUser(user.username);
-        setData({ username: user.username, password: user.password || 'password' });
         router.post(
-            routes.loginPost(),
-            { username: user.username, password: user.password || 'password' },
+            postDemoLogin.url(),
+            { username: user.username },
             { onFinish: () => setLoggingInUser(null) },
         );
     };
 
-    const quickUsers = (demo_users || []).filter((user) => user.username !== 'superadmin');
+    const quickUsers = (demo_users || []).filter((user) => user.role !== 'super_admin');
     const hasDemo = is_demo && quickUsers.length > 0;
     const fallbackLogo = '/uploads/optimized/logo.webp';
 
@@ -215,7 +214,7 @@ export default function Login({
                                 <div className="bc-login-demo-grid">
                                     {quickUsers.map((user) => {
                                         const isThisLoggingIn = loggingInUser === user.username;
-                                        const label = user.username === 'admin' ? 'Admin' : user.username === 'manager' ? 'Manager' : 'Cashier';
+                                        const label = user.role_label;
 
                                         return (
                                             <button

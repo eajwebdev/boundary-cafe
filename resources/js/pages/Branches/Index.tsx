@@ -180,12 +180,14 @@ function BranchDrawer({
     branch,
     suppliers,
     businessTypes,
+    canChangeStatus,
     onClose,
 }: {
     mode: FormMode;
     branch: Branch | null;
     suppliers: Supplier[];
     businessTypes: Record<string, string>;
+    canChangeStatus: boolean;
     onClose: () => void;
 }) {
     const [form, setForm] = useState<BranchForm>(EMPTY_FORM);
@@ -229,7 +231,11 @@ function BranchDrawer({
     const handleSubmit = () => {
         setLoading(true);
         setErrors({});
-        const payload = { ...form, supplier_id: form.supplier_id || null };
+        const payload: Partial<Omit<BranchForm, 'supplier_id'>> & { supplier_id: string | null } = {
+            ...form,
+            supplier_id: form.supplier_id || null,
+        };
+        if (!canChangeStatus) delete payload.is_active;
         const isCreate = mode === 'create';
         const url = isCreate ? routes.branches.store() : routes.branches.update(branch!.id);
 
@@ -434,12 +440,14 @@ function BranchDrawer({
                             </div>
 
                             {/* Active */}
-                            <Toggle
-                                checked={form.is_active}
-                                onChange={(v) => set('is_active', v)}
-                                label="Active"
-                                description="Inactive branches are hidden from operations"
-                            />
+                            {canChangeStatus && (
+                                <Toggle
+                                    checked={form.is_active}
+                                    onChange={(v) => set('is_active', v)}
+                                    label="Active"
+                                    description="Inactive branches are hidden from operations"
+                                />
+                            )}
                         </div>
                     ) : (
                         <div className="space-y-3">
@@ -607,7 +615,8 @@ export default function BranchesIndex() {
         return list;
     }, [branches, search, typeFilter, statusFilter]);
 
-    const canManage = auth?.user?.is_super_admin || auth?.user?.is_administrator;
+    const isSuperAdmin = auth?.user?.is_super_admin === true;
+    const canEdit = isSuperAdmin || auth?.user?.is_administrator === true;
     const activeCount = branches.filter((b) => b.is_active).length;
 
     const handleToggle = (b: Branch) => {
@@ -622,7 +631,7 @@ export default function BranchesIndex() {
         <AdminLayout>
             <div className="space-y-4">
                 <PageHeader title="Branches" subtitle="Each store location, its business type and the features it uses.">
-                    {canManage && (
+                    {isSuperAdmin && (
                         <Button size="sm" className="h-9 gap-1.5" onClick={() => setDrawer({ mode: 'create', branch: null })}>
                             <Plus className="h-4 w-4" /> Add branch
                         </Button>
@@ -770,7 +779,7 @@ export default function BranchesIndex() {
                                                 </td>
                                                 <td className="hidden px-4 py-2 text-right tabular-nums sm:table-cell">{b.users_count}</td>
                                                 <td className="px-4 py-2">
-                                                    {canManage ? (
+                                                    {isSuperAdmin ? (
                                                         <Switch
                                                             checked={b.is_active}
                                                             onCheckedChange={() => handleToggle(b)}
@@ -783,7 +792,7 @@ export default function BranchesIndex() {
                                                     )}
                                                 </td>
                                                 <td className="px-2 py-2">
-                                                    {canManage && (
+                                                    {canEdit && (
                                                         <div className="flex justify-end gap-0.5">
                                                             <button
                                                                 onClick={() => setDrawer({ mode: 'edit', branch: b })}
@@ -792,13 +801,15 @@ export default function BranchesIndex() {
                                                             >
                                                                 <Edit2 className="h-3.5 w-3.5" />
                                                             </button>
-                                                            <button
-                                                                onClick={() => setDeleteTarget(b)}
-                                                                className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                                                                aria-label={`Delete ${b.name}`}
-                                                            >
-                                                                <Trash2 className="h-3.5 w-3.5" />
-                                                            </button>
+                                                            {isSuperAdmin && (
+                                                                <button
+                                                                    onClick={() => setDeleteTarget(b)}
+                                                                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                                                    aria-label={`Delete ${b.name}`}
+                                                                >
+                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </td>
@@ -818,6 +829,7 @@ export default function BranchesIndex() {
                     branch={drawer.branch}
                     suppliers={suppliers}
                     businessTypes={businessTypes}
+                    canChangeStatus={isSuperAdmin}
                     onClose={() => setDrawer(null)}
                 />
             )}

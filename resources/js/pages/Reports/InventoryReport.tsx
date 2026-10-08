@@ -1,166 +1,223 @@
-import { router } from '@inertiajs/react';
 import { Head } from '@inertiajs/react';
+import { AlertTriangle, Clock, Package, PackageX, Search, Wallet } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
-import { AlertTriangle, Clock, Download, Package } from 'lucide-react';
-import { useState } from 'react';
-import { BranchSelect, controlCls, EmptyRow, FilterBar, PageHeader, Pager, Panel, Stat, StatStrip, StatusPill, thCls } from '@/components/AdminKit';
-import { Button } from '@/components/ui/button';
+import { BranchSelect, Chip, EmptyRow, FilterBar, Panel, Stat, StatStrip, StatusPill, controlCls, thCls } from '@/components/AdminKit';
+import type { Tone } from '@/components/AdminKit';
 import AdminLayout from '@/layouts/AdminLayout';
+import { fmtDate } from '@/lib/date';
 import { cn } from '@/lib/utils';
-import { reportRoutes, getReportTitle, openLivePdfPreview } from './Files';
 
-interface Props {
-    stocks: {
-        data: Array<{
-            id: number;
-            name: string;
-            category_name?: string;
-            product_type: string;
-            stock: number;
-            unit?: string;
-            expiry_date?: string;
-            is_low_stock: boolean;
-            is_near_expiry: boolean;
-        }>;
-        current_page: number;
-        last_page: number;
-        total: number;
-        from: number | null;
-        to: number | null;
-        links: Array<{ url: string | null; label: string; active: boolean }>;
-    };
-    branches: Array<{ id: number; name: string }> | null;
-    currentBranchId?: number;
+import { Footnote, ReportHeader, SectionTitle, openPdf, peso, qty, useReportVisit } from './kit';
+import type { ReportContext } from './kit';
+
+type Status = 'out' | 'low' | 'expired' | 'expiring' | 'ok';
+
+interface Row {
+    key: string;
+    name: string;
+    variant: string | null;
+    sku: string | null;
+    category: string;
+    unit: string;
+    stock: number;
+    unit_cost: number;
+    price: number;
+    value: number;
+    retail_value: number;
+    expiry_date: string | null;
+    days_to_expiry: number | null;
+    status: Status;
 }
 
-const TYPE_LABEL: Record<string, string> = {
-    made_to_order: 'Made to order',
-    bundle: 'Bundle',
-    variant: 'Variant',
-    ingredient: 'Ingredient',
-    standard: 'Stocked',
+interface Props extends ReportContext {
+    report: {
+        low_stock_threshold: number;
+        excluded_count: number;
+        summary: { items: number; value: number; retail_value: number; out: number; low: number; expired: number; expiring: number };
+        categories: string[];
+        rows: Row[];
+    };
+}
+
+const STATUS: Record<Status, { label: string; tone: Tone }> = {
+    out: { label: 'Out of stock', tone: 'danger' },
+    low: { label: 'Low', tone: 'warning' },
+    expired: { label: 'Expired', tone: 'danger' },
+    expiring: { label: 'Expiring soon', tone: 'warning' },
+    ok: { label: 'OK', tone: 'muted' },
 };
 
-export default function InventoryReport({ stocks, branches, currentBranchId }: Props) {
-    const [filters, setFilters] = useState({
-        branch_id: currentBranchId || undefined,
-        type: 'all',
-    });
+type View = 'all' | 'attention' | Status;
 
-    const [loading, setLoading] = useState(false);
+export default function InventoryReport(props: Props) {
+    const { report, branches, filters } = props;
+    const s = report.summary;
+    const [branchId, setBranchId] = useState<number | undefined>(filters.branch_id ?? undefined);
+    const [view, setView] = useState<View>('all');
+    const [category, setCategory] = useState('');
+    const [search, setSearch] = useState('');
+    const { loading, visit } = useReportVisit('reports.inventory');
 
-    const handleFilterChange = (name: string, value: string | number | undefined) => {
-        setFilters((prev) => ({ ...prev, [name]: value }));
-    };
-
-    const handleGenerate = () => {
-        setLoading(true);
-        router.get(
-            reportRoutes.inventory(),
-            {
-                ...filters,
-                per_page: 15,
-            },
-            {
-                preserveState: true,
-                preserveScroll: true,
-                onFinish: () => setLoading(false),
-            },
+    const rows = useMemo(() => {
+        const term = search.trim().toLowerCase();
+        return report.rows.filter(
+            (r) =>
+                (view === 'all' || (view === 'attention' ? r.status !== 'ok' : r.status === view)) &&
+                (!category || r.category === category) &&
+                (!term || `${r.name} ${r.variant ?? ''} ${r.sku ?? ''}`.toLowerCase().includes(term)),
         );
-    };
+    }, [report.rows, view, category, search]);
 
-    const lowStockCount = stocks.data.filter((s) => s.is_low_stock).length;
-    const nearExpiryCount = stocks.data.filter((s) => s.is_near_expiry).length;
+    const shownValue = rows.reduce((sum, r) => sum + r.value, 0);
+    const attention = s.out + s.low + s.expired + s.expiring;
 
     return (
         <AdminLayout>
-            <Head title={getReportTitle('inventory')} />
+            <Head title="Inventory Report" />
 
             <div className="space-y-4">
-                <PageHeader title={getReportTitle('inventory')} subtitle="Stock on hand right now, by product type.">
-                    <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => openLivePdfPreview('inventory', filters)}>
-                        <Download className="h-4 w-4" /> PDF preview
-                    </Button>
-                </PageHeader>
+                <ReportHeader
+                    title="Inventory Valuation"
+                    context={props}
+                    scope="stock on hand right now"
+                    onPdf={() =>
+                        openPdf('reports.inventory.pdf', {
+                            branch_id: filters.branch_id,
+                            category: category || undefined,
+                            status: view === 'all' ? undefined : view,
+                        })
+                    }
+                />
 
-                <FilterBar onApply={handleGenerate} loading={loading} applyLabel="Show stock">
-                    <BranchSelect
-                        branches={branches}
-                        value={filters.branch_id}
-                        onChange={(v) => handleFilterChange('branch_id', v ? Number(v) : undefined)}
-                    />
-                    <select
-                        value={filters.type}
-                        onChange={(e) => handleFilterChange('type', e.target.value)}
-                        className={cn(controlCls, 'h-9')}
-                        aria-label="Product type"
-                    >
-                        <option value="all">All products</option>
-                        <option value="standard">Stocked</option>
-                        <option value="variant">Variants</option>
-                        <option value="bundle">Bundles</option>
-                        <option value="made_to_order">Made to order</option>
-                    </select>
-                </FilterBar>
+                {branches && (
+                    <FilterBar loading={loading} applyLabel="Show branch" onApply={() => visit({ branch_id: branchId })}>
+                        <BranchSelect branches={branches} value={branchId} onChange={(v) => setBranchId(v ? Number(v) : undefined)} />
+                    </FilterBar>
+                )}
 
-                <StatStrip count={3}>
-                    <Stat icon={Package} label="Items" value={stocks.total.toLocaleString()} />
+                <StatStrip count={5}>
+                    <Stat icon={Wallet} label="Stock value at cost" value={peso(s.value)} tone="success" />
+                    <Stat icon={Wallet} label="Value at selling price" value={peso(s.retail_value)} />
+                    <Stat icon={PackageX} label="Out of stock" value={s.out.toLocaleString()} tone={s.out ? 'warning' : 'muted'} />
                     <Stat
                         icon={AlertTriangle}
-                        label="Low stock · this page"
-                        value={lowStockCount.toLocaleString()}
-                        tone={lowStockCount > 0 ? 'warning' : undefined}
+                        label={`Low (≤ ${report.low_stock_threshold})`}
+                        value={s.low.toLocaleString()}
+                        tone={s.low ? 'warning' : 'muted'}
                     />
                     <Stat
                         icon={Clock}
-                        label="Near expiry · this page"
-                        value={nearExpiryCount.toLocaleString()}
-                        tone={nearExpiryCount > 0 ? 'warning' : undefined}
+                        label="Expired / expiring"
+                        value={`${s.expired} / ${s.expiring}`}
+                        tone={s.expired + s.expiring ? 'warning' : 'muted'}
                     />
                 </StatStrip>
 
-                <Panel flush icon={Package} title="Current stock">
+                <Panel
+                    flush
+                    icon={Package}
+                    title={<SectionTitle no={1}>Stock on hand</SectionTitle>}
+                    actions={
+                        <span className="text-[11px] font-semibold text-muted-foreground">
+                            {rows.length.toLocaleString()} of {s.items.toLocaleString()} items · {peso(shownValue)}
+                        </span>
+                    }
+                >
+                    <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5">
+                        <div className="flex flex-wrap gap-1">
+                            <Chip active={view === 'all'} onClick={() => setView('all')}>
+                                All
+                            </Chip>
+                            <Chip active={view === 'attention'} onClick={() => setView('attention')}>
+                                Needs attention ({attention})
+                            </Chip>
+                            {(['out', 'low', 'expiring', 'expired'] as const).map((k) => (
+                                <Chip key={k} active={view === k} onClick={() => setView(k)}>
+                                    {STATUS[k].label}
+                                </Chip>
+                            ))}
+                        </div>
+                        <div className="ml-auto flex flex-wrap gap-2">
+                            <select value={category} onChange={(e) => setCategory(e.target.value)} className={controlCls} aria-label="Category">
+                                <option value="">All categories</option>
+                                {report.categories.map((c) => (
+                                    <option key={c} value={c}>
+                                        {c}
+                                    </option>
+                                ))}
+                            </select>
+                            <label className="relative">
+                                <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                                <input
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    placeholder="Item or SKU"
+                                    className={cn(controlCls, 'w-44 pl-8')}
+                                    aria-label="Search items"
+                                />
+                            </label>
+                        </div>
+                    </div>
+
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead className="border-b border-border">
                                 <tr>
-                                    <th className={thCls}>Product</th>
-                                    <th className={cn(thCls, 'hidden md:table-cell')}>Type</th>
-                                    <th className={cn(thCls, 'text-right')}>Stock</th>
-                                    <th className={cn(thCls, 'hidden md:table-cell')}>Expiry</th>
+                                    <th className={thCls}>Item</th>
+                                    <th className={cn(thCls, 'hidden lg:table-cell')}>Category</th>
+                                    <th className={cn(thCls, 'text-right')}>On hand</th>
+                                    <th className={cn(thCls, 'hidden text-right md:table-cell')}>Unit cost</th>
+                                    <th className={cn(thCls, 'text-right')}>Value</th>
+                                    <th className={cn(thCls, 'hidden text-right lg:table-cell')}>Price</th>
+                                    <th className={cn(thCls, 'hidden md:table-cell')}>Next expiry</th>
                                     <th className={thCls}>Status</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
-                                {stocks.data.length === 0 ? (
-                                    <EmptyRow colSpan={5} icon={Package}>
-                                        No stock for these filters.
+                                {rows.length === 0 ? (
+                                    <EmptyRow colSpan={8} icon={Package}>
+                                        No items match these filters.
                                     </EmptyRow>
                                 ) : (
-                                    stocks.data.map((item) => (
-                                        <tr key={item.id} className="hover:bg-muted/30">
+                                    rows.map((r) => (
+                                        <tr key={r.key} className="hover:bg-muted/30">
                                             <td className="px-4 py-2">
-                                                <p className="font-semibold">{item.name}</p>
-                                                <p className="text-[11px] text-muted-foreground">{item.category_name || 'Uncategorised'}</p>
+                                                <p className="font-semibold">
+                                                    {r.name}
+                                                    {r.variant && <span className="font-normal text-muted-foreground"> · {r.variant}</span>}
+                                                </p>
+                                                {r.sku && <p className="font-mono text-[11px] text-muted-foreground">{r.sku}</p>}
                                             </td>
-                                            <td className="hidden px-4 py-2 text-xs text-muted-foreground md:table-cell">
-                                                {TYPE_LABEL[item.product_type] ?? item.product_type}
+                                            <td className="hidden px-4 py-2 text-xs text-muted-foreground lg:table-cell">{r.category}</td>
+                                            <td className="px-4 py-2 text-right font-semibold whitespace-nowrap tabular-nums">
+                                                {qty(r.stock)} <span className="text-xs font-normal text-muted-foreground">{r.unit}</span>
                                             </td>
-                                            <td className="px-4 py-2 text-right font-bold tabular-nums">
-                                                {Number(item.stock).toLocaleString()}{' '}
-                                                <span className="text-xs font-normal text-muted-foreground">{item.unit || 'pcs'}</span>
+                                            <td className="hidden px-4 py-2 text-right text-muted-foreground tabular-nums md:table-cell">
+                                                {peso(r.unit_cost)}
                                             </td>
-                                            <td className="hidden px-4 py-2 text-xs text-muted-foreground tabular-nums md:table-cell">
-                                                {item.expiry_date || '—'}
+                                            <td className="px-4 py-2 text-right tabular-nums">{peso(r.value)}</td>
+                                            <td className="hidden px-4 py-2 text-right text-muted-foreground tabular-nums lg:table-cell">
+                                                {peso(r.price)}
                                             </td>
-                                            <td className="px-4 py-2">
-                                                {item.is_low_stock ? (
-                                                    <StatusPill tone="danger">Low stock</StatusPill>
-                                                ) : item.is_near_expiry ? (
-                                                    <StatusPill tone="warning">Near expiry</StatusPill>
+                                            <td className="hidden px-4 py-2 text-xs md:table-cell">
+                                                {r.expiry_date ? (
+                                                    <>
+                                                        {fmtDate(`${r.expiry_date}T12:00:00+08:00`, 'MMM d, yyyy')}
+                                                        <span className="block text-[11px] text-muted-foreground">
+                                                            {r.days_to_expiry! < 0
+                                                                ? `${Math.abs(r.days_to_expiry!)} day(s) ago`
+                                                                : r.days_to_expiry === 0
+                                                                  ? 'today'
+                                                                  : `in ${r.days_to_expiry} day(s)`}
+                                                        </span>
+                                                    </>
                                                 ) : (
-                                                    <StatusPill tone="success">OK</StatusPill>
+                                                    <span className="text-muted-foreground">—</span>
                                                 )}
+                                            </td>
+                                            <td className="px-4 py-2">
+                                                <StatusPill tone={STATUS[r.status].tone}>{STATUS[r.status].label}</StatusPill>
                                             </td>
                                         </tr>
                                     ))
@@ -168,16 +225,14 @@ export default function InventoryReport({ stocks, branches, currentBranchId }: P
                             </tbody>
                         </table>
                     </div>
-                    {stocks.last_page > 1 && (
-                        <Pager
-                            from={stocks.from}
-                            to={stocks.to}
-                            total={stocks.total}
-                            links={stocks.links}
-                            onVisit={(url) => router.get(url, {}, { preserveState: true, preserveScroll: true })}
-                        />
-                    )}
                 </Panel>
+
+                <Footnote>
+                    Value at cost uses each branch’s recorded capital per unit; negative stock is valued at zero. “Low” means{' '}
+                    {report.low_stock_threshold} or fewer on hand (System Settings → Inventory). Expiry warnings use each item’s own warning days.
+                    {report.excluded_count > 0 &&
+                        ` ${report.excluded_count} made-to-order, bundle or service item(s) aren’t listed because they hold no stock of their own — their ingredients and components are.`}
+                </Footnote>
             </div>
         </AdminLayout>
     );

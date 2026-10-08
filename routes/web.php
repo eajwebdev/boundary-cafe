@@ -35,6 +35,7 @@ use App\Http\Controllers\SystemSettingsController;
 use App\Http\Controllers\TableOrderController;
 use App\Http\Controllers\TimeClockController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\ZReadingController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -48,13 +49,14 @@ Route::post('/time-clock/identify', [TimeClockController::class, 'identify'])->m
 Route::post('/time-clock/punch', [TimeClockController::class, 'punch'])->middleware('throttle:20,1')->name('time-clock.punch');
 
 // Public quotation pages (static files in public/proposal) — shareable, no sign-in.
-Route::get('/quotation', fn (Request $request) => redirect('/proposal/boundary-cafe/subscription.html' . ($request->getQueryString() ? '?' . $request->getQueryString() : '')))->name('quotation');
-Route::get('/quotation/one-time', fn (Request $request) => redirect('/proposal/boundary-cafe/one-time.html' . ($request->getQueryString() ? '?' . $request->getQueryString() : '')))->name('quotation.one-time');
+Route::get('/quotation', fn (Request $request) => redirect('/proposal/boundary-cafe/subscription.html'.($request->getQueryString() ? '?'.$request->getQueryString() : '')))->name('quotation');
+Route::get('/quotation/one-time', fn (Request $request) => redirect('/proposal/boundary-cafe/one-time.html'.($request->getQueryString() ? '?'.$request->getQueryString() : '')))->name('quotation.one-time');
 Route::get('/quotation/details', [QuotationController::class, 'details'])->name('quotation.details');
 
 // Staff sign-in
 Route::get('/login', [LoginAuthController::class, 'getLogin'])->name('login');
 Route::post('/login', [LoginAuthController::class, 'postLogin'])->middleware('throttle:20,1')->name('login.post');
+Route::post('/login/demo', [LoginAuthController::class, 'postDemoLogin'])->middleware('throttle:20,1')->name('login.demo');
 
 // ─── CUSTOMER ACCOUNTS (separate "customer" guard) ───────────────────────────
 Route::prefix('account')->name('customer.')->group(function () {
@@ -221,6 +223,14 @@ Route::middleware(['auth:web', 'order-taker'])->group(function () {
         Route::patch('/funds/{fund}/close', [PettyCashFundController::class, 'close'])->name('funds.close');
     });
 
+    // Z-Reading (end of day) — ID 47
+    Route::middleware('access:47')->prefix('z-readings')->name('z-readings.')->controller(ZReadingController::class)->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::post('/', 'store')->name('store');
+        Route::get('/{zReading}', 'show')->name('show');
+        Route::post('/{zReading}/reprint', 'reprint')->name('reprint');
+    });
+
     // Expenses — ID 17
     Route::middleware('access:17')->prefix('expenses')->name('expenses.')->controller(ExpenseController::class)->group(function () {
         Route::get('/', 'index')->name('index');
@@ -239,23 +249,32 @@ Route::middleware(['auth:web', 'order-taker'])->group(function () {
         Route::patch('/{category}/toggle', 'toggleActive')->name('toggle');
     });
 
-    // Reports (IDs 18–21)
-    Route::middleware('access:18')->prefix('reports')->name('reports.')->controller(ReportController::class)->group(function () {
-
-        // HTML Views
-        Route::get('/daily', 'dailySummary')->name('daily');
-        Route::get('/sales', 'salesReport')->name('sales');
-        Route::get('/inventory', 'inventoryReport')->name('inventory');
-        Route::get('/expenses', 'expenseReport')->name('expenses');
-        Route::get('/ingredient-usage', 'ingredientUsageReport')->name('ingredient-usage');
-        Route::get('/stock-loss', 'stockLossReport')->name('stock-loss');
-
-        // Live PDF Previews (opens in new tab)
-        Route::get('/daily/pdf', 'dailySummaryPdf')->name('daily.pdf');
-        Route::get('/sales/pdf', 'salesReportPdf')->name('sales.pdf');
-        Route::get('/inventory/pdf', 'inventoryReportPdf')->name('inventory.pdf');
-        Route::get('/expenses/pdf', 'expenseReportPdf')->name('expenses.pdf');
-        Route::get('/ingredient-usage/pdf', 'ingredientUsageReportPdf')->name('ingredient-usage.pdf');
+    // Reports — each report checks its own menu permission
+    Route::prefix('reports')->name('reports.')->controller(ReportController::class)->group(function () {
+        Route::middleware('access:18')->group(function () {
+            Route::get('/daily', 'dailySummary')->name('daily');
+            Route::get('/daily/pdf', 'dailySummaryPdf')->name('daily.pdf');
+        });
+        Route::middleware('access:19')->group(function () {
+            Route::get('/sales', 'salesReport')->name('sales');
+            Route::get('/sales/pdf', 'salesReportPdf')->name('sales.pdf');
+        });
+        Route::middleware('access:20')->group(function () {
+            Route::get('/inventory', 'inventoryReport')->name('inventory');
+            Route::get('/inventory/pdf', 'inventoryReportPdf')->name('inventory.pdf');
+        });
+        Route::middleware('access:21')->group(function () {
+            Route::get('/expenses', 'expenseReport')->name('expenses');
+            Route::get('/expenses/pdf', 'expenseReportPdf')->name('expenses.pdf');
+        });
+        Route::middleware('access:30')->group(function () {
+            Route::get('/ingredient-usage', 'ingredientUsageReport')->name('ingredient-usage');
+            Route::get('/ingredient-usage/pdf', 'ingredientUsageReportPdf')->name('ingredient-usage.pdf');
+        });
+        Route::middleware('access:31')->group(function () {
+            Route::get('/stock-loss', 'stockLossReport')->name('stock-loss');
+            Route::get('/stock-loss/pdf', 'stockLossReportPdf')->name('stock-loss.pdf');
+        });
     });
 
     // Activity Logs — ID 22

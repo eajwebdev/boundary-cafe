@@ -2,479 +2,361 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\DailySummary;
-use App\Models\StockAdjustment;
-use App\Models\Sale;
-use App\Models\Product;
-use App\Models\RecipeIngredient;
-use App\Models\ProductStock;
-use App\Models\Expense;
 use App\Models\Branch;
+use App\Models\Expense;
+use App\Models\Sale;
 use App\Models\SystemSetting;
-use App\Models\CustomerPayment;
+use App\Services\Reports\DailyReport;
+use App\Services\Reports\ExpenseReport;
+use App\Services\Reports\IngredientUsageReport;
+use App\Services\Reports\InventoryReport;
+use App\Services\Reports\ReportLabels;
+use App\Services\Reports\SalesReport;
+use App\Services\Reports\StockLossReport;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
-use Carbon\Carbon;
+use Inertia\Response;
 
+/**
+ * Back-office reports. Each report is built once by its report class and the
+ * same result feeds both the screen and the PDF, so the two always agree.
+ */
 class ReportController extends Controller
 {
+    private const MAX_PERIOD_DAYS = 366;
+
+    private const REGISTER_PER_PAGE = 25;
+
+    // ── Daily Summary ─────────────────────────────────────────────────────────
+
+    public function dailySummary(Request $request, DailyReport $report): Response
+    {
+        $branchId = $this->resolvedBranchId($request);
+        $date = $this->day($request);
+
+        return Inertia::render('Reports/DailySummary', [
+            ...$this->context($branchId, $date, $date),
+            'report' => $report->build($branchId, $date),
+        ]);
+    }
+
+    public function dailySummaryPdf(Request $request, DailyReport $report): HttpResponse
+    {
+        $branchId = $this->resolvedBranchId($request);
+        $date = $this->day($request);
+
+        return $this->pdf('daily', 'Daily Sales Summary', $branchId, $date, $date, [
+            'report' => $report->build($branchId, $date),
+        ]);
+    }
+
+    // ── Sales Report ──────────────────────────────────────────────────────────
+
+    public function salesReport(Request $request, SalesReport $report): Response
+    {
+        $branchId = $this->resolvedBranchId($request);
+        [$from, $to] = $this->period($request, today()->startOfMonth());
+        $method = $this->paymentMethod($request);
+
+        $register = $report->register($branchId, $from, $to, $method)
+            ->paginate(self::REGISTER_PER_PAGE)
+            ->withQueryString()
+            ->through(fn (Sale $sale) => $this->saleRow($sale));
+
+        return Inertia::render('Reports/SalesReport', [
+            ...$this->context($branchId, $from, $to),
+            'payment_method' => $method,
+            'report' => $report->build($branchId, $from, $to),
+            'register' => $register,
+        ]);
+    }
+
+    public function salesReportPdf(Request $request, SalesReport $report): HttpResponse
+    {
+        $branchId = $this->resolvedBranchId($request);
+        [$from, $to] = $this->period($request, today()->startOfMonth());
+        $method = $this->paymentMethod($request);
+
+        return $this->pdf('sales', 'Sales Report', $branchId, $from, $to, [
+            'report' => $report->build($branchId, $from, $to),
+            'register' => $report->register($branchId, $from, $to, $method)->get()->map(fn (Sale $sale) => $this->saleRow($sale)),
+            'paymentMethod' => $method,
+        ], 'landscape');
+    }
+
+    // ── Inventory Report ──────────────────────────────────────────────────────
+
+    public function inventoryReport(Request $request, InventoryReport $report): Response
+    {
+        $branchId = $this->resolvedBranchId($request);
+
+        return Inertia::render('Reports/InventoryReport', [
+            ...$this->context($branchId, null, null),
+            'report' => $report->build($branchId),
+        ]);
+    }
+
+    public function inventoryReportPdf(Request $request, InventoryReport $report): HttpResponse
+    {
+        $branchId = $this->resolvedBranchId($request);
+        $validated = $request->validate([
+            'status' => ['nullable', Rule::in(['attention', InventoryReport::STATUS_OUT, InventoryReport::STATUS_LOW, InventoryReport::STATUS_EXPIRED, InventoryReport::STATUS_EXPIRING])],
+            'category' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $data = $report->build($branchId);
+        $data['rows'] = collect($data['rows'])
+            ->when($validated['category'] ?? null, fn ($rows, $category) => $rows->where('category', $category))
+            ->when($validated['status'] ?? null, fn ($rows, $status) => $status === 'attention'
+                ? $rows->where('status', '!=', InventoryReport::STATUS_OK)
+                : $rows->where('status', $status))
+            ->values()
+            ->all();
+
+        return $this->pdf('inventory', 'Inventory Valuation Report', $branchId, null, null, [
+            'report' => $data,
+            'filterNote' => collect([$validated['category'] ?? null, isset($validated['status']) ? 'Status: '.$validated['status'] : null])->filter()->join(' · '),
+        ], 'landscape');
+    }
+
+    // ── Expense Report ────────────────────────────────────────────────────────
+
+    public function expenseReport(Request $request, ExpenseReport $report): Response
+    {
+        $branchId = $this->resolvedBranchId($request);
+        [$from, $to] = $this->period($request, today()->startOfMonth());
+
+        $register = $report->register($branchId, $from, $to)
+            ->paginate(self::REGISTER_PER_PAGE)
+            ->withQueryString()
+            ->through(fn (Expense $expense) => $this->expenseRow($expense));
+
+        return Inertia::render('Reports/ExpensesReport', [
+            ...$this->context($branchId, $from, $to),
+            'report' => $report->build($branchId, $from, $to),
+            'register' => $register,
+        ]);
+    }
+
+    public function expenseReportPdf(Request $request, ExpenseReport $report): HttpResponse
+    {
+        $branchId = $this->resolvedBranchId($request);
+        [$from, $to] = $this->period($request, today()->startOfMonth());
+
+        return $this->pdf('expenses', 'Expense Report', $branchId, $from, $to, [
+            'report' => $report->build($branchId, $from, $to),
+            'register' => $report->register($branchId, $from, $to)->get()->map(fn (Expense $expense) => $this->expenseRow($expense)),
+        ]);
+    }
+
+    // ── Ingredient Usage Report ───────────────────────────────────────────────
+
+    public function ingredientUsageReport(Request $request, IngredientUsageReport $report): Response
+    {
+        $branchId = $this->resolvedBranchId($request);
+        [$from, $to] = $this->period($request, today()->subDays(6));
+
+        return Inertia::render('Reports/IngredientUsageReport', [
+            ...$this->context($branchId, $from, $to),
+            'report' => $report->build($branchId, $from, $to),
+        ]);
+    }
+
+    public function ingredientUsageReportPdf(Request $request, IngredientUsageReport $report): HttpResponse
+    {
+        $branchId = $this->resolvedBranchId($request);
+        [$from, $to] = $this->period($request, today()->subDays(6));
+
+        return $this->pdf('ingredient-usage', 'Ingredient Usage Report', $branchId, $from, $to, [
+            'report' => $report->build($branchId, $from, $to),
+        ]);
+    }
+
+    // ── Stock Loss Report ─────────────────────────────────────────────────────
+
+    public function stockLossReport(Request $request, StockLossReport $report): Response
+    {
+        $branchId = $this->resolvedBranchId($request);
+        [$from, $to] = $this->period($request, today()->startOfMonth());
+        $type = $this->lossType($request);
+
+        return Inertia::render('Reports/StockLoss', [
+            ...$this->context($branchId, $from, $to),
+            'type' => $type,
+            'report' => $report->build($branchId, $from, $to, $type),
+        ]);
+    }
+
+    public function stockLossReportPdf(Request $request, StockLossReport $report): HttpResponse
+    {
+        $branchId = $this->resolvedBranchId($request);
+        [$from, $to] = $this->period($request, today()->startOfMonth());
+        $type = $this->lossType($request);
+
+        return $this->pdf('stock-loss', 'Stock Loss Report', $branchId, $from, $to, [
+            'report' => $report->build($branchId, $from, $to, $type),
+            'type' => $type,
+        ]);
+    }
+
+    // ── Shared helpers ────────────────────────────────────────────────────────
+
     /**
-     * Resolve the branch_id to scope report data.
-     * Admins can pass branch_id as a query param (or null = all).
-     * Non-admins always see only their own branch, ignoring any passed param.
+     * Admins may pick a branch (none = all branches); everyone else only sees
+     * their own branch, whatever they pass.
      */
     private function resolvedBranchId(Request $request): ?int
     {
-        $user = auth()->user();
-        if ($user->isAdmin()) return $request->branch_id ? (int) $request->branch_id : null;
-        return $user->branch_id;
+        $user = $request->user();
+
+        if (! $user->isAdmin()) {
+            return $user->branch_id;
+        }
+
+        return $request->filled('branch_id') ? Branch::findOrFail((int) $request->input('branch_id'))->id : null;
+    }
+
+    private function day(Request $request): string
+    {
+        $validated = $request->validate(['date' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:today']]);
+
+        return $validated['date'] ?? today()->toDateString();
     }
 
     /**
-     * Returns the branches list for the branch selector.
-     * Non-admins receive null so the frontend hides the selector.
+     * The requested period, defaulting to $defaultFrom … today.
+     *
+     * @return array{0: string, 1: string}
      */
-    private function branchesForSelector(): ?object
+    private function period(Request $request, CarbonInterface $defaultFrom): array
     {
-        if (!auth()->user()->isAdmin()) return null;
-        return Branch::where('is_active', true)->select('id', 'name')->get();
+        $validated = $request->validate([
+            'from' => ['nullable', 'date_format:Y-m-d'],
+            'to' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+
+        $from = Carbon::parse($validated['from'] ?? $defaultFrom);
+        $to = Carbon::parse($validated['to'] ?? today());
+        if ($from->gt($to)) {
+            [$from, $to] = [$to, $from];
+        }
+
+        if ($from->diffInDays($to) + 1 > self::MAX_PERIOD_DAYS) {
+            throw ValidationException::withMessages(['to' => 'Choose a period of one year or less.']);
+        }
+
+        return [$from->toDateString(), $to->toDateString()];
     }
 
-    private function reportBranding(?int $branchId): array
+    private function paymentMethod(Request $request): ?string
+    {
+        return $request->validate(['payment_method' => ['nullable', Rule::in(['cash', 'gcash', 'card', 'others', 'credit', 'mixed', 'installment'])]])['payment_method'] ?? null;
+    }
+
+    private function lossType(Request $request): ?string
+    {
+        return $request->validate(['type' => ['nullable', Rule::in(StockLossReport::TYPES)]])['type'] ?? null;
+    }
+
+    /**
+     * Branch picker and the filters the page was built with.
+     *
+     * @return array<string, mixed>
+     */
+    private function context(?int $branchId, ?string $from, ?string $to): array
     {
         return [
-            'businessName' => SystemSetting::businessName($branchId),
-            'logoPath'     => SystemSetting::logoFilePath($branchId),
+            'branches' => auth()->user()->isAdmin() ? Branch::where('is_active', true)->orderBy('name')->get(['id', 'name']) : null,
+            'filters' => ['branch_id' => $branchId, 'from' => $from, 'to' => $to],
+            'branch_label' => $this->branchLabel($branchId),
+            'generated_at' => now()->toIso8601String(),
         ];
     }
 
-    // ====================== DAILY SUMMARY ======================
-    public function dailySummary(Request $request)
+    private function branchLabel(?int $branchId): string
     {
-        $branchId = $this->resolvedBranchId($request);
-        $date = $request->date ?? today()->toDateString();
-
-        $summary = DailySummary::generate($branchId, $date);
-
-        return Inertia::render('Reports/DailySummary', [
-            'dailySummary'    => $summary,
-            'branches'        => $this->branchesForSelector(),
-            'currentBranchId' => $branchId,
-        ]);
+        return $branchId ? (Branch::whereKey($branchId)->value('name') ?? 'Branch') : 'All branches';
     }
 
-    public function dailySummaryPdf(Request $request)
+    /**
+     * Render a report PDF on the shared letterhead.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function pdf(string $view, string $title, ?int $branchId, ?string $from, ?string $to, array $data, string $orientation = 'portrait'): HttpResponse
     {
-        $branchId = $this->resolvedBranchId($request);
-        $date = $request->date ?? today()->toDateString();
+        $settingsBranch = $branchId;
+        $period = match (true) {
+            $from === null => 'As of '.now()->format('M j, Y g:i A'),
+            $from === $to => Carbon::parse($from)->format('l, F j, Y'),
+            default => Carbon::parse($from)->format('M j, Y').' – '.Carbon::parse($to)->format('M j, Y'),
+        };
 
-        $summary = DailySummary::generate($branchId, $date);
-        $branch = $branchId ? Branch::select('id', 'name')->find($branchId) : null;
+        $meta = [
+            'title' => $title,
+            'period' => $period,
+            'branch' => $this->branchLabel($branchId),
+            'businessName' => SystemSetting::businessName($settingsBranch),
+            'address' => (string) SystemSetting::get('general.address', $settingsBranch, ''),
+            'phone' => (string) SystemSetting::get('general.phone', $settingsBranch, ''),
+            'tin' => (string) SystemSetting::get('general.tin', $settingsBranch, ''),
+            'logoPath' => SystemSetting::logoFilePath($settingsBranch),
+            'generatedAt' => now()->format('M j, Y g:i A'),
+            'generatedBy' => auth()->user()->full_name,
+            'orientation' => $orientation,
+        ];
 
-        $pdf = Pdf::loadView('pdf.reports.daily', [
-            'summary' => $summary,
-            'branch' => $branch,
-            'date' => Carbon::parse($date),
-        ] + $this->reportBranding($branchId));
+        $filename = str($title)->slug().'-'.($from ?? now()->toDateString()).($to && $to !== $from ? "-to-{$to}" : '').'.pdf';
 
-        $pdf->setPaper('a4', 'portrait');
-        return $pdf->stream("daily-summary-{$date}.pdf");
+        return Pdf::loadView("pdf.reports.{$view}", ['meta' => $meta, ...$data])
+            ->setPaper('a4', $orientation)
+            ->setOption(['isPhpEnabled' => true])
+            ->stream($filename);
     }
 
-    // ====================== SALES REPORT ======================
-    public function salesReport(Request $request)
+    /**
+     * @return array<string, mixed>
+     */
+    private function saleRow(Sale $sale): array
     {
-        $branchId = $this->resolvedBranchId($request);
-        $filters  = array_merge($request->only(['from_date', 'to_date']), ['branch_id' => $branchId]);
+        $collected = in_array($sale->payment_method, ['credit', 'mixed', 'installment'], true) ? (float) $sale->amount_paid : (float) $sale->total;
 
-        $sales = Sale::query()
-            ->select([
-                'id', 'receipt_number', 'created_at', 'user_id',
-                'total', 'payment_method', 'payment_amount', 'amount_paid', 'balance_due', 'payment_status', 'discount_amount',
-                'customer_name', 'customer_id'
-            ])
-            ->with(['user:id,fname,lname', 'customer:id,name'])
-            ->where('status', 'completed')
-            ->when($branchId, fn($q, $id) => $q->where('branch_id', $id))
-            ->when($filters['from_date'] ?? null, fn($q, $d) => $q->whereDate('created_at', '>=', $d))
-            ->when($filters['to_date'] ?? null, fn($q, $d) => $q->whereDate('created_at', '<=', $d))
-            ->latest()
-            ->paginate(10)
-            ->withQueryString();
-
-        // User::full_name is a computed accessor not in $appends — append it so it serializes
-        $sales->getCollection()->each(fn($sale) => $sale->user?->append('full_name'));
-
-        return Inertia::render('Reports/SalesReport', [
-            'sales'    => $sales,
-            'branches' => $this->branchesForSelector(),
-            'filters'  => $filters,
-        ]);
+        return [
+            'id' => $sale->id,
+            'receipt_number' => $sale->receipt_number,
+            'created_at' => $sale->created_at->toIso8601String(),
+            'cashier' => $sale->user?->full_name ?? '—',
+            'customer' => $sale->customer?->name ?? $sale->customer_name,
+            'channel' => ReportLabels::channel($sale->channel),
+            'payment_method' => $sale->payment_method,
+            'payment_label' => ReportLabels::paymentMethod($sale->payment_method),
+            'discount' => round((float) $sale->discount_amount + (float) $sale->loyalty_discount, 2),
+            'total' => round((float) $sale->total, 2),
+            'collected' => round($collected, 2),
+            'balance' => round((float) $sale->balance_due, 2),
+        ];
     }
 
-    public function salesReportPdf(Request $request)
+    /**
+     * @return array<string, mixed>
+     */
+    private function expenseRow(Expense $expense): array
     {
-        $branchId = $this->resolvedBranchId($request);
-        $filters  = array_merge($request->only(['from_date', 'to_date', 'payment_method']), ['branch_id' => $branchId]);
-
-        $sales = Sale::query()
-            ->select([
-                'id', 'receipt_number', 'created_at', 'user_id',
-                'total', 'payment_method', 'payment_amount', 'amount_paid', 'balance_due', 'payment_status', 'discount_amount',
-                'customer_name', 'status', 'customer_id'
-            ])
-            ->with(['user:id,fname,lname', 'customer:id,name'])
-            ->where('status', 'completed')
-            ->when($branchId, fn($q, $id) => $q->where('branch_id', $id))
-            ->when($filters['from_date'] ?? null, fn($q, $d) => $q->whereDate('created_at', '>=', $d))
-            ->when($filters['to_date'] ?? null, fn($q, $d) => $q->whereDate('created_at', '<=', $d))
-            ->when($filters['payment_method'] ?? null, fn($q, $m) => $q->where('payment_method', $m))
-            ->latest()
-            ->get();
-
-        $creditPayments = CustomerPayment::query()
-            ->when($branchId, fn($q, $id) => $q->where('branch_id', $id))
-            ->when($filters['from_date'] ?? null, fn($q, $d) => $q->whereDate('payment_date', '>=', $d))
-            ->when($filters['to_date'] ?? null, fn($q, $d) => $q->whereDate('payment_date', '<=', $d))
-            ->sum('amount');
-        $totalSales = $sales->sum(fn ($sale) => in_array($sale->payment_method, ['credit', 'mixed'], true) ? 0 : ($sale->payment_method === 'installment' ? (float) $sale->amount_paid : (float) $sale->total)) + $creditPayments;
-
-        $branch = $branchId ? Branch::select('id', 'name')->find($branchId) : null;
-
-        $pdf = Pdf::loadView('pdf.reports.sales', [
-            'sales'       => $sales,
-            'total_sales' => $totalSales,
-            'branch'      => $branch,
-            'from_date'   => $filters['from_date'] ?? null,
-            'to_date'     => $filters['to_date'] ?? null,
-        ] + $this->reportBranding($filters['branch_id'] ?? null));
-
-        $pdf->setPaper('a4', 'landscape');
-        return $pdf->stream('sales-report.pdf');
-    }
-
-    // ====================== INVENTORY REPORT (Stock Levels Only) ======================
-    public function inventoryReport(Request $request)
-    {
-        $branchId = $this->resolvedBranchId($request);
-        $type     = $request->type ?? 'all';
-
-        $query = Product::with([
-            'category:id,name',
-            'stocks' => function ($q) use ($branchId) {
-                if ($branchId) $q->where('branch_id', $branchId);
-            }
-        ])
-        ->select('id', 'name', 'category_id', 'product_type', 'barcode')
-        ->when($type !== 'all', function ($q) use ($type) {
-            // Keep your existing type filter logic
-            if ($type === 'ingredient' || $type === 'standard') {
-                $q->where('product_type', 'standard');
-            } else {
-                $q->where('product_type', $type);
-            }
-        })
-        ->when($branchId, fn($q) => $q->whereHas('stocks', fn($sq) => $sq->where('branch_id', $branchId)));
-
-        $stocks = $query->paginate(15);
-
-        // Transform to plain arrays so Product model accessors don't override
-        // branch-specific stock values during Inertia serialization.
-        $stocks->getCollection()->transform(function ($product) use ($branchId) {
-            // Stocks are already filtered to the branch by the eager load constraint above
-            $stockRecord = $product->stocks->first();
-
-            $stockQty = $branchId
-                ? ($stockRecord?->stock ?? 0)
-                : $product->stocks->sum('stock');
-
-            return [
-                'id'             => $product->id,
-                'name'           => $product->name,
-                'category_name'  => $product->category?->name,
-                'product_type'   => $product->product_type,
-                'stock'          => $stockQty,
-                'unit'           => 'pcs',
-                'expiry_date'    => $stockRecord?->expiry_date?->format('Y-m-d'),
-                'is_low_stock'   => $stockQty > 0 && $stockQty <= 5,
-                'is_near_expiry' => $stockRecord ? $stockRecord->isNearExpiry() : false,
-            ];
-        });
-
-        return Inertia::render('Reports/InventoryReport', [
-            'stocks'          => $stocks,
-            'branches'        => $this->branchesForSelector(),
-            'currentBranchId' => $branchId,
-        ]);
-    }
-
-    public function inventoryReportPdf(Request $request)
-    {
-        $branchId = $this->resolvedBranchId($request);
-        $type     = $request->type ?? 'all';
-
-        $products = Product::with([
-                'category:id,name',
-                'stocks' => function ($q) use ($branchId) {
-                    if ($branchId) $q->where('branch_id', $branchId);
-                },
-            ])
-            ->when($type !== 'all', function ($q) use ($type) {
-                if ($type === 'ingredient' || $type === 'standard') {
-                    $q->where('product_type', 'standard');
-                } else {
-                    $q->where('product_type', $type);
-                }
-            })
-            ->when($branchId, function ($q) use ($branchId) {
-                $q->whereHas('stocks', fn($sq) => $sq->where('branch_id', $branchId));
-            })
-            ->get();
-
-        // Transform to plain objects so Product model accessors don't override
-        // branch-specific stock values in the Blade template.
-        $stocks = $products->map(function ($product) use ($branchId) {
-            $stockRecord = $product->stocks->first();
-
-            $stockQty = $branchId
-                ? ($stockRecord?->stock ?? 0)
-                : $product->stocks->sum('stock');
-
-            $item = new \stdClass();
-            $item->name         = $product->name;
-            $item->category     = $product->category;
-            $item->product_type = $product->product_type;
-            $item->stock        = $stockQty;
-            $item->unit         = 'pcs';
-            $item->expiry_date  = $stockRecord?->expiry_date; // Carbon instance or null
-            return $item;
-        });
-
-        $branch = $branchId ? Branch::select('id', 'name')->find($branchId) : null;
-
-        $pdf = Pdf::loadView('pdf.reports.inventory', [
-            'stocks'       => $stocks,
-            'branch'       => $branch,
-        ] + $this->reportBranding($branchId));
-
-        $pdf->setPaper('a4', 'portrait');
-        return $pdf->stream('inventory-report.pdf');
-    }
-
-    // ====================== NEW: INGREDIENT USAGE REPORT (Separate) ======================
-    public function ingredientUsageReport(Request $request)
-    {
-        $branchId = $this->resolvedBranchId($request);
-        $fromDate = $request->from_date;
-        $toDate   = $request->to_date ?: now()->format('Y-m-d');
-
-        $usage = collect();
-
-        if ($fromDate) {
-            $usage = RecipeIngredient::selectRaw('
-                    recipe_ingredients.ingredient_id,
-                    ingredients.name as ingredient_name,
-                    recipe_ingredients.unit,
-                    SUM(recipe_ingredients.quantity * sale_items.quantity) as total_used
-                ')
-                ->join('products as ingredients', 'ingredients.id', '=', 'recipe_ingredients.ingredient_id')
-                ->join('sale_items', 'sale_items.product_id', '=', 'recipe_ingredients.product_id')
-                ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
-                ->whereBetween('sales.created_at', [$fromDate, $toDate . ' 23:59:59'])
-                ->when($branchId, fn($q) => $q->where('sales.branch_id', $branchId))
-                ->groupBy('recipe_ingredients.ingredient_id', 'ingredients.name', 'recipe_ingredients.unit')
-                ->orderByDesc('total_used')
-                ->get();
-
-            // Add breakdown per finished product
-            $usage->each(function ($item) use ($fromDate, $toDate, $branchId) {
-                $item->recipes_used_in = RecipeIngredient::selectRaw('
-                        products.name as product_name,
-                        recipe_ingredients.quantity as quantity_per_unit,
-                        SUM(sale_items.quantity) as total_sold
-                    ')
-                    ->join('products', 'products.id', '=', 'recipe_ingredients.product_id')
-                    ->join('sale_items', 'sale_items.product_id', '=', 'recipe_ingredients.product_id')
-                    ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
-                    ->where('recipe_ingredients.ingredient_id', $item->ingredient_id)
-                    ->whereBetween('sales.created_at', [$fromDate, $toDate . ' 23:59:59'])
-                    ->when($branchId, fn($q) => $q->where('sales.branch_id', $branchId))
-                    ->groupBy('products.name', 'recipe_ingredients.quantity')
-                    ->get();
-            });
-        }
-
-        return Inertia::render('Reports/IngredientUsageReport', [
-            'usage'    => $usage,
-            'branches' => $this->branchesForSelector(),
-        ]);
-    }
-
-    public function ingredientUsageReportPdf(Request $request)
-    {
-        $branchId = $this->resolvedBranchId($request);
-        $fromDate = $request->from_date;
-        $toDate   = $request->to_date ?: now()->format('Y-m-d');
-
-        $usage = collect();
-
-        if ($fromDate) {
-            $usage = RecipeIngredient::selectRaw('
-                    recipe_ingredients.ingredient_id,
-                    ingredients.name as ingredient_name,
-                    recipe_ingredients.unit,
-                    SUM(recipe_ingredients.quantity * sale_items.quantity) as total_used
-                ')
-                ->join('products as ingredients', 'ingredients.id', '=', 'recipe_ingredients.ingredient_id')
-                ->join('sale_items', 'sale_items.product_id', '=', 'recipe_ingredients.product_id')
-                ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
-                ->whereBetween('sales.created_at', [$fromDate, $toDate . ' 23:59:59'])
-                ->when($branchId, fn($q) => $q->where('sales.branch_id', $branchId))
-                ->groupBy('recipe_ingredients.ingredient_id', 'ingredients.name', 'recipe_ingredients.unit')
-                ->orderByDesc('total_used')
-                ->get();
-
-            $usage->each(function ($item) use ($fromDate, $toDate, $branchId) {
-                $item->recipes_used_in = RecipeIngredient::selectRaw('
-                        products.name as product_name,
-                        recipe_ingredients.quantity as quantity_per_unit,
-                        SUM(sale_items.quantity) as total_sold
-                    ')
-                    ->join('products', 'products.id', '=', 'recipe_ingredients.product_id')
-                    ->join('sale_items', 'sale_items.product_id', '=', 'recipe_ingredients.product_id')
-                    ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
-                    ->where('recipe_ingredients.ingredient_id', $item->ingredient_id)
-                    ->whereBetween('sales.created_at', [$fromDate, $toDate . ' 23:59:59'])
-                    ->when($branchId, fn($q) => $q->where('sales.branch_id', $branchId))
-                    ->groupBy('products.name', 'recipe_ingredients.quantity')
-                    ->get();
-            });
-        }
-
-        $branch = $branchId ? Branch::select('id', 'name')->find($branchId) : null;
-
-        $pdf = Pdf::loadView('pdf.reports.ingredient-usage', [
-            'usage'    => $usage,
-            'fromDate' => $fromDate,
-            'toDate'   => $toDate,
-            'branch'   => $branch,
-        ] + $this->reportBranding($branchId));
-
-        $pdf->setPaper('a4', 'portrait');
-        return $pdf->stream('ingredient-usage-report.pdf');
-    }
-
-    // ====================== EXPENSES REPORT ======================
-    public function expenseReport(Request $request)
-    {
-        $branchId = $this->resolvedBranchId($request);
-        $filters  = array_merge($request->only(['from_date', 'to_date']), ['branch_id' => $branchId]);
-
-        $baseQuery = fn() => Expense::query()
-            ->where('status', 'approved')
-            ->when($filters['branch_id'] ?? null, fn($q, $id) => $q->where('branch_id', $id))
-            ->when($filters['from_date'] ?? null, fn($q, $d) => $q->whereDate('expense_date', '>=', $d))
-            ->when($filters['to_date'] ?? null, fn($q, $d) => $q->whereDate('expense_date', '<=', $d));
-
-        $expenses = $baseQuery()
-            ->select([
-                'id', 'expense_date', 'amount', 'expense_category_id',
-                'payment_method', 'description', 'status'
-            ])
-            ->with(['category:id,name'])
-            ->latest('expense_date')
-            ->paginate(10)
-            ->withQueryString();
-
-        $totalAmount = $baseQuery()->sum('amount');
-
-        return Inertia::render('Reports/ExpensesReport', [
-            'expenses'     => $expenses,
-            'branches'     => $this->branchesForSelector(),
-            'filters'      => $filters,
-            'total_amount' => (float) $totalAmount,
-        ]);
-    }
-
-    public function expenseReportPdf(Request $request)
-    {
-        $branchId = $this->resolvedBranchId($request);
-        $filters  = array_merge($request->only(['from_date', 'to_date']), ['branch_id' => $branchId]);
-
-        $expenses = Expense::query()
-            ->select([
-                'id', 'expense_date', 'amount', 'expense_category_id',
-                'payment_method', 'description', 'status'
-            ])
-            ->with(['category:id,name'])
-            ->where('status', 'approved')
-            ->when($branchId, fn($q, $id) => $q->where('branch_id', $id))
-            ->when($filters['from_date'] ?? null, fn($q, $d) => $q->whereDate('expense_date', '>=', $d))
-            ->when($filters['to_date'] ?? null, fn($q, $d) => $q->whereDate('expense_date', '<=', $d))
-            ->latest('expense_date')
-            ->get();
-
-        $branch = $branchId ? Branch::select('id', 'name')->find($branchId) : null;
-
-        $pdf = Pdf::loadView('pdf.reports.expenses', [
-            'expenses'     => $expenses,
-            'branch'       => $branch,
-            'fromDate'     => $filters['from_date'] ?? null,
-            'toDate'       => $filters['to_date'] ?? null,
-        ] + $this->reportBranding($branchId));
-
-        $pdf->setPaper('a4', 'portrait');
-        return $pdf->stream('expenses-report.pdf');
-    }
-
-    // ====================== STOCK LOSS REPORT ======================
-
-    public function stockLossReport(Request $request)
-    {
-        $branchId = $this->resolvedBranchId($request);
-
-        $filters = $request->only(['from', 'to', 'type']);
-        $from = $filters['from'] ?? now()->startOfMonth()->toDateString();
-        $to   = $filters['to']   ?? now()->toDateString();
-
-        $query = StockAdjustment::with(['product:id,name,barcode', 'recordedBy:id,fname,lname'])
-            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
-            ->whereDate('created_at', '>=', $from)
-            ->whereDate('created_at', '<=', $to);
-
-        if (!empty($filters['type'])) {
-            $query->where('type', $filters['type']);
-        }
-
-        $adjustments = $query->latest()->get()->map(fn ($a) => [
-            'id'           => $a->id,
-            'date'         => $a->created_at->toDateTimeString(),
-            'product_name' => $a->product?->name ?? '—',
-            'barcode'      => $a->product?->barcode,
-            'type'         => $a->type,
-            'type_label'   => StockAdjustment::typeLabel($a->type),
-            'quantity'     => $a->quantity,
-            'unit_cost'    => (float) $a->unit_cost,
-            'total_cost'   => round((float) $a->unit_cost * $a->quantity, 2),
-            'note'         => $a->note,
-            'recorded_by'  => trim(($a->recordedBy?->fname ?? '') . ' ' . ($a->recordedBy?->lname ?? '')),
-        ]);
-
-        $summary = $adjustments->groupBy('type')->map(fn ($group) => [
-            'count'      => $group->count(),
-            'total_qty'  => $group->sum('quantity'),
-            'total_cost' => $group->sum('total_cost'),
-        ]);
-
-        return Inertia::render('Reports/StockLoss', [
-            'adjustments'     => $adjustments,
-            'summary'         => $summary,
-            'total_loss'      => $adjustments->sum('total_cost'),
-            'total_units'     => $adjustments->sum('quantity'),
-            'filters'         => ['from' => $from, 'to' => $to, 'type' => $filters['type'] ?? null],
-            'branches'        => $this->branchesForSelector(),
-            'currentBranchId' => $branchId,
-        ]);
+        return [
+            'id' => $expense->id,
+            'date' => Carbon::parse($expense->expense_date)->toDateString(),
+            'reference' => $expense->reference_number,
+            'category' => $expense->category?->name ?? 'Uncategorized',
+            'description' => $expense->description,
+            'payment_label' => ReportLabels::paymentMethod($expense->payment_method),
+            'recorded_by' => $expense->user?->full_name ?? '—',
+            'amount' => round((float) $expense->amount, 2),
+        ];
     }
 }

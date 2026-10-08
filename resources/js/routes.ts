@@ -154,6 +154,14 @@ export const routes = {
         index: () => route('cash-counts.index'),
     },
 
+    // ── Z-Reading (end of day) — ID 47 ────────────────────────────────────────
+    zReadings: {
+        index: () => route('z-readings.index'),
+        store: () => route('z-readings.store'),
+        show: (id: Id) => route('z-readings.show', { zReading: id }),
+        reprint: (id: Id) => route('z-readings.reprint', { zReading: id }),
+    },
+
     // ── Petty Cash — ID 16 ────────────────────────────────────────────────────
     pettyCash: {
         index: () => route('petty-cash.index'),
@@ -195,18 +203,12 @@ export const routes = {
 
     // ── Reports — IDs 18–21 (HTML views + direct PDF downloads) ───────────────
     reports: {
-        // HTML Views
         daily: () => route('reports.daily'),
         sales: () => route('reports.sales'),
         inventory: () => route('reports.inventory'),
         expenses: () => route('reports.expenses'),
+        ingredientUsage: () => route('reports.ingredient-usage'),
         stockLoss: () => route('reports.stock-loss'),
-
-        // Live PDF Previews
-        dailyPreview: () => route('reports.daily.pdf'),
-        salesPreview: () => route('reports.sales.pdf'),
-        inventoryPreview: () => route('reports.inventory.pdf'),
-        expensesPreview: () => route('reports.expenses.pdf'),
     },
 
     // ── Activity Logs — ID 22 ─────────────────────────────────────────────────
