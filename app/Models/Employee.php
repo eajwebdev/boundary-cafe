@@ -28,6 +28,8 @@ class Employee extends Model
         'face_photo',
         'face_descriptor',
         'face_enrolled_at',
+        'device_token_hash',
+        'device_registered_at',
         'is_active',
     ];
 
@@ -35,6 +37,7 @@ class Employee extends Model
         'pin',
         'face_photo',
         'face_descriptor',
+        'device_token_hash',
     ];
 
     protected function casts(): array
@@ -43,6 +46,7 @@ class Employee extends Model
             'pin' => 'hashed',
             'face_descriptor' => 'array',
             'face_enrolled_at' => 'datetime',
+            'device_registered_at' => 'datetime',
             'is_active' => 'boolean',
         ];
     }

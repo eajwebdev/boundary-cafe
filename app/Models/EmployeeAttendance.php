@@ -27,6 +27,7 @@ class EmployeeAttendance extends Model
         'accuracy_m',
         'distance_m',
         'face_distance',
+        'liveness',
         'photo',
         'ip_address',
         'user_agent',
@@ -42,6 +43,7 @@ class EmployeeAttendance extends Model
             'accuracy_m' => 'integer',
             'distance_m' => 'integer',
             'face_distance' => 'float',
+            'liveness' => 'array',
         ];
     }
 

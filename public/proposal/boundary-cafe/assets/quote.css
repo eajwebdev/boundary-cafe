@@ -122,8 +122,9 @@ button { font: inherit; cursor: pointer; }
 .plan-price { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; }
 .plan-price strong { font-family: var(--font-display); font-weight: 800; font-size: 32px; letter-spacing: -.01em; }
 .plan-price span { color: var(--muted); font-size: 14px; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; padding: 0; list-style: none; }
-.chips li { font-size: 12.5px; font-weight: 600; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; }
+.chips { display: flex; flex-wrap: wrap; gap: 2px 0; margin: 0 0 12px; padding: 0; list-style: none; }
+.chips li { font-size: 12.5px; font-weight: 600; line-height: 1.5; }
+.chips li + li::before { content: '·'; margin: 0 7px; color: var(--muted); font-weight: 700; }
 .feature-group { margin: 12px 0 0; }
 .feature-group h4 { font-family: var(--font-display); font-weight: 700; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
 .feature-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }

@@ -45,7 +45,7 @@
     <section class="section" aria-labelledby="plans-title">
       <p class="eyebrow">01 · One-time packages</p>
       <h2 id="plans-title">Choose a base plan</h2>
-      <p class="section-lede">Pay once per branch with no monthly subscription. The system is installed on your own computer and runs offline, so the counter keeps working even without internet. Setup and staff training are included, and staff accounts are unlimited and free.</p>
+      <p class="section-lede">Pay once per branch with no monthly subscription. The price includes the POS computer, delivered with the system installed. It runs offline, so the counter keeps working even without internet. Setup and staff training are included, and staff accounts are unlimited and free.</p>
       <div class="plans" id="plans" role="radiogroup" aria-label="Base plan"></div>
     </section>
 
@@ -144,25 +144,25 @@
     assetBase: 'assets/',
 
     // Prices in PHP, per branch, paid once.
-    plans: { standard: 27999, advance: 37999 },
+    plans: { standard: 35000, advance: 47000 },
     planSuffix: 'one-time / branch',
-    extraChips: ['Lifetime license', 'Works offline'],
+    extraChips: ['POS computer included', 'Lifetime license', 'Works offline'],
     addonSuffix: 'one-time',
     priceColumn: 'One-time',
     perBranchLabel: 'Per branch',
     // Offline install: no Online Storefront or PayMongo e-payments (both need internet).
     addons: [
       { id: 'table',   price: 4999, includedIn: [] },
+      { id: 'attendance', price: 5999, includedIn: [] },
       { id: 'promos',  price: 2999, includedIn: ['advance'] },
       { id: 'recipes', price: 4999, includedIn: ['advance'] },
-      { id: 'support', price: 2999, includedIn: ['advance'] },
     ],
 
     // Offline wording for text shared with the subscription page.
     addonText: {
       table: { desc: 'Waiters take orders on a phone by table number over the café Wi-Fi, no internet needed. Orders go to the cashier as pending, and you manage the dining-table layout.' },
+      attendance: { desc: 'Staff time in and out on their own phone over the café Wi-Fi with a PIN, a GPS check that they are at the branch, and face recognition. A live face check (head turns and mouth movement in a random order) rejects photos and recorded videos, and each employee can only clock in from their own registered phone, so a co-worker cannot clock them in over a video call. Includes the attendance log with a photo of every time in and out.' },
       promos: { desc: 'Percentage, fixed and item promos with schedules. Promos appear automatically on the POS.' },
-      support: { desc: 'Same-day response during business hours and automatic daily backups on your computer. Standard packages back up weekly.' },
     },
     freeModules: [
       ['Loyalty Rewards', 'Points on every purchase, redeemable at the POS.'],
@@ -196,12 +196,12 @@
       ['Prices are in Philippine Peso.', 'They exclude any applicable government taxes.'],
       ['One-time payment, per branch.', '50% downpayment on signing to start setup, and the 50% balance on go-live, by GCash, bank transfer or cash.'],
       ['Lifetime license.', 'Use the system for as long as you operate the branch, with no monthly subscription fee.'],
-      ['Runs offline.', 'The system is installed on a computer at your branch and works without internet. Each branch runs its own copy with its own data.'],
-      ['Setup & training included.', 'Installation on your computer, configuration of your menu, and staff training before go-live.'],
+      ['Runs offline.', 'The system runs on the included POS computer at your branch and works without internet. Each branch runs its own copy with its own data.'],
+      ['Setup & training included.', 'Installation on the included POS computer, configuration of your menu, and staff training before go-live.'],
       ['Updates & bug fixes for 12 months.', 'After the first year, maintenance and updates are optional and quoted separately.'],
       ['Unlimited staff.', 'Add as many cashier, waiter and admin accounts as you need at no extra cost.'],
-      ['Hardware is not included.', 'The computer, tablets, phones, Wi-Fi router, receipt printers and cash drawers are provided by the client.'],
-      ['Your data stays with you.', 'Customer and sales data is stored on your own computer and belongs to {client}.'],
+      ['POS computer included.', 'One POS computer per branch is included in the price. Tablets, phones, Wi-Fi router, receipt printers and cash drawers are provided by the client.'],
+      ['Your data stays with you.', 'Customer and sales data is stored on the POS computer at your branch and belongs to {client}.'],
       ['Validity.', 'This quotation is valid until November 4, 2026.'],
     ],
   };

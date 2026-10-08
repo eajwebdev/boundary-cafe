@@ -1,10 +1,24 @@
 import { Head } from '@inertiajs/react';
-import { ArrowLeft, CheckCircle2, Loader2, LocateFixed, LogIn, LogOut, MapPin, ScanFace, XCircle } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import {
+    ArrowBigLeft,
+    ArrowBigRight,
+    ArrowLeft,
+    CheckCircle2,
+    Laugh,
+    Loader2,
+    LocateFixed,
+    LogIn,
+    LogOut,
+    MapPin,
+    ScanFace,
+    XCircle,
+} from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { CameraFeed, useCamera } from '@/components/CameraFeed';
 import { jsonRequest } from '@/lib/customer';
-import { captureFace, distanceMeters, getPosition, loadFaceApi, type Position } from '@/lib/face-capture';
+import { distanceMeters, getPosition, loadFaceApi, type Position } from '@/lib/face-capture';
+import { runLivenessCheck, type LivenessAction, type LivenessPrompt, type LivenessThresholds } from '@/lib/face-liveness';
 import { cn } from '@/lib/utils';
 import { routes } from '@/routes';
 
@@ -25,9 +39,23 @@ interface PunchResult {
     employee: EmployeeSummary;
 }
 
+interface Challenge {
+    token: string;
+    steps: LivenessAction[];
+    expires_in: number;
+}
+
 type Step = 'pin' | 'verify' | 'done';
 
 const RESET_AFTER_MS = 8000;
+
+/** On-camera instructions. The preview is mirrored, so "your left" is also the screen's left. */
+const PROMPTS: Record<LivenessPrompt, { label: string; icon: typeof ScanFace }> = {
+    look_straight: { label: 'Look straight at the camera', icon: ScanFace },
+    turn_left: { label: 'Slowly turn your head to your left', icon: ArrowBigLeft },
+    turn_right: { label: 'Slowly turn your head to your right', icon: ArrowBigRight },
+    open_mouth: { label: 'Open your mouth wide', icon: Laugh },
+};
 
 function useClock() {
     const [now, setNow] = useState(() => new Date());
@@ -38,7 +66,7 @@ function useClock() {
     return now;
 }
 
-export default function TimeClock({ business_name, logo_url }: { business_name: string; logo_url: string }) {
+export default function TimeClock({ business_name, logo_url, liveness }: { business_name: string; logo_url: string; liveness: LivenessThresholds }) {
     const now = useClock();
     const [step, setStep] = useState<Step>('pin');
     const [code, setCode] = useState('');
@@ -52,11 +80,14 @@ export default function TimeClock({ business_name, logo_url }: { business_name: 
     const [locError, setLocError] = useState<string | null>(null);
     const [locating, setLocating] = useState(false);
     const [modelReady, setModelReady] = useState(false);
+    const [prompt, setPrompt] = useState<{ prompt: LivenessPrompt; step: number; total: number } | null>(null);
+    const checkAbort = useRef<AbortController | null>(null);
 
     const cameraOn = step === 'verify' && !!employee && !employee.blocker;
     const camera = useCamera(cameraOn);
 
     const reset = useCallback(() => {
+        checkAbort.current?.abort();
         setStep('pin');
         setCode('');
         setPin('');
@@ -109,21 +140,42 @@ export default function TimeClock({ business_name, logo_url }: { business_name: 
     };
 
     const punch = async () => {
-        if (!camera.videoRef.current || !position || !employee) return;
+        const video = camera.videoRef.current;
+        if (!video || !position || !employee) return;
         setError(null);
+        const abort = new AbortController();
+        checkAbort.current = abort;
         try {
-            setBusy('Scanning your face…');
-            const face = await captureFace(camera.videoRef.current);
+            setBusy('Starting the face check…');
+            const challenge = await jsonRequest<Challenge>(routes.timeClock.challenge(), { method: 'POST', body: { employee_code: code, pin } });
+            setBusy('Follow the steps on the camera');
+            const check = await runLivenessCheck(
+                video,
+                challenge.steps,
+                liveness,
+                (next, stepNumber) => setPrompt({ prompt: next, step: stepNumber, total: challenge.steps.length }),
+                abort.signal,
+            );
+            setPrompt(null);
             setBusy(employee.next === 'in' ? 'Timing you in…' : 'Timing you out…');
             const res = await jsonRequest<PunchResult>(routes.timeClock.punch(), {
                 method: 'POST',
-                body: { employee_code: code, pin, ...position, descriptor: face.descriptor, photo: face.photo },
+                body: {
+                    employee_code: code,
+                    pin,
+                    ...position,
+                    descriptor: check.face.descriptor,
+                    photo: check.face.photo,
+                    challenge: challenge.token,
+                    liveness: { camera: check.camera, neutral: check.neutral, steps: check.steps },
+                },
             });
             setResult(res);
             setStep('done');
         } catch (err) {
-            setError((err as Error).message);
+            if (!abort.signal.aborted) setError((err as Error).message);
         } finally {
+            setPrompt(null);
             setBusy(null);
         }
     };
@@ -235,7 +287,9 @@ export default function TimeClock({ business_name, logo_url }: { business_name: 
                                 <ErrorNote message={employee.blocker} />
                             ) : (
                                 <>
-                                    <CameraFeed videoRef={camera.videoRef} ready={camera.ready} error={camera.error} />
+                                    <CameraFeed videoRef={camera.videoRef} ready={camera.ready} error={camera.error}>
+                                        {prompt && <LivenessOverlay {...prompt} />}
+                                    </CameraFeed>
 
                                     <div
                                         className={cn(
@@ -321,7 +375,28 @@ export default function TimeClock({ business_name, logo_url }: { business_name: 
                     )}
                 </main>
 
-                <p className="text-center text-[11px] text-muted-foreground">Your location and a photo are saved with every time in and out.</p>
+                <p className="text-center text-[11px] text-muted-foreground">
+                    Your location and a photo are saved with every time in and out. The phone you first clock in with becomes your registered phone.
+                </p>
+            </div>
+        </div>
+    );
+}
+
+function LivenessOverlay({ prompt, step, total }: { prompt: LivenessPrompt; step: number; total: number }) {
+    const { label, icon: Icon } = PROMPTS[prompt];
+
+    return (
+        <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-1.5 bg-linear-to-t from-black/80 to-transparent px-4 pt-10 pb-3 text-white"
+            aria-live="assertive"
+        >
+            <Icon className="h-9 w-9 animate-pulse" />
+            <p className="text-center text-base font-bold">{label}</p>
+            <div className="flex gap-1" aria-hidden="true">
+                {Array.from({ length: total + 1 }, (_, i) => (
+                    <span key={i} className={cn('h-1.5 w-6 rounded-full', i <= step ? 'bg-white' : 'bg-white/30')} />
+                ))}
             </div>
         </div>
     );

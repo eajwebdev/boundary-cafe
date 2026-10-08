@@ -46,6 +46,7 @@ Route::get('/loyalty/card/{token}', [LoyaltyController::class, 'card'])->name('l
 // Employee time clock (public; employees prove who they are with code + PIN, GPS and face)
 Route::get('/time-clock', [TimeClockController::class, 'show'])->name('time-clock');
 Route::post('/time-clock/identify', [TimeClockController::class, 'identify'])->middleware('throttle:20,1')->name('time-clock.identify');
+Route::post('/time-clock/challenge', [TimeClockController::class, 'challenge'])->middleware('throttle:20,1')->name('time-clock.challenge');
 Route::post('/time-clock/punch', [TimeClockController::class, 'punch'])->middleware('throttle:20,1')->name('time-clock.punch');
 
 // Public quotation pages (static files in public/proposal) — shareable, no sign-in.
@@ -165,6 +166,7 @@ Route::middleware(['auth:web', 'order-taker'])->group(function () {
         Route::delete('/{employee}', 'destroy')->name('destroy');
         Route::post('/{employee}/face', 'enrollFace')->name('face.store');
         Route::get('/{employee}/face', 'face')->name('face');
+        Route::delete('/{employee}/device', 'resetDevice')->name('device.destroy');
     });
 
     // Attendance log + branch clock-in areas — ID 46

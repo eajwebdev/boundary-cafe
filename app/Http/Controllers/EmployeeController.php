@@ -68,6 +68,7 @@ class EmployeeController extends Controller
                 'has_face' => $e->hasFace(),
                 'face_samples' => count($e->faceSamples()),
                 'face_enrolled_at' => $e->face_enrolled_at?->toIso8601String(),
+                'device_registered_at' => $e->device_registered_at?->toIso8601String(),
                 'today' => ($last = $lastToday->get($e->id)) ? [
                     'type' => $last->type,
                     'time' => $last->created_at->format('g:i A'),
@@ -146,6 +147,16 @@ class EmployeeController extends Controller
         $this->log('employee_face_enrolled', $employee, $request);
 
         return back()->with('success', "Face enrolled for {$employee->full_name}.");
+    }
+
+    /** Forget the employee's registered phone; the next phone they clock in with becomes the registered one. */
+    public function resetDevice(Request $request, Employee $employee): RedirectResponse
+    {
+        $this->ensureSameBranch($employee);
+        $employee->update(['device_token_hash' => null, 'device_registered_at' => null]);
+        $this->log('employee_device_reset', $employee, $request);
+
+        return back()->with('success', "{$employee->full_name} can now clock in from a new phone.");
     }
 
     /** The enrolled face photo as an image (keeps photos out of the page payload). */

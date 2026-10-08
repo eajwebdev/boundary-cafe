@@ -31,10 +31,17 @@ export function loadFaceApi(): Promise<typeof FaceApi> {
     return faceApi;
 }
 
+export interface Point {
+    x: number;
+    y: number;
+}
+
 export interface FaceCapture {
     descriptor: number[];
     /** Small JPEG data URL (a few KB) of the cropped face. */
     photo: string;
+    /** The 68 face landmarks in video pixels (unmirrored). */
+    landmarks: Point[];
 }
 
 /** Enrollment needs at least this many samples (the server enforces the same). */
@@ -73,7 +80,19 @@ export async function captureFace(video: HTMLVideoElement, options: { strict?: b
         }
     }
 
-    return { descriptor: Array.from(results[0].descriptor), photo: cropToJpeg(video, box) };
+    return {
+        descriptor: Array.from(results[0].descriptor),
+        photo: cropToJpeg(video, box),
+        landmarks: results[0].landmarks.positions.map(({ x, y }) => ({ x, y })),
+    };
+}
+
+/** Landmarks of the one face in view (null when there is no face or more than one). Faster than captureFace. */
+export async function detectLandmarks(video: HTMLVideoElement): Promise<Point[] | null> {
+    const api = await loadFaceApi();
+    const results = await api.detectAllFaces(video, new api.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 })).withFaceLandmarks();
+
+    return results.length === 1 ? results[0].landmarks.positions.map(({ x, y }) => ({ x, y })) : null;
 }
 
 export function faceDistance(a: number[], b: number[]): number {

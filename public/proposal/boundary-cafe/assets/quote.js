@@ -16,7 +16,7 @@
     standard: {
       name: 'Standard',
       tagline: 'For a single café that needs a fast counter and clean books.',
-      chips: ['Unlimited staff accounts', 'Email & chat support'],
+      chips: ['Unlimited staff', 'Email & chat support'],
       groups: [
         ['Point of sale', [
           'POS for dine-in & take-out, split tender and receipts',
@@ -44,7 +44,7 @@
     advance: {
       name: 'Advance',
       tagline: 'For a growing restaurant that needs to track food costs and run promotions.',
-      chips: ['Unlimited staff accounts', 'Priority support'],
+      chips: ['Unlimited staff', 'Priority support'],
       recommended: true,
       plus: [
         'Recipes & ingredient costing, with automatic stock deduction',
@@ -67,6 +67,10 @@
       name: 'Table Ordering',
       desc: 'Waiters take orders on a phone by table number. Orders go to the cashier as pending, and you manage the dining-table layout.',
     },
+    attendance: {
+      name: 'Face Attendance',
+      desc: 'Staff time in and out on their own phone with a PIN, a GPS check that they are at the branch, and face recognition. A live face check (head turns and mouth movement in a random order) rejects photos and recorded videos, and each employee can only clock in from their own registered phone, so a co-worker cannot clock them in over a video call. Includes the attendance log with a photo of every time in and out.',
+    },
     epayment: {
       name: 'E-Payment Integration (PayMongo)',
       desc: 'Accept GCash, Maya, cards and QR Ph online and at the counter through PayMongo. Payments are confirmed automatically on the order.',
@@ -78,10 +82,6 @@
     recipes: {
       name: 'Recipe & Ingredient Costing',
       desc: 'Recipes, automatic ingredient deduction on every sale, an ingredient usage report, and losses & damages.',
-    },
-    support: {
-      name: 'Priority Support & Daily Backup',
-      desc: 'Same-day response during business hours and daily off-site backups. Standard plans get weekly backups.',
     },
   };
 

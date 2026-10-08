@@ -183,6 +183,7 @@ export const routes = {
         destroy: (id: Id) => route('employees.destroy', { employee: id }),
         enrollFace: (id: Id) => route('employees.face.store', { employee: id }),
         face: (id: Id) => route('employees.face', { employee: id }),
+        resetDevice: (id: Id) => route('employees.device.destroy', { employee: id }),
     },
     attendance: {
         index: () => route('attendance.index'),
@@ -192,6 +193,7 @@ export const routes = {
     timeClock: {
         show: () => route('time-clock'),
         identify: () => route('time-clock.identify'),
+        challenge: () => route('time-clock.challenge'),
         punch: () => route('time-clock.punch'),
     },
 

@@ -39,17 +39,19 @@ export function useCamera(active: boolean) {
     return { videoRef, ready, error };
 }
 
-/** Mirrored selfie preview with a face guide. */
+/** Mirrored selfie preview with a face guide; `children` are drawn on top (e.g. instructions). */
 export function CameraFeed({
     videoRef,
     ready,
     error,
     className,
+    children,
 }: {
     videoRef: React.RefObject<HTMLVideoElement | null>;
     ready: boolean;
     error: string | null;
     className?: string;
+    children?: React.ReactNode;
 }) {
     return (
         <div className={cn('relative aspect-[4/3] w-full overflow-hidden rounded-xl bg-black', className)}>
@@ -67,6 +69,7 @@ export function CameraFeed({
             {error && (
                 <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm font-semibold text-white">{error}</div>
             )}
+            {ready && children}
         </div>
     );
 }

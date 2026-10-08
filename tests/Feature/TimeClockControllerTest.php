@@ -6,6 +6,7 @@ use App\Models\Branch;
 use App\Models\Employee;
 use App\Models\EmployeeAttendance;
 use App\Models\Supplier;
+use App\Services\AttendanceService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -17,6 +18,8 @@ class TimeClockControllerTest extends TestCase
     private const BRANCH_LAT = 9.7306;
 
     private const BRANCH_LNG = 122.9213;
+
+    private const DEVICE = 'joys-own-phone';
 
     private Branch $branch;
 
@@ -52,10 +55,55 @@ class TimeClockControllerTest extends TestCase
         return 'data:image/jpeg;base64,'.base64_encode((string) ob_get_clean());
     }
 
-    /** @param  array<string, mixed>  $overrides */
-    private function punch(array $overrides = []): TestResponse
+    /**
+     * Start a live face check the way the portal does before the camera steps.
+     * When the portal would refuse, a dummy check is returned so the punch itself can be tested.
+     *
+     * @return array{token: string, steps: array<int, string>}
+     */
+    private function challenge(string $device = self::DEVICE): array
     {
-        return $this->postJson('/time-clock/punch', $overrides + [
+        $response = $this->withCredentials()->withCookie(AttendanceService::DEVICE_COOKIE, $device)
+            ->postJson('/time-clock/challenge', ['employee_code' => $this->employee->employee_code, 'pin' => '4321']);
+
+        return $response->isOk() ? $response->json() : ['token' => 'not-issued', 'steps' => AttendanceService::LIVENESS_ACTIONS];
+    }
+
+    /**
+     * A live check a real face passes: the steps in the order asked, the head
+     * turning each way and the mouth opening, all of it the enrolled person.
+     *
+     * @param  array<int, string>  $steps
+     * @return array<string, mixed>
+     */
+    private function liveness(array $steps): array
+    {
+        $measured = [
+            'turn_left' => ['turn' => 0.2, 'mouth' => 0.05],
+            'turn_right' => ['turn' => -0.2, 'mouth' => 0.05],
+            'open_mouth' => ['turn' => 0.0, 'mouth' => 0.5],
+        ];
+
+        return [
+            'camera' => 'Front Camera',
+            'neutral' => ['turn' => 0.0, 'mouth' => 0.05],
+            'steps' => array_map(fn (string $action) => ['action' => $action, 'descriptor' => $this->descriptor(0.06)] + $measured[$action], $steps),
+        ];
+    }
+
+    /**
+     * Time in or out the way the portal does: start a live check, then punch with its result.
+     *
+     * @param  array<string, mixed>  $overrides
+     * @param  (callable(array<string, mixed>): array<string, mixed>)|null  $tamper  changes the live-check result before it is sent
+     * @param  array{token: string, steps: array<int, string>}|null  $challenge  an earlier check to reuse
+     */
+    private function punch(array $overrides = [], ?callable $tamper = null, string $device = self::DEVICE, ?array $challenge = null): TestResponse
+    {
+        $challenge ??= $this->challenge();
+        $liveness = $this->liveness($challenge['steps']);
+
+        return $this->withCredentials()->withCookie(AttendanceService::DEVICE_COOKIE, $device)->postJson('/time-clock/punch', $overrides + [
             'employee_code' => $this->employee->employee_code,
             'pin' => '4321',
             'latitude' => self::BRANCH_LAT + 0.0002,   // ≈ 22 m north
@@ -63,7 +111,29 @@ class TimeClockControllerTest extends TestCase
             'accuracy' => 12,
             'descriptor' => $this->descriptor(0.06),   // distance ≈ 0.11, a match
             'photo' => $this->jpeg(),
+            'challenge' => $challenge['token'],
+            'liveness' => $tamper ? $tamper($liveness) : $liveness,
         ]);
+    }
+
+    /**
+     * Change one step of a live-check result.
+     *
+     * @param  array<string, mixed>  $liveness
+     * @param  array<string, mixed>  $changes
+     * @return array<string, mixed>
+     */
+    private function withStep(array $liveness, string $action, array $changes): array
+    {
+        $liveness['steps'] = array_map(fn (array $step) => $step['action'] === $action ? $changes + $step : $step, $liveness['steps']);
+
+        return $liveness;
+    }
+
+    private function assertRejectedWith(TestResponse $response, string $reason): void
+    {
+        $response->assertUnprocessable()->assertJsonPath('errors.punch.0', $reason);
+        $this->assertSame('rejected', EmployeeAttendance::latest('id')->first()->status);
     }
 
     public function test_identify_rejects_a_wrong_pin_with_a_generic_message(): void
@@ -162,5 +232,123 @@ class TimeClockControllerTest extends TestCase
         $this->punch(['photo' => 'data:image/png;base64,'.base64_encode('not an image')])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['photo' => 'The photo must be a JPEG image.']);
+    }
+
+    public function test_challenge_asks_for_every_step_once_and_needs_the_right_pin(): void
+    {
+        $this->postJson('/time-clock/challenge', ['employee_code' => $this->employee->employee_code, 'pin' => '0000'])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.pin.0', 'Employee code or PIN is incorrect.');
+
+        $steps = $this->challenge()['steps'];
+
+        $this->assertEqualsCanonicalizing(['turn_left', 'turn_right', 'open_mouth'], $steps);
+    }
+
+    public function test_accepted_punch_keeps_what_the_live_check_measured(): void
+    {
+        $this->punch()->assertOk();
+
+        $liveness = EmployeeAttendance::sole()->liveness;
+        $this->assertSame('Front Camera', $liveness['camera']);
+        $this->assertEqualsWithDelta(0.2, $liveness['head_turn_left'], 0.001);
+        $this->assertEqualsWithDelta(0.45, $liveness['mouth_open'], 0.001);
+    }
+
+    public function test_a_live_check_cannot_be_used_twice(): void
+    {
+        $challenge = $this->challenge();
+        $this->punch(challenge: $challenge)->assertOk();
+
+        $this->travel(2)->minutes();
+        $this->assertRejectedWith($this->punch(challenge: $challenge), 'The face check expired. Please try again.');
+    }
+
+    public function test_an_expired_live_check_is_rejected(): void
+    {
+        $challenge = $this->challenge();
+        $this->travel(AttendanceService::CHALLENGE_TTL_SECONDS + 1)->seconds();
+
+        $this->assertRejectedWith($this->punch(challenge: $challenge), 'The face check expired. Please try again.');
+    }
+
+    public function test_steps_done_in_another_order_are_rejected(): void
+    {
+        $this->assertRejectedWith(
+            $this->punch(tamper: fn (array $liveness) => ['steps' => array_reverse($liveness['steps'])] + $liveness),
+            'The face check steps were not done in the order asked. Please try again.',
+        );
+    }
+
+    public function test_a_flat_photo_that_cannot_turn_its_head_is_rejected(): void
+    {
+        // Tilting a photo or a screen keeps the nose on the eye–mouth line, so the "turn" barely changes.
+        $flat = fn (array $liveness) => $this->withStep($this->withStep($liveness, 'turn_left', ['turn' => 0.02]), 'turn_right', ['turn' => -0.02]);
+
+        $this->assertRejectedWith(
+            $this->punch(tamper: $flat),
+            'No real head turn was seen. Use your own face, not a photo or video, and turn your head when asked.',
+        );
+        $this->assertEqualsWithDelta(0.02, EmployeeAttendance::sole()->liveness['head_turn_left'], 0.001);
+    }
+
+    public function test_a_turn_to_only_one_side_is_rejected(): void
+    {
+        $this->assertRejectedWith(
+            $this->punch(tamper: fn (array $liveness) => $this->withStep($liveness, 'turn_right', ['turn' => 0.2])),
+            'No real head turn was seen. Use your own face, not a photo or video, and turn your head when asked.',
+        );
+    }
+
+    public function test_a_mouth_that_never_opens_is_rejected(): void
+    {
+        $this->assertRejectedWith(
+            $this->punch(tamper: fn (array $liveness) => $this->withStep($liveness, 'open_mouth', ['mouth' => 0.1])),
+            'Your mouth did not open when asked. Please try again and open your mouth wide.',
+        );
+    }
+
+    public function test_someone_else_doing_a_step_is_rejected(): void
+    {
+        $this->assertRejectedWith(
+            $this->punch(tamper: fn (array $liveness) => $this->withStep($liveness, 'open_mouth', ['descriptor' => $this->descriptor(-0.05)])),
+            'Your face did not match during the face check. Only you should be in front of the camera.',
+        );
+    }
+
+    public function test_a_virtual_camera_is_rejected(): void
+    {
+        $this->assertRejectedWith(
+            $this->punch(tamper: fn (array $liveness) => ['camera' => 'OBS Virtual Camera'] + $liveness),
+            "A virtual camera was detected. Use your phone's own camera.",
+        );
+    }
+
+    public function test_identify_gives_the_phone_a_device_cookie(): void
+    {
+        $this->postJson('/time-clock/identify', ['employee_code' => $this->employee->employee_code, 'pin' => '4321'])
+            ->assertOk()
+            ->assertCookie(AttendanceService::DEVICE_COOKIE);
+    }
+
+    public function test_first_accepted_punch_registers_the_phone_and_another_phone_is_refused(): void
+    {
+        $this->punch()->assertOk();
+        $this->assertNotNull($this->employee->fresh()->device_registered_at);
+        $this->travel(2)->minutes();
+
+        $notYourPhone = 'This is not your registered phone. Clock in with your own phone, or ask your manager to reset your registered phone.';
+
+        // The portal warns before the camera opens and will not start a live check.
+        $this->withCredentials()->withCookie(AttendanceService::DEVICE_COOKIE, 'co-workers-phone')
+            ->postJson('/time-clock/identify', ['employee_code' => $this->employee->employee_code, 'pin' => '4321'])
+            ->assertOk()
+            ->assertJsonPath('blocker', $notYourPhone);
+        $this->assertSame('not-issued', $this->challenge('co-workers-phone')['token']);
+
+        // A punch sent from another phone anyway is refused and logged.
+        $this->assertRejectedWith($this->punch(device: 'co-workers-phone'), $notYourPhone);
+
+        $this->punch()->assertOk()->assertJsonPath('type', 'out');
     }
 }

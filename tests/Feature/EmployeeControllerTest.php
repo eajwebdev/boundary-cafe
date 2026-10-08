@@ -128,4 +128,21 @@ class EmployeeControllerTest extends TestCase
             ->assertNotFound();
         $this->assertNull($away->fresh()->latitude);
     }
+
+    public function test_manager_can_reset_a_registered_phone_only_in_their_branch(): void
+    {
+        $home = $this->branch('HOME');
+        $away = $this->branch('AWAY');
+        $manager = $this->user(User::ROLE_MANAGER, $home, 'mara');
+        $registered = ['device_token_hash' => hash('sha256', 'old-phone'), 'device_registered_at' => now()];
+        $crew = Employee::create(['branch_id' => $home->id, 'first_name' => 'Kitchen'] + $registered);
+        $otherCrew = Employee::create(['branch_id' => $away->id, 'first_name' => 'Barista'] + $registered);
+
+        $this->actingAs($manager)->delete("/employees/{$crew->id}/device")->assertSessionHasNoErrors();
+        $this->assertNull($crew->fresh()->device_token_hash);
+        $this->assertNull($crew->fresh()->device_registered_at);
+
+        $this->actingAs($manager)->delete("/employees/{$otherCrew->id}/device")->assertNotFound();
+        $this->assertNotNull($otherCrew->fresh()->device_token_hash);
+    }
 }

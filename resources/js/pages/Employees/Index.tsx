@@ -1,5 +1,21 @@
 import { Head, router, usePage } from '@inertiajs/react';
-import { Camera, CheckCircle2, Clock, Edit2, ExternalLink, IdCard, KeyRound, Loader2, Plus, ScanFace, Search, Trash2, UserX, X } from 'lucide-react';
+import {
+    Camera,
+    CheckCircle2,
+    Clock,
+    Edit2,
+    ExternalLink,
+    IdCard,
+    KeyRound,
+    Loader2,
+    Plus,
+    ScanFace,
+    Search,
+    Smartphone,
+    Trash2,
+    UserX,
+    X,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import {
@@ -42,6 +58,7 @@ interface Employee {
     has_face: boolean;
     face_samples: number;
     face_enrolled_at: string | null;
+    device_registered_at: string | null;
     today: { type: 'in' | 'out'; time: string } | null;
 }
 
@@ -89,6 +106,15 @@ export default function EmployeesIndex() {
             tone: 'danger',
         });
         if (ok) router.delete(routes.employees.destroy(e.id), { preserveScroll: true });
+    };
+
+    const resetDevice = async (e: Employee) => {
+        const ok = await confirmDialog({
+            title: `Reset ${e.full_name}'s phone?`,
+            description: 'Do this when they change or lose their phone. The next phone they clock in with becomes their registered phone.',
+            confirmLabel: 'Reset phone',
+        });
+        if (ok) router.delete(routes.employees.resetDevice(e.id), { preserveScroll: true });
     };
 
     return (
@@ -230,6 +256,10 @@ export default function EmployeesIndex() {
                                                     <StatusPill tone={e.has_pin ? 'success' : 'warning'}>
                                                         <KeyRound className="h-3 w-3" /> {e.has_pin ? 'PIN' : 'No PIN'}
                                                     </StatusPill>
+                                                    <StatusPill tone={e.device_registered_at ? 'success' : 'muted'}>
+                                                        <Smartphone className="h-3 w-3" />{' '}
+                                                        {e.device_registered_at ? 'Phone' : 'Phone set on first clock-in'}
+                                                    </StatusPill>
                                                 </div>
                                             </td>
                                             <td className="hidden px-4 py-2 text-xs sm:table-cell">
@@ -251,6 +281,16 @@ export default function EmployeesIndex() {
                                                     >
                                                         <Camera className="h-3.5 w-3.5" />
                                                     </button>
+                                                    {e.device_registered_at && (
+                                                        <button
+                                                            onClick={() => resetDevice(e)}
+                                                            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                                                            aria-label={`Reset registered phone for ${e.full_name}`}
+                                                            title="Reset registered phone"
+                                                        >
+                                                            <Smartphone className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    )}
                                                     <button
                                                         onClick={() => setEditing(e)}
                                                         className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
