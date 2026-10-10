@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import MapThumb from '@/components/storefront/MapThumb';
 import { Pill, Price, RouteLine, ShopButton, STATUS_PILL } from '@/components/storefront/ui';
+import { useRewardsName } from '@/hooks/use-business-name';
 import CustomerLayout from '@/layouts/CustomerLayout';
 import { jsonRequest, manilaTime } from '@/lib/customer';
 import { cn } from '@/lib/utils';
@@ -64,6 +65,7 @@ const HEADLINE: Record<string, string> = {
 };
 
 export default function OrderTrack({ order: initial }: { order: TrackedOrder }) {
+    const rewardsName = useRewardsName();
     const [order, setOrder] = useState(initial);
     const [updatedAt, setUpdatedAt] = useState(Date.now());
     const [cancelOpen, setCancelOpen] = useState(false);
@@ -278,7 +280,7 @@ export default function OrderTrack({ order: initial }: { order: TrackedOrder }) 
                                         </>
                                     ) : (
                                         <>
-                                            <span className="font-bold">{order.loyalty_points_to_earn} points</span> will land in your Boundary Rewards when this order is completed.
+                                            <span className="font-bold">{order.loyalty_points_to_earn} points</span> will land in your {rewardsName} when this order is completed.
                                         </>
                                     )}
                                 </p>

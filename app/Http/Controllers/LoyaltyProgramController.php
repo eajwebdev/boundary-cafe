@@ -12,7 +12,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Boundary Rewards programme settings and overview (menu 44).
+ * Rewards programme settings and overview (menu 44).
  */
 class LoyaltyProgramController extends Controller
 {
@@ -88,6 +88,6 @@ class LoyaltyProgramController extends Controller
             'name' => trim($t['name']), 'min' => (int) $t['min'], 'multiplier' => round((float) $t['multiplier'], 2),
         ])->all());
 
-        return back()->with('success', 'Boundary Rewards settings saved.');
+        return back()->with('success', SystemSetting::rewardsName().' settings saved.');
     }
 }

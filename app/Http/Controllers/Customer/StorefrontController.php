@@ -35,6 +35,7 @@ class StorefrontController extends Controller
                 'logo' => SystemSetting::logoUrl($branch?->id),
                 'branch' => $branch ? [
                     'name' => $branch->name,
+                    'location' => $branch->location,
                     'address' => $branch->address,
                     'phone' => $branch->phone ?: SystemSetting::get('general.phone', $branch->id, ''),
                 ] : null,

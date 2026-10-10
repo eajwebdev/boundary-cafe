@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Helpers\MenuHelper;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Cache;
@@ -22,7 +23,7 @@ class SystemSetting extends Model
     ];
 
     protected $casts = [
-        'is_public'   => 'boolean',
+        'is_public' => 'boolean',
         'is_readonly' => 'boolean',
     ];
 
@@ -34,14 +35,23 @@ class SystemSetting extends Model
     protected static function booted(): void
     {
         // Flush cache whenever a setting is saved or deleted
-        static::saved(fn($s)   => static::flushCache($s->branch_id));
-        static::deleted(fn($s) => static::flushCache($s->branch_id));
+        static::saved(fn ($s) => static::flushCache($s->branch_id));
+        static::deleted(fn ($s) => static::flushCache($s->branch_id));
     }
 
+    /**
+     * Forget cached settings. Branch caches hold merged global values too,
+     * so a global change (no $branchId) clears every branch cache.
+     */
     public static function flushCache(?int $branchId = null): void
     {
-        Cache::forget("settings:global");
-        if ($branchId) Cache::forget("settings:branch:{$branchId}");
+        Cache::forget('settings:global');
+
+        $branchIds = $branchId ? [$branchId] : Branch::query()->pluck('id')->all();
+
+        foreach ($branchIds as $id) {
+            Cache::forget("settings:branch:{$id}");
+        }
     }
 
     // ── Relationships ──────────────────────────────────────────────
@@ -71,7 +81,9 @@ class SystemSetting extends Model
         $all = static::allForBranch($branchId);
         $raw = $all[$key] ?? null;
 
-        if ($raw === null) return $default;
+        if ($raw === null) {
+            return $default;
+        }
 
         return static::castValue($raw['value'], $raw['type'] ?? 'string');
     }
@@ -84,23 +96,25 @@ class SystemSetting extends Model
      */
     public static function allForBranch(?int $branchId = null): array
     {
-        $cacheKey = $branchId ? "settings:branch:{$branchId}" : "settings:global";
+        $cacheKey = $branchId ? "settings:branch:{$branchId}" : 'settings:global';
 
         return Cache::remember($cacheKey, static::CACHE_TTL, function () use ($branchId) {
             // Load global settings
             $globals = static::whereNull('branch_id')
                 ->get()
                 ->keyBy('key')
-                ->map(fn($s) => ['value' => $s->value, 'type' => $s->type, 'group' => $s->group])
+                ->map(fn ($s) => ['value' => $s->value, 'type' => $s->type, 'group' => $s->group])
                 ->toArray();
 
-            if (!$branchId) return $globals;
+            if (! $branchId) {
+                return $globals;
+            }
 
             // Load branch settings
             $branchSettings = static::where('branch_id', $branchId)
                 ->get()
                 ->keyBy('key')
-                ->map(fn($s) => ['value' => $s->value, 'type' => $s->type, 'group' => $s->group])
+                ->map(fn ($s) => ['value' => $s->value, 'type' => $s->type, 'group' => $s->group])
                 ->toArray();
 
             // Branch settings override globals
@@ -115,8 +129,8 @@ class SystemSetting extends Model
     public static function group(string $group, ?int $branchId = null): array
     {
         return collect(static::allForBranch($branchId))
-            ->filter(fn($v, $k) => str_starts_with($k, $group . '.'))
-            ->map(fn($v) => static::castValue($v['value'], $v['type']))
+            ->filter(fn ($v, $k) => str_starts_with($k, $group.'.'))
+            ->map(fn ($v) => static::castValue($v['value'], $v['type']))
             ->toArray();
     }
 
@@ -127,11 +141,13 @@ class SystemSetting extends Model
     public static function isModuleEnabled(string|int $menuId): bool
     {
         $id = (string) $menuId;
-        if ($id === '28' || $id === '1') return true;
+        if ($id === '28' || $id === '1') {
+            return true;
+        }
 
         $key = "modules.menu_{$id}";
         $all = static::allForBranch(null);
-        if (!isset($all[$key])) {
+        if (! isset($all[$key])) {
             return true;
         }
 
@@ -150,12 +166,13 @@ class SystemSetting extends Model
     {
         $all = static::allForBranch(null);
         $enabled = [];
-        $allMenus = \App\Helpers\MenuHelper::all();
+        $allMenus = MenuHelper::all();
 
         foreach ($allMenus as $id => $label) {
             $idStr = (string) $id;
             if ($idStr === '28' || $idStr === '1') {
                 $enabled[] = $idStr;
+
                 continue;
             }
             $key = "modules.menu_{$idStr}";
@@ -219,10 +236,10 @@ class SystemSetting extends Model
     {
         return match ($type) {
             'boolean' => filter_var($value, FILTER_VALIDATE_BOOLEAN),
-            'integer' => (int)   $value,
+            'integer' => (int) $value,
             'decimal' => (float) $value,
-            'json'    => json_decode($value, true),
-            default   => (string) $value,
+            'json' => json_decode($value, true),
+            default => (string) $value,
         };
     }
 
@@ -247,31 +264,33 @@ class SystemSetting extends Model
             ['key' => 'general.date_format',     'value' => 'M d, Y',               'type' => 'string',  'group' => 'general', 'label' => 'Date format'],
             ['key' => 'general.timezone',        'value' => 'Asia/Manila',           'type' => 'string',  'group' => 'general', 'label' => 'Timezone'],
             ['key' => 'general.logo',            'value' => '/uploads/logo.png',     'type' => 'image',   'group' => 'general', 'label' => 'Business logo'],
-            ['key' => 'general.color_theme',     'value' => 'ea',                    'type' => 'select',  'group' => 'general', 'label' => 'Color theme', 'description' => 'Brand color palette applied system-wide', 'options' => json_encode(['ea','indigo','emerald','amber','rose'])],
+            ['key' => 'general.tagline',         'value' => 'Taste of Negros',       'type' => 'string',  'group' => 'general', 'label' => 'Tagline', 'description' => 'Short line under the business name on the staff login page'],
+            ['key' => 'general.order_prefix',    'value' => '',                      'type' => 'string',  'group' => 'general', 'label' => 'Order number prefix', 'description' => 'Starts online order and member numbers, e.g. EAJ-ONL-261010-1234. Leave blank to take it from the business name (EAJ Cafe → EAJ).'],
+            ['key' => 'general.color_theme',     'value' => 'ea',                    'type' => 'select',  'group' => 'general', 'label' => 'Color theme', 'description' => 'Brand color palette applied system-wide', 'options' => json_encode(['ea', 'indigo', 'emerald', 'amber', 'rose'])],
 
             // ── Tax ───────────────────────────────────────────────
             ['key' => 'tax.enable_vat',          'value' => 'false',                 'type' => 'boolean', 'group' => 'tax',     'label' => 'Enable VAT'],
             ['key' => 'tax.vat_rate',            'value' => '12',                    'type' => 'decimal', 'group' => 'tax',     'label' => 'VAT rate (%)'],
             ['key' => 'tax.vat_inclusive',       'value' => 'true',                  'type' => 'boolean', 'group' => 'tax',     'label' => 'Prices are VAT-inclusive'],
-            ['key' => 'tax.enable_service_charge','value' => 'false',                'type' => 'boolean', 'group' => 'tax',     'label' => 'Enable service charge'],
+            ['key' => 'tax.enable_service_charge', 'value' => 'false',                'type' => 'boolean', 'group' => 'tax',     'label' => 'Enable service charge'],
             ['key' => 'tax.service_charge_rate', 'value' => '10',                    'type' => 'decimal', 'group' => 'tax',     'label' => 'Service charge rate (%)'],
 
             // ── POS behavior ──────────────────────────────────────
-            ['key' => 'pos.require_cash_session','value' => 'false',                 'type' => 'boolean', 'group' => 'pos',     'label' => 'Require open cash session to sell'],
-            ['key' => 'pos.allow_negative_stock','value' => 'true',                  'type' => 'boolean', 'group' => 'pos',     'label' => 'Allow sales when stock is 0'],
+            ['key' => 'pos.require_cash_session', 'value' => 'false',                 'type' => 'boolean', 'group' => 'pos',     'label' => 'Require open cash session to sell'],
+            ['key' => 'pos.allow_negative_stock', 'value' => 'true',                  'type' => 'boolean', 'group' => 'pos',     'label' => 'Allow sales when stock is 0'],
             ['key' => 'pos.default_payment',     'value' => 'cash',                  'type' => 'select',  'group' => 'pos',     'label' => 'Default payment method',         'options' => '["cash","gcash","card","others"]'],
-            ['key' => 'pos.item_mode',           'value' => 'products_only',          'type' => 'select',  'group' => 'pos',     'label' => 'Cashier item mode', 'description' => 'Boundary Cafe sells menu products', 'options' => '["products_only"]'],
-            ['key' => 'pos.require_customer_name','value' => 'false',                'type' => 'boolean', 'group' => 'pos',     'label' => 'Require customer name at checkout'],
+            ['key' => 'pos.item_mode',           'value' => 'products_only',          'type' => 'select',  'group' => 'pos',     'label' => 'Cashier item mode', 'description' => 'The cashier sells menu products', 'options' => '["products_only"]'],
+            ['key' => 'pos.require_customer_name', 'value' => 'false',                'type' => 'boolean', 'group' => 'pos',     'label' => 'Require customer name at checkout'],
             ['key' => 'pos.default_due_days',    'value' => '0',                     'type' => 'integer', 'group' => 'pos',     'label' => 'Default due days for credit/laundry'],
             ['key' => 'pos.show_product_images', 'value' => 'true',                  'type' => 'boolean', 'group' => 'pos',     'label' => 'Show product images on POS'],
             ['key' => 'pos.allow_discount',      'value' => 'true',                  'type' => 'boolean', 'group' => 'pos',     'label' => 'Allow discount on sale'],
-            ['key' => 'pos.max_discount_percent','value' => '20',                    'type' => 'decimal', 'group' => 'pos',     'label' => 'Max discount % allowed'],
+            ['key' => 'pos.max_discount_percent', 'value' => '20',                    'type' => 'decimal', 'group' => 'pos',     'label' => 'Max discount % allowed'],
             ['key' => 'pos.senior_pwd_discount',  'value' => '20',                    'type' => 'decimal', 'group' => 'pos',     'label' => 'Senior/PWD discount (%)'],
 
             // ── Receipt ───────────────────────────────────────────
             ['key' => 'receipt.show_logo',       'value' => 'true',                  'type' => 'boolean', 'group' => 'receipt', 'label' => 'Show logo on receipt'],
-            ['key' => 'receipt.header_text',     'value' => 'Boundary Cafe — Taste of Negros', 'type' => 'string', 'group' => 'receipt', 'label' => 'Receipt header'],
-            ['key' => 'loyalty.enabled',          'value' => 'true',  'type' => 'boolean', 'group' => 'loyalty', 'label' => 'Enable Boundary Rewards'],
+            ['key' => 'receipt.header_text',     'value' => '', 'type' => 'string', 'group' => 'receipt', 'label' => 'Receipt header', 'description' => 'Leave blank to print the business name and tagline'],
+            ['key' => 'loyalty.enabled',          'value' => 'true',  'type' => 'boolean', 'group' => 'loyalty', 'label' => 'Enable rewards programme'],
             ['key' => 'loyalty.spend_per_point',  'value' => '100',   'type' => 'decimal', 'group' => 'loyalty', 'label' => 'Peso spend per point'],
             ['key' => 'loyalty.minimum_redeem',   'value' => '10',    'type' => 'integer', 'group' => 'loyalty', 'label' => 'Minimum points to redeem'],
             ['key' => 'loyalty.peso_per_point',   'value' => '1',     'type' => 'decimal', 'group' => 'loyalty', 'label' => 'Peso value per point'],
@@ -282,7 +301,7 @@ class SystemSetting extends Model
 
             // ── Online ordering (customer app, Mabinay only) ───────
             ['key' => 'online.enabled',           'value' => 'true',  'type' => 'boolean', 'group' => 'online', 'label' => 'Accept online orders'],
-            ['key' => 'online.branch_code',       'value' => 'BC-MAB','type' => 'string',  'group' => 'online', 'label' => 'Branch that fulfils online orders'],
+            ['key' => 'online.branch_code',       'value' => 'BC-MAB', 'type' => 'string',  'group' => 'online', 'label' => 'Branch that fulfils online orders'],
             ['key' => 'online.delivery_enabled',  'value' => 'true',  'type' => 'boolean', 'group' => 'online', 'label' => 'Offer delivery'],
             ['key' => 'online.pickup_enabled',    'value' => 'true',  'type' => 'boolean', 'group' => 'online', 'label' => 'Offer pickup'],
             ['key' => 'online.delivery_fee',      'value' => '49',    'type' => 'decimal', 'group' => 'online', 'label' => 'Delivery fee (₱)'],
@@ -297,23 +316,23 @@ class SystemSetting extends Model
             ['key' => 'online.zone_polygon',      'value' => '[]',    'type' => 'json',    'group' => 'online', 'label' => 'Delivery boundary polygon', 'description' => 'List of [lat, lng] points drawn on the Delivery Zone page'],
             ['key' => 'receipt.footer_text',     'value' => 'Please come again.',    'type' => 'string',  'group' => 'receipt', 'label' => 'Receipt footer'],
             ['key' => 'receipt.show_cashier',    'value' => 'true',                  'type' => 'boolean', 'group' => 'receipt', 'label' => 'Show cashier name on receipt'],
-            ['key' => 'receipt.show_vat_breakdown','value' => 'false',               'type' => 'boolean', 'group' => 'receipt', 'label' => 'Show VAT breakdown on receipt'],
+            ['key' => 'receipt.show_vat_breakdown', 'value' => 'false',               'type' => 'boolean', 'group' => 'receipt', 'label' => 'Show VAT breakdown on receipt'],
             ['key' => 'receipt.copies',          'value' => '1',                     'type' => 'integer', 'group' => 'receipt', 'label' => 'Number of receipt copies'],
 
             // ── Inventory ─────────────────────────────────────────
-            ['key' => 'inventory.low_stock_threshold','value' => '5',                'type' => 'integer', 'group' => 'inventory','label' => 'Low stock alert threshold'],
-            ['key' => 'inventory.near_expiry_days',  'value' => '30',               'type' => 'integer', 'group' => 'inventory','label' => 'Near expiry warning (days)'],
-            ['key' => 'inventory.auto_grn_on_delivery','value' => 'false',          'type' => 'boolean', 'group' => 'inventory','label' => 'Auto-create GRN on order delivery'],
+            ['key' => 'inventory.low_stock_threshold', 'value' => '5',                'type' => 'integer', 'group' => 'inventory', 'label' => 'Low stock alert threshold'],
+            ['key' => 'inventory.near_expiry_days',  'value' => '30',               'type' => 'integer', 'group' => 'inventory', 'label' => 'Near expiry warning (days)'],
+            ['key' => 'inventory.auto_grn_on_delivery', 'value' => 'false',          'type' => 'boolean', 'group' => 'inventory', 'label' => 'Auto-create GRN on order delivery'],
 
             // ── Cash management ───────────────────────────────────
             ['key' => 'cash.require_count_on_close', 'value' => 'true',             'type' => 'boolean', 'group' => 'cash',    'label' => 'Require cash count before closing session'],
             ['key' => 'cash.petty_cash_limit',       'value' => '500',              'type' => 'decimal', 'group' => 'cash',    'label' => 'Max single petty cash withdrawal (₱)'],
             ['key' => 'cash.over_short_alert',       'value' => '100',              'type' => 'decimal', 'group' => 'cash',    'label' => 'Over/short alert threshold (₱)'],
-            ['key' => 'cash.require_manager_approval','value' => 'true',            'type' => 'boolean', 'group' => 'cash',    'label' => 'Require manager to verify cash count'],
+            ['key' => 'cash.require_manager_approval', 'value' => 'true',            'type' => 'boolean', 'group' => 'cash',    'label' => 'Require manager to verify cash count'],
 
             // ── Notifications ─────────────────────────────────────
-            ['key' => 'notification.low_stock_alert','value' => 'true',             'type' => 'boolean', 'group' => 'notification','label' => 'Show low stock alert on dashboard'],
-            ['key' => 'notification.expiry_alert',   'value' => 'true',             'type' => 'boolean', 'group' => 'notification','label' => 'Show near-expiry alert on dashboard'],
+            ['key' => 'notification.low_stock_alert', 'value' => 'true',             'type' => 'boolean', 'group' => 'notification', 'label' => 'Show low stock alert on dashboard'],
+            ['key' => 'notification.expiry_alert',   'value' => 'true',             'type' => 'boolean', 'group' => 'notification', 'label' => 'Show near-expiry alert on dashboard'],
 
             // ── Quotation (public pages in public/proposal) ───────
             ['key' => 'quotation.client_name',            'value' => 'Boundary Café',                                              'type' => 'string', 'group' => 'quotation', 'label' => 'Prepared for — name', 'description' => 'Client name on the quotation, signature line and PDF'],
@@ -328,12 +347,57 @@ class SystemSetting extends Model
 
     public static function businessName(?int $branchId = null): string
     {
-        return (string) static::get('general.business_name', $branchId, config('app.name', 'Boundary Cafe'));
+        return (string) static::get('general.business_name', $branchId, config('app.name', 'Our Cafe'));
     }
 
+    /**
+     * Short code at the start of online order and member numbers, e.g. "EAJ" in EAJ-ONL-261010-1234.
+     * Uses the "Order number prefix" setting, else the business name: a leading acronym ("EAJ Cafe" → EAJ)
+     * or the initials ("Boundary Cafe" → BC).
+     */
+    public static function orderPrefix(): string
+    {
+        $configured = strtoupper((string) preg_replace('/[^A-Za-z0-9]/', '', (string) static::get('general.order_prefix', null, '')));
+        if ($configured !== '') {
+            return substr($configured, 0, 6);
+        }
+
+        $words = preg_split('/\s+/', trim((string) preg_replace('/[^A-Za-z0-9\s]/', '', static::businessName()))) ?: [];
+        $first = $words[0] ?? '';
+        $prefix = preg_match('/^[A-Z0-9]{2,}$/', $first) === 1
+            ? $first
+            : implode('', array_map(fn (string $word) => strtoupper(substr($word, 0, 1)), array_filter($words)));
+
+        return substr($prefix, 0, 6) ?: 'POS';
+    }
+
+    /** The loyalty programme's name, e.g. "EAJ Cafe Rewards". */
+    public static function rewardsName(?int $branchId = null): string
+    {
+        return static::businessName($branchId).' Rewards';
+    }
+
+    /** The receipt header; blank means "business name — tagline". */
+    public static function receiptHeader(?int $branchId = null): string
+    {
+        $header = trim((string) static::get('receipt.header_text', $branchId, ''));
+
+        if ($header !== '') {
+            return $header;
+        }
+
+        $tagline = trim((string) static::get('general.tagline', $branchId, ''));
+
+        return $tagline !== '' ? static::businessName($branchId).' — '.$tagline : static::businessName($branchId);
+    }
+
+    /**
+     * The business logo is system-wide, so branch overrides (older uploads made from a branch view) are ignored;
+     * $branchId is kept for existing callers.
+     */
     public static function logoPath(?int $branchId = null): ?string
     {
-        $path = trim((string) static::get('general.logo', $branchId, ''));
+        $path = trim((string) static::get('general.logo', null, ''));
 
         return $path !== '' ? $path : null;
     }
@@ -427,6 +491,7 @@ class SystemSetting extends Model
     public static function posItemMode(?int $branchId = null): string
     {
         $mode = (string) static::get('pos.item_mode', $branchId, 'products_and_services');
+
         return in_array($mode, ['products_and_services', 'products_only', 'services_only'], true)
             ? $mode
             : 'products_and_services';

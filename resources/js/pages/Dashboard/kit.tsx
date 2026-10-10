@@ -34,8 +34,20 @@ export function shortDate(d: string) {
 
 // ─── Chart theme (validated reference palette; light & dark steps) ────────────
 
-const SERIES_LIGHT = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
-const SERIES_DARK = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'];
+const FALLBACK_SERIES = ['#ff5a0a', '#063ccb', '#ff8a00', '#3d792d', '#7a3e24'];
+
+function mixHex(color: string, target: string, targetWeight: number): string {
+    const parse = (value: string) => {
+        const match = value.trim().match(/^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i);
+        return match ? [Number.parseInt(match[1], 16), Number.parseInt(match[2], 16), Number.parseInt(match[3], 16)] : null;
+    };
+    const sourceRgb = parse(color);
+    const targetRgb = parse(target);
+    if (!sourceRgb || !targetRgb) return color;
+
+    const mixed = sourceRgb.map((channel, index) => Math.round(channel * (1 - targetWeight) + targetRgb[index] * targetWeight));
+    return `#${mixed.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+}
 
 export function useIsDark() {
     const [dark, setDark] = useState(false);
@@ -51,25 +63,62 @@ export function useIsDark() {
 
 export function useChartTheme() {
     const dark = useIsDark();
+    const [theme, setTheme] = useState('ea');
+
+    useEffect(() => {
+        const root = document.documentElement;
+        const sync = () => setTheme(root.dataset.theme ?? 'ea');
+        sync();
+        const observer = new MutationObserver(sync);
+        observer.observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+        return () => observer.disconnect();
+    }, []);
+
     return useMemo(() => {
-        const series = dark ? SERIES_DARK : SERIES_LIGHT;
-        const muted = dark ? '#c3c2b7' : '#52514e';
-        const grid = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)';
+        const styles = getComputedStyle(document.documentElement);
+        const token = (name: string, fallback: string) => styles.getPropertyValue(name).trim() || fallback;
+        const chartColors = FALLBACK_SERIES.map((fallback, index) => token(`--chart-${index + 1}`, fallback));
+        const series = [...chartColors, ...chartColors];
+        const muted = token('--muted-foreground', dark ? '#c3c2b7' : '#52514e');
+        const grid = token('--border', dark ? '#30302d' : '#e8e6df');
+        const surface = token('--card', dark ? '#1a1a19' : '#ffffff');
+        const heatTarget = dark ? '#090909' : '#ffffff';
         return {
             dark,
+            theme,
             series,
+            surface,
+            heatmap: [
+                token('--muted', dark ? '#262624' : '#f1f0ec'),
+                mixHex(chartColors[0], heatTarget, 0.78),
+                mixHex(chartColors[0], heatTarget, 0.55),
+                mixHex(chartColors[0], heatTarget, 0.28),
+                chartColors[0],
+            ],
             base: {
-                chart: { fontFamily: 'Inter, ui-sans-serif, system-ui', toolbar: { show: false }, background: 'transparent', animations: { enabled: true, speed: 350 }, zoom: { enabled: false } },
+                chart: {
+                    fontFamily: 'Inter, ui-sans-serif, system-ui',
+                    toolbar: { show: false },
+                    background: 'transparent',
+                    animations: { enabled: true, speed: 350 },
+                    zoom: { enabled: false },
+                },
                 grid: { borderColor: grid, strokeDashArray: 3, padding: { left: 4, right: 8, top: -8 } },
                 xaxis: { labels: { style: { colors: muted, fontSize: '11px' } }, axisBorder: { show: false }, axisTicks: { show: false } },
                 yaxis: { labels: { style: { colors: muted, fontSize: '11px' } } },
                 tooltip: { theme: dark ? 'dark' : 'light' },
-                legend: { labels: { colors: muted }, position: 'top' as const, horizontalAlign: 'left' as const, fontSize: '12px', markers: { size: 5 } },
+                legend: {
+                    labels: { colors: muted },
+                    position: 'top' as const,
+                    horizontalAlign: 'left' as const,
+                    fontSize: '12px',
+                    markers: { size: 5 },
+                },
                 dataLabels: { enabled: false },
                 states: { hover: { filter: { type: 'lighten' } } },
             },
         };
-    }, [dark]);
+    }, [dark, theme]);
 }
 
 export function Chart(props: { type: 'line' | 'area' | 'bar' | 'donut' | 'heatmap'; height: number; options: object; series: unknown[] }) {

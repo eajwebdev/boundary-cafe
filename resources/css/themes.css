@@ -1,0 +1,363 @@
+/* ══════════════════════════════════════════════════════════════════════════════
+   COLOUR THEMES - the full palette per theme (System Settings → General → Color theme).
+   app.css sets each theme's bright --primary; this file adds its dark brand shade (admin
+   sidebar, secondary) and the online store / waiter app palette (.bc-shop), so the whole
+   system follows the theme the admin picks. "ea" (Boundary Cafe) is the base palette.
+   Generated with contrast checks: text pairs >= 4.5:1, button labels >= 4.5:1.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* indigo */
+[data-theme='indigo'] {
+    --secondary: #e0e7ff;
+    --secondary-foreground: #3730a3;
+    --chart-2: #3730a3;
+    --sidebar: #3730a3;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-accent: #4338ca;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #4338ca;
+}
+.dark[data-theme='indigo'],
+.dark [data-theme='indigo'] {
+    --secondary: #4338ca;
+    --secondary-foreground: #f8fafc;
+    --sidebar: #1e1b4b;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-accent: #4338ca;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #4338ca;
+}
+[data-theme='indigo'] .bc-shop {
+    --shop-accent: #4f46e5;
+    --shop-accent-ink: #4338ca;
+    --shop-on-accent: #ffffff;
+    --shop-accent-soft: #e0e7ff;
+    --shop-navy: #3730a3;
+    --shop-navy-ink: #ffffff;
+}
+.dark[data-theme='indigo'] .bc-shop {
+    --shop-accent: #818cf8;
+    --shop-accent-ink: #a5b4fc;
+    --shop-on-accent: #1e1b4b;
+    --shop-accent-soft: #25234f;
+    --shop-navy: #4338ca;
+    --shop-navy-ink: #ffffff;
+}
+
+/* violet */
+[data-theme='violet'] {
+    --secondary: #ede9fe;
+    --secondary-foreground: #4c1d95;
+    --chart-2: #4c1d95;
+    --sidebar: #4c1d95;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-accent: #5b21b6;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #5b21b6;
+}
+.dark[data-theme='violet'],
+.dark [data-theme='violet'] {
+    --secondary: #5b21b6;
+    --secondary-foreground: #f8fafc;
+    --sidebar: #2e1065;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-accent: #5b21b6;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #5b21b6;
+}
+[data-theme='violet'] .bc-shop {
+    --shop-accent: #7c3aed;
+    --shop-accent-ink: #6d28d9;
+    --shop-on-accent: #ffffff;
+    --shop-accent-soft: #ede9fe;
+    --shop-navy: #4c1d95;
+    --shop-navy-ink: #ffffff;
+}
+.dark[data-theme='violet'] .bc-shop {
+    --shop-accent: #a78bfa;
+    --shop-accent-ink: #c4b5fd;
+    --shop-on-accent: #2e1065;
+    --shop-accent-soft: #2c1b4d;
+    --shop-navy: #5b21b6;
+    --shop-navy-ink: #ffffff;
+}
+
+/* emerald */
+[data-theme='emerald'] {
+    --secondary: #d1fae5;
+    --secondary-foreground: #065f46;
+    --chart-2: #065f46;
+    --sidebar: #065f46;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-accent: #047857;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #047857;
+}
+.dark[data-theme='emerald'],
+.dark [data-theme='emerald'] {
+    --secondary: #047857;
+    --secondary-foreground: #f8fafc;
+    --sidebar: #022c22;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-accent: #047857;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #047857;
+}
+[data-theme='emerald'] .bc-shop {
+    --shop-accent: #059669;
+    --shop-accent-ink: #047857;
+    --shop-on-accent: #16130f;
+    --shop-accent-soft: #d1fae5;
+    --shop-navy: #065f46;
+    --shop-navy-ink: #ffffff;
+}
+.dark[data-theme='emerald'] .bc-shop {
+    --shop-accent: #34d399;
+    --shop-accent-ink: #6ee7b7;
+    --shop-on-accent: #022c22;
+    --shop-accent-soft: #0f3328;
+    --shop-navy: #047857;
+    --shop-navy-ink: #ffffff;
+}
+
+/* teal */
+[data-theme='teal'] {
+    --secondary: #ccfbf1;
+    --secondary-foreground: #134e4a;
+    --chart-2: #134e4a;
+    --sidebar: #134e4a;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-accent: #115e59;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #115e59;
+}
+.dark[data-theme='teal'],
+.dark [data-theme='teal'] {
+    --secondary: #115e59;
+    --secondary-foreground: #f8fafc;
+    --sidebar: #042f2e;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-accent: #115e59;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #115e59;
+}
+[data-theme='teal'] .bc-shop {
+    --shop-accent: #0d9488;
+    --shop-accent-ink: #0f766e;
+    --shop-on-accent: #16130f;
+    --shop-accent-soft: #ccfbf1;
+    --shop-navy: #134e4a;
+    --shop-navy-ink: #ffffff;
+}
+.dark[data-theme='teal'] .bc-shop {
+    --shop-accent: #2dd4bf;
+    --shop-accent-ink: #5eead4;
+    --shop-on-accent: #042f2e;
+    --shop-accent-soft: #0f3230;
+    --shop-navy: #115e59;
+    --shop-navy-ink: #ffffff;
+}
+
+/* cyan */
+[data-theme='cyan'] {
+    --secondary: #cffafe;
+    --secondary-foreground: #164e63;
+    --chart-2: #164e63;
+    --sidebar: #164e63;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-accent: #155e75;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #155e75;
+}
+.dark[data-theme='cyan'],
+.dark [data-theme='cyan'] {
+    --secondary: #155e75;
+    --secondary-foreground: #f8fafc;
+    --sidebar: #083344;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-accent: #155e75;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #155e75;
+}
+[data-theme='cyan'] .bc-shop {
+    --shop-accent: #0891b2;
+    --shop-accent-ink: #0e7490;
+    --shop-on-accent: #16130f;
+    --shop-accent-soft: #cffafe;
+    --shop-navy: #164e63;
+    --shop-navy-ink: #ffffff;
+}
+.dark[data-theme='cyan'] .bc-shop {
+    --shop-accent: #22d3ee;
+    --shop-accent-ink: #67e8f9;
+    --shop-on-accent: #083344;
+    --shop-accent-soft: #0f2f3a;
+    --shop-navy: #155e75;
+    --shop-navy-ink: #ffffff;
+}
+
+/* amber */
+[data-theme='amber'] {
+    --secondary: #fef3c7;
+    --secondary-foreground: #92400e;
+    --chart-2: #92400e;
+    --sidebar: #92400e;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-accent: #b45309;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #b45309;
+}
+.dark[data-theme='amber'],
+.dark [data-theme='amber'] {
+    --secondary: #b45309;
+    --secondary-foreground: #f8fafc;
+    --sidebar: #451a03;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-accent: #b45309;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #b45309;
+}
+[data-theme='amber'] .bc-shop {
+    --shop-accent: #d97706;
+    --shop-accent-ink: #b45309;
+    --shop-on-accent: #16130f;
+    --shop-accent-soft: #fef3c7;
+    --shop-navy: #92400e;
+    --shop-navy-ink: #ffffff;
+}
+.dark[data-theme='amber'] .bc-shop {
+    --shop-accent: #fbbf24;
+    --shop-accent-ink: #fde68a;
+    --shop-on-accent: #451a03;
+    --shop-accent-soft: #33280d;
+    --shop-navy: #b45309;
+    --shop-navy-ink: #ffffff;
+}
+
+/* orange */
+[data-theme='orange'] {
+    --secondary: #ffedd5;
+    --secondary-foreground: #7c2d12;
+    --chart-2: #7c2d12;
+    --sidebar: #7c2d12;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-accent: #9a3412;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #9a3412;
+}
+.dark[data-theme='orange'],
+.dark [data-theme='orange'] {
+    --secondary: #9a3412;
+    --secondary-foreground: #f8fafc;
+    --sidebar: #431407;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-accent: #9a3412;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #9a3412;
+}
+[data-theme='orange'] .bc-shop {
+    --shop-accent: #ea580c;
+    --shop-accent-ink: #c2410c;
+    --shop-on-accent: #16130f;
+    --shop-accent-soft: #ffedd5;
+    --shop-navy: #7c2d12;
+    --shop-navy-ink: #ffffff;
+}
+.dark[data-theme='orange'] .bc-shop {
+    --shop-accent: #fb923c;
+    --shop-accent-ink: #fdba74;
+    --shop-on-accent: #431407;
+    --shop-accent-soft: #3a1f17;
+    --shop-navy: #9a3412;
+    --shop-navy-ink: #ffffff;
+}
+
+/* rose */
+[data-theme='rose'] {
+    --secondary: #ffe4e6;
+    --secondary-foreground: #9f1239;
+    --chart-2: #9f1239;
+    --sidebar: #9f1239;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-accent: #be123c;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #be123c;
+}
+.dark[data-theme='rose'],
+.dark [data-theme='rose'] {
+    --secondary: #be123c;
+    --secondary-foreground: #f8fafc;
+    --sidebar: #4c0519;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-accent: #be123c;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #be123c;
+}
+[data-theme='rose'] .bc-shop {
+    --shop-accent: #e11d48;
+    --shop-accent-ink: #be123c;
+    --shop-on-accent: #ffffff;
+    --shop-accent-soft: #ffe4e6;
+    --shop-navy: #9f1239;
+    --shop-navy-ink: #ffffff;
+}
+.dark[data-theme='rose'] .bc-shop {
+    --shop-accent: #fb7185;
+    --shop-accent-ink: #fda4af;
+    --shop-on-accent: #4c0519;
+    --shop-accent-soft: #3b1520;
+    --shop-navy: #be123c;
+    --shop-navy-ink: #ffffff;
+}
+
+/* slate */
+[data-theme='slate'] {
+    --secondary: #f1f5f9;
+    --secondary-foreground: #1e293b;
+    --chart-2: #1e293b;
+    --sidebar: #1e293b;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-accent: #334155;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #334155;
+}
+.dark[data-theme='slate'],
+.dark [data-theme='slate'] {
+    --secondary: #334155;
+    --secondary-foreground: #f8fafc;
+    --sidebar: #0f172a;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-accent: #334155;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #334155;
+}
+[data-theme='slate'] .bc-shop {
+    --shop-accent: #475569;
+    --shop-accent-ink: #334155;
+    --shop-on-accent: #ffffff;
+    --shop-accent-soft: #f1f5f9;
+    --shop-navy: #1e293b;
+    --shop-navy-ink: #ffffff;
+}
+.dark[data-theme='slate'] .bc-shop {
+    --shop-accent: #94a3b8;
+    --shop-accent-ink: #cbd5e1;
+    --shop-on-accent: #0f172a;
+    --shop-accent-soft: #1e2533;
+    --shop-navy: #334155;
+    --shop-navy-ink: #ffffff;
+}
+
+/* Inertia page-load bar follows the theme */
+#nprogress .bar { background: var(--primary) !important; }
+#nprogress .peg { box-shadow: 0 0 10px var(--primary), 0 0 5px var(--primary) !important; }
+
+/* POS register display (Fast Cashiering total board, tender "Total amount due"): a deep tint of the theme's
+   dark shade with theme-accent labels, so the display follows the colour theme like the rest of the POS. */
+:root {
+    --pos-display: color-mix(in srgb, var(--sidebar) 34%, #05070d);
+    --pos-display-raised: color-mix(in srgb, var(--sidebar) 46%, #0b0f1a);
+    --pos-display-line: color-mix(in srgb, var(--sidebar) 58%, #1c2233);
+    --pos-display-accent: color-mix(in srgb, var(--primary) 70%, #ffffff);
+    --pos-display-muted: color-mix(in srgb, #ffffff 62%, transparent);
+}

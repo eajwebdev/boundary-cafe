@@ -8,7 +8,7 @@ import { Circle, MapContainer, Polygon, TileLayer, useMapEvents } from 'react-le
 
 import type { DeliveryZone, SavedAddress } from '@/lib/customer';
 import { jsonRequest } from '@/lib/customer';
-import { cn } from '@/lib/utils';
+import { cn, themeAccent } from '@/lib/utils';
 
 // ─── Zone geometry (mirrors DeliveryZoneService on the server) ────────────────
 
@@ -31,7 +31,9 @@ function pointInPolygon(lat: number, lng: number, poly: [number, number][]) {
 }
 
 export function inDeliveryZone(zone: DeliveryZone, lat: number, lng: number) {
-    return zone.uses_polygon && zone.polygon.length >= 3 ? pointInPolygon(lat, lng, zone.polygon) : distanceKm(zone.center, { lat, lng }) <= zone.radius_km;
+    return zone.uses_polygon && zone.polygon.length >= 3
+        ? pointInPolygon(lat, lng, zone.polygon)
+        : distanceKm(zone.center, { lat, lng }) <= zone.radius_km;
 }
 
 // ─── Map helpers ──────────────────────────────────────────────────────────────
@@ -60,6 +62,7 @@ interface Props {
 }
 
 export default function AddressPicker({ zone, barangays, initial, onClose, onSaved }: Props) {
+    const accent = themeAccent();
     const start = initial ? { lat: initial.lat, lng: initial.lng } : zone.center;
     const mapRef = useRef<LeafletMap | null>(null);
     const [step, setStep] = useState<'map' | 'details'>('map');
@@ -182,7 +185,9 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
                 </button>
                 <div className="min-w-0">
                     <p className="text-base leading-tight font-bold">{step === 'map' ? 'Set your delivery location' : 'Address details'}</p>
-                    <p className="text-xs text-shop-muted">{step === 'map' ? 'Move the map so the pin sits on your house' : 'Help our rider find you'}</p>
+                    <p className="text-xs text-shop-muted">
+                        {step === 'map' ? 'Move the map so the pin sits on your house' : 'Help our rider find you'}
+                    </p>
                 </div>
             </div>
 
@@ -206,12 +211,12 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
                                 maxZoom={19}
                             />
                             {zoneShape ? (
-                                <Polygon positions={zoneShape} pathOptions={{ color: '#ff5a0a', weight: 2, fillOpacity: 0.05, dashArray: '6 6' }} />
+                                <Polygon positions={zoneShape} pathOptions={{ color: accent, weight: 2, fillOpacity: 0.05, dashArray: '6 6' }} />
                             ) : (
                                 <Circle
                                     center={[zone.center.lat, zone.center.lng]}
                                     radius={zone.radius_km * 1000}
-                                    pathOptions={{ color: '#ff5a0a', weight: 2, fillOpacity: 0.04, dashArray: '6 6' }}
+                                    pathOptions={{ color: accent, weight: 2, fillOpacity: 0.04, dashArray: '6 6' }}
                                 />
                             )}
                             <CenterTracker
@@ -225,15 +230,26 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
 
                         {/* Fixed centre pin */}
                         <div className="pointer-events-none absolute inset-0 z-500 flex items-center justify-center">
-                            <div className={cn('flex -translate-y-1/2 flex-col items-center transition-transform duration-200 ease-shop', moving && '-translate-y-[78%]')}>
+                            <div
+                                className={cn(
+                                    'flex -translate-y-1/2 flex-col items-center transition-transform duration-200 ease-shop',
+                                    moving && '-translate-y-[78%]',
+                                )}
+                            >
                                 {/* Lifts while dragging, drops with a small bounce when the map settles */}
                                 <MapPin
                                     key={moving ? 'up' : 'down'}
-                                    className={cn('h-12 w-12 drop-shadow-lg', !moving && 'bc-pin-drop', inZone ? 'fill-shop-accent text-white' : 'fill-shop-danger text-white')}
+                                    className={cn(
+                                        'h-12 w-12 drop-shadow-lg',
+                                        !moving && 'bc-pin-drop',
+                                        inZone ? 'fill-shop-accent text-white' : 'fill-shop-danger text-white',
+                                    )}
                                     strokeWidth={1.5}
                                 />
                             </div>
-                            <span className={cn('absolute h-2 w-2 rounded-full bg-black/40 transition', moving ? 'scale-150 opacity-40' : 'opacity-70')} />
+                            <span
+                                className={cn('absolute h-2 w-2 rounded-full bg-black/40 transition', moving ? 'scale-150 opacity-40' : 'opacity-70')}
+                            />
                         </div>
 
                         {/* Map buttons */}
@@ -261,12 +277,19 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
                     {/* Bottom card */}
                     <div className="space-y-3 border-t border-shop-line bg-shop-surface px-4 pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))]">
                         <div className="flex items-start gap-3">
-                            <span className={cn('mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full', inZone ? 'bg-shop-accent-soft text-shop-accent-ink' : 'bg-shop-danger-soft text-shop-danger')}>
+                            <span
+                                className={cn(
+                                    'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
+                                    inZone ? 'bg-shop-accent-soft text-shop-accent-ink' : 'bg-shop-danger-soft text-shop-danger',
+                                )}
+                            >
                                 <Navigation className="h-4 w-4" />
                             </span>
                             <div className="min-w-0 flex-1">
                                 <p className="truncate text-sm font-semibold">
-                                    {geo.loading || moving ? 'Finding address…' : geo.label || (geo.barangay ? `${geo.barangay}, Mabinay` : 'Pinned location')}
+                                    {geo.loading || moving
+                                        ? 'Finding address…'
+                                        : geo.label || (geo.barangay ? `${geo.barangay}, Mabinay` : 'Pinned location')}
                                 </p>
                                 <p className="text-xs text-shop-muted">
                                     {pos.lat.toFixed(5)}, {pos.lng.toFixed(5)}
@@ -283,7 +306,7 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
                             type="button"
                             disabled={!inZone || moving}
                             onClick={() => setStep('details')}
-                            className="bc-press h-14 w-full cursor-pointer rounded-2xl bg-shop-accent text-base font-semibold text-shop-on-accent shadow-shop-md disabled:cursor-not-allowed disabled:bg-shop-sunken disabled:text-shop-muted disabled:shadow-none"
+                            className="bc-press shadow-shop-md h-14 w-full cursor-pointer rounded-2xl bg-shop-accent text-base font-semibold text-shop-on-accent disabled:cursor-not-allowed disabled:bg-shop-sunken disabled:text-shop-muted disabled:shadow-none"
                         >
                             Confirm location
                         </button>
@@ -300,7 +323,9 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
                                     onClick={() => setForm({ ...form, label: l })}
                                     className={cn(
                                         'h-10 rounded-full border px-4 text-sm font-semibold',
-                                        form.label === l ? 'border-shop-accent bg-shop-accent-soft text-shop-accent-ink' : 'border-shop-line text-shop-muted',
+                                        form.label === l
+                                            ? 'border-shop-accent bg-shop-accent-soft text-shop-accent-ink'
+                                            : 'border-shop-line text-shop-muted',
                                     )}
                                 >
                                     {l}
@@ -309,7 +334,12 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
                         </div>
                         <label className="block space-y-1.5">
                             <span className="text-sm font-semibold">Barangay</span>
-                            <select className={inputCls} value={form.barangay} onChange={(e) => setForm({ ...form, barangay: e.target.value })} required>
+                            <select
+                                className={inputCls}
+                                value={form.barangay}
+                                onChange={(e) => setForm({ ...form, barangay: e.target.value })}
+                                required
+                            >
                                 <option value="">Choose barangay</option>
                                 {barangays.map((b) => (
                                     <option key={b} value={b}>
@@ -322,11 +352,23 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
                         </label>
                         <label className="block space-y-1.5">
                             <span className="text-sm font-semibold">Street / Purok / Sitio</span>
-                            <input className={inputCls} value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} placeholder="e.g. Purok 3, Rizal St." maxLength={191} />
+                            <input
+                                className={inputCls}
+                                value={form.street}
+                                onChange={(e) => setForm({ ...form, street: e.target.value })}
+                                placeholder="e.g. Purok 3, Rizal St."
+                                maxLength={191}
+                            />
                         </label>
                         <label className="block space-y-1.5">
                             <span className="text-sm font-semibold">Landmark</span>
-                            <input className={inputCls} value={form.landmark} onChange={(e) => setForm({ ...form, landmark: e.target.value })} placeholder="e.g. Blue gate beside the chapel" maxLength={191} />
+                            <input
+                                className={inputCls}
+                                value={form.landmark}
+                                onChange={(e) => setForm({ ...form, landmark: e.target.value })}
+                                placeholder="e.g. Blue gate beside the chapel"
+                                maxLength={191}
+                            />
                         </label>
                         <label className="block space-y-1.5">
                             <span className="text-sm font-semibold">Note to rider (optional)</span>
@@ -339,7 +381,12 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
                             />
                         </label>
                         <label className="flex items-center gap-2 text-sm">
-                            <input type="checkbox" className="h-4 w-4 accent-shop-accent" checked={form.is_default} onChange={(e) => setForm({ ...form, is_default: e.target.checked })} />
+                            <input
+                                type="checkbox"
+                                className="h-4 w-4 accent-shop-accent"
+                                checked={form.is_default}
+                                onChange={(e) => setForm({ ...form, is_default: e.target.checked })}
+                            />
                             Make this my default address
                         </label>
                         {Object.entries(errors)

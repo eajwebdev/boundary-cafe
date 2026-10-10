@@ -2,6 +2,7 @@ import { Award, Cake, Gift, TrendingUp } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 import { RouteLine } from '@/components/storefront/ui';
+import { useRewardsName } from '@/hooks/use-business-name';
 import CustomerLayout from '@/layouts/CustomerLayout';
 import { manilaTime } from '@/lib/customer';
 import { cn } from '@/lib/utils';
@@ -25,12 +26,13 @@ interface Props {
 const TYPE_LABEL: Record<string, string> = { earn: 'Earned', redeem: 'Redeemed', reversal: 'Returned', adjustment: 'Adjustment', bonus: 'Birthday bonus' };
 
 export default function Rewards({ card, tier, rules, transactions }: Props) {
+    const rewardsName = useRewardsName();
     const worth = card.points * rules.peso_per_point;
 
     return (
-        <CustomerLayout title="Boundary Rewards">
+        <CustomerLayout title={rewardsName}>
             <div className="mx-auto max-w-5xl px-4 pt-5 lg:px-6 lg:pt-8">
-                <h1 className="font-display text-[30px] leading-none font-bold">Boundary Rewards</h1>
+                <h1 className="font-display text-[30px] leading-none font-bold">{rewardsName}</h1>
                 <p className="mt-1.5 text-shop-muted">Points on every order — delivery, pickup or dine-in.</p>
 
                 <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">

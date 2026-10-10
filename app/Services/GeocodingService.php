@@ -29,7 +29,7 @@ class GeocodingService
 
         try {
             $response = Http::withHeaders([
-                'User-Agent' => config('app.name', 'BoundaryCafe').' online ordering ('.config('app.url').')',
+                'User-Agent' => config('app.name', 'CafePOS').' online ordering ('.config('app.url').')',
                 'Accept-Language' => 'en',
             ])->timeout(6)->get(self::ENDPOINT, [
                 'lat' => $lat,

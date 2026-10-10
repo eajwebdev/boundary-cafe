@@ -116,6 +116,7 @@ Route::middleware(['auth:web', 'order-taker'])->group(function () {
         Route::get('/', 'index')->name('index');
         Route::post('/', 'store')->name('store');
         Route::post('/session/open', [CashSessionController::class, 'open'])->name('session.open');
+        Route::post('/session/{session}/close', [CashSessionController::class, 'close'])->name('session.close');
         Route::get('/barcode/lookup', 'lookupBarcode')->name('barcode.lookup');
 
         // Pending dine-in tickets sent by waiters + online pickups ready to collect

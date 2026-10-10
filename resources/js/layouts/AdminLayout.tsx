@@ -243,6 +243,7 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
     const { props } = usePage<SharedProps>();
     const { theme, setTheme } = useTheme();
     const appName = props.app?.name ?? 'POS System';
+    const appTagline = props.app?.tagline ?? '';
     const appLogo = props.app?.logo_url ?? null;
     const appIcon = props.app?.icon_url || appLogo || '/uploads/logo.png';
 
@@ -299,7 +300,8 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
         <SidebarProvider key={isPosPage ? 'sidebar-pos' : 'sidebar-main'} defaultOpen={shouldOpen} forceDesktop={isPosPage}>
             <div className="flex min-h-screen w-full bg-background text-foreground">
                 {/* ── SIDEBAR ─────────────────────────────────────────── */}
-                <Sidebar collapsible={sidebarCollapsible} className="border-r border-sidebar-border">
+                {/* The POS forces the desktop sidebar, so its icon rail must also show below md (small tablets in portrait). */}
+                <Sidebar collapsible={sidebarCollapsible} className={cn('border-r border-sidebar-border', isPosPage && 'flex')}>
                     <Head title={props.title ?? ''}>
                         <link rel="icon" href={appIcon} />
                         <link rel="apple-touch-icon" href={appIcon} />
@@ -317,7 +319,7 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
                                         <div className="grid flex-1 text-left text-sm leading-tight">
                                             <span className="truncate font-semibold">{appName}</span>
                                             <span className="truncate text-xs text-sidebar-foreground/60">
-                                                {props.auth?.user?.supplier?.name ?? '—'}
+                                                {appTagline || props.auth?.user?.branch?.location || 'All branches'}
                                             </span>
                                         </div>
                                     </Link>
@@ -639,7 +641,12 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
                 {/* ── MAIN CONTENT ────────────────────────────────────── */}
                 <div className="flex min-w-0 flex-1 flex-col">
                     {/* Top bar */}
-                    <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-border bg-background px-6 shadow-sm">
+                    <header
+                        className={cn(
+                            'sticky top-0 z-40 flex items-center justify-between border-b border-border bg-background shadow-sm',
+                            isPosPage ? 'h-12 px-3' : 'h-16 px-6',
+                        )}
+                    >
                         <div className="flex items-center gap-3">
                             <SidebarTrigger />
                             <h1 className="text-base font-semibold">{title ?? (isPosPage ? 'POS / Cashier' : (props.title ?? 'Dashboard'))}</h1>

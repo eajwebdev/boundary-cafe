@@ -104,7 +104,7 @@ class ZReadingController extends Controller
             'business' => [
                 'name' => SystemSetting::businessName($zReading->branch_id),
                 'tin' => (string) SystemSetting::get('general.tin', $zReading->branch_id, ''),
-                'branch' => $zReading->branch?->name,
+                'branch' => $zReading->branch?->display_name,
                 'address' => $zReading->branch?->address,
             ],
         ]);

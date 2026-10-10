@@ -4,6 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\Branch;
 use App\Models\CashSession;
+use App\Models\Category;
+use App\Models\Expense;
+use App\Models\ExpenseCategory;
+use App\Models\PettyCashFund;
+use App\Models\PettyCashVoucher;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\Supplier;
@@ -59,6 +64,59 @@ class ZReadingTest extends TestCase
             [['method' => 'cash', 'count' => 1, 'amount' => 300], ['method' => 'gcash', 'count' => 1, 'amount' => 200]],
             $reading->payments,
         );
+    }
+
+    public function test_the_z_reading_breaks_down_discounts_cash_payouts_and_what_sold(): void
+    {
+        $session = $this->closedSession('2026-10-08 08:00:00', opening: 1000, expected: 1280, counted: 1280);
+        $coffee = Category::create(['name' => 'Coffee', 'slug' => 'coffee']);
+        $burgers = Category::create(['name' => 'Burgers', 'slug' => 'burgers']);
+        $latte = Product::create(['name' => 'Spanish Latte', 'category_id' => $coffee->id]);
+        $burger = Product::create(['name' => 'Ultimate Burger', 'category_id' => $burgers->id]);
+
+        $senior = $this->sale('2026-10-08 09:00:00', total: 260, discount: 65, extra: [
+            'cash_session_id' => $session->id, 'manual_discount' => 65, 'discount_type' => 'senior_pwd', 'service_charge' => 25,
+        ]);
+        $senior->items()->create(['product_id' => $latte->id, 'quantity' => 2, 'price' => 145, 'total' => 290]);
+        $promo = $this->sale('2026-10-08 10:00:00', total: 150, method: 'gcash', discount: 15, extra: ['promo_discount' => 15]);
+        $promo->items()->create(['product_id' => $burger->id, 'quantity' => 1, 'price' => 165, 'total' => 165]);
+        // An older sale that only stored the combined discount counts as a manual discount.
+        $this->sale('2026-10-08 11:00:00', total: 90, discount: 10, extra: ['cash_session_id' => $session->id]);
+
+        $fund = PettyCashFund::create(['branch_id' => $this->branch->id, 'managed_by' => $this->manager->id, 'fund_name' => 'Drawer', 'fund_amount' => 500, 'current_balance' => 430, 'status' => 'active']);
+        $expense = Expense::create([
+            'expense_category_id' => ExpenseCategory::firstOrCreate(['name' => 'Supplies'])->id,
+            'branch_id' => $this->branch->id,
+            'user_id' => $this->manager->id,
+            'cash_session_id' => $session->id,
+            'amount' => 70,
+            'expense_date' => '2026-10-08',
+            'payment_method' => 'cash',
+            'description' => 'Ice for drinks',
+            'status' => 'approved',
+        ]);
+        PettyCashVoucher::create([
+            'voucher_number' => 'PCV-1', 'petty_cash_fund_id' => $fund->id, 'requested_by' => $this->manager->id,
+            'expense_id' => $expense->id, 'voucher_type' => 'expense', 'amount' => 70, 'balance_before' => 500,
+            'balance_after' => 430, 'payee' => 'Ice store', 'purpose' => 'Ice for drinks', 'status' => 'approved',
+        ]);
+
+        $this->actingAs($this->manager)->post(route('z-readings.store'), ['business_date' => '2026-10-08']);
+
+        $reading = ZReading::sole();
+        $this->assertSame(90.0, $reading->discount_total);
+        $this->assertSame(65.0, $reading->senior_pwd_discount);
+        $this->assertSame(15.0, $reading->promo_discount);
+        $this->assertSame(10.0, $reading->manual_discount);
+        $this->assertSame(25.0, $reading->service_charge_total);
+        // Drawer: opening 1,000 + cash sales 350 − paid out 70.
+        $this->assertSame(350.0, $reading->cash_sales);
+        $this->assertSame(70.0, $reading->cash_paid_out);
+        $this->assertSame('Ice for drinks', $reading->payouts[0]['description']);
+        $this->assertSame(70.0, (float) $reading->payouts[0]['amount']);
+        $this->assertSame(['Spanish Latte', 'Ultimate Burger'], array_column($reading->top_items, 'name'));
+        $this->assertSame(2.0, (float) $reading->top_items[0]['quantity']);
+        $this->assertSame(['Coffee', 'Burgers'], array_column($reading->categories, 'category'));
     }
 
     public function test_numbers_and_grand_total_carry_over_from_the_previous_reading(): void
@@ -228,6 +286,7 @@ class ZReadingTest extends TestCase
         float $discount = 0,
         string $status = 'completed',
         ?string $receipt = null,
+        array $extra = [],
     ): Sale {
         $sale = (new Sale)->forceFill([
             'receipt_number' => $receipt ?? 'R-'.uniqid(),
@@ -239,6 +298,7 @@ class ZReadingTest extends TestCase
             'status' => $status,
             'created_at' => $at,
             'updated_at' => $at,
+            ...$extra,
         ]);
         $sale->save();
 

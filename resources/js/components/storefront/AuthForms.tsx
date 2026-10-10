@@ -2,6 +2,7 @@ import { useForm } from '@inertiajs/react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useId, useState } from 'react';
 
+import { useBusinessName, useRewardsName } from '@/hooks/use-business-name';
 import { cn } from '@/lib/utils';
 
 import { ShopButton } from './ui';
@@ -130,6 +131,8 @@ export function LoginForm({ onSuccess }: { onSuccess?: () => void }) {
 
 export function RegisterForm({ barangays, onSuccess }: { barangays: string[]; onSuccess?: () => void }) {
     const id = useId();
+    const businessName = useBusinessName();
+    const rewardsName = useRewardsName();
     const form = useForm({
         name: '',
         contact_number: '',
@@ -197,7 +200,9 @@ export function RegisterForm({ barangays, onSuccess }: { barangays: string[]; on
             </div>
             <label className="flex cursor-pointer items-start gap-2.5 text-sm text-shop-muted">
                 <input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0 accent-shop-accent" checked={form.data.terms} onChange={(ev) => form.setData('terms', ev.target.checked)} />
-                <span>I agree that Boundary Café may use my details to prepare my orders and run Boundary Rewards.</span>
+                <span>
+                    I agree that {businessName} may use my details to prepare my orders and run {rewardsName}.
+                </span>
             </label>
             {e.terms && (
                 <p className="text-sm text-shop-danger" role="alert">

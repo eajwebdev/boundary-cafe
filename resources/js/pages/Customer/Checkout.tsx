@@ -6,6 +6,7 @@ import { formatPhone, inputCls } from '@/components/storefront/AuthForms';
 import MapThumb from '@/components/storefront/MapThumb';
 import { Price, RouteLine, ShopButton, Skeleton } from '@/components/storefront/ui';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
+import { useBranchLabel, useRewardsName } from '@/hooks/use-business-name';
 import CustomerLayout from '@/layouts/CustomerLayout';
 import type { CustomerSession, DeliveryZone, SavedAddress, StoreStatus} from '@/lib/customer';
 import { jsonRequest, useCart } from '@/lib/customer';
@@ -36,7 +37,7 @@ interface PageProps {
     store: {
         status: StoreStatus;
         settings: { delivery_enabled: boolean; pickup_enabled: boolean; delivery_fee: number; prep_minutes: number; delivery_minutes: number; min_order: number };
-        branch: { name: string; address: string | null } | null;
+        branch: { name: string; location: string; address: string | null } | null;
     };
     contact: { name: string; contact_number: string | null };
     customer: CustomerSession;
@@ -57,6 +58,8 @@ function CheckoutBody() {
     const { props } = usePage<PageProps>();
     const { addresses, zone, barangays, store, contact, customer } = props;
     const cart = useCart(customer.id);
+    const branchLabel = useBranchLabel(store.branch?.location);
+    const rewardsName = useRewardsName();
 
     const initialFulfillment = (() => {
         const q = new URLSearchParams(window.location.search).get('fulfillment');
@@ -194,7 +197,7 @@ function CheckoutBody() {
                 </Link>
                 <div>
                     <h1 className="font-display text-[28px] leading-none font-bold">Checkout</h1>
-                    <p className="mt-1 text-sm text-shop-muted">Boundary Café – Mabinay</p>
+                    <p className="mt-1 text-sm text-shop-muted">{branchLabel}</p>
                 </div>
             </div>
 
@@ -272,7 +275,7 @@ function CheckoutBody() {
                             <div className="flex items-start gap-3 rounded-2xl bg-shop-sunken p-4">
                                 <Store className="mt-0.5 h-5 w-5 text-shop-accent-ink" />
                                 <div>
-                                    <p className="font-semibold">{store.branch?.name ?? 'Boundary Café – Mabinay'}</p>
+                                    <p className="font-semibold">{branchLabel}</p>
                                     <p className="text-sm text-shop-muted">{store.branch?.address ?? 'Mabinay, Negros Oriental'}</p>
                                 </div>
                             </div>
@@ -368,7 +371,7 @@ function CheckoutBody() {
                     </Step>
 
                     {hasPoints && quote && (
-                        <Step n={6} title="Boundary Rewards" icon={Gift} error={serverErrors.loyalty_points ?? quote.loyalty.error ?? undefined}>
+                        <Step n={6} title={rewardsName} icon={Gift} error={serverErrors.loyalty_points ?? quote.loyalty.error ?? undefined}>
                             <div className="flex items-center justify-between gap-3">
                                 <span>
                                     <span className="block font-semibold">Pay with points</span>

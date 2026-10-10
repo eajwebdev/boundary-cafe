@@ -11,6 +11,8 @@ import ProductDetail from '@/components/storefront/ProductDetail';
 import PromoRail from '@/components/storefront/PromoRail';
 import { Pill, Price, useIsDesktop } from '@/components/storefront/ui';
 import ShopAutoSkeleton from '@/components/ui/auto-skeleton';
+import { useBranchLabel, useBusinessName, useRewardsName, useTagline } from '@/hooks/use-business-name';
+import { useLogoUrl } from '@/hooks/use-logo';
 import CustomerLayout, { useCustomerAuth } from '@/layouts/CustomerLayout';
 import type { CustomerSession, MenuProduct, StoreStatus, StorefrontPromo } from '@/lib/customer';
 import { useCart } from '@/lib/customer';
@@ -20,7 +22,7 @@ interface PageProps {
     store: {
         name: string;
         logo: string | null;
-        branch: { name: string; address: string | null; phone: string | null } | null;
+        branch: { name: string; location: string; address: string | null; phone: string | null } | null;
         status: StoreStatus;
         settings: {
             delivery_fee: number;
@@ -127,13 +129,26 @@ export default function Storefront() {
             subHeader={
                 <div className="hidden h-14 items-stretch justify-between gap-6 lg:flex">
                     <ServiceTabs settings={store.settings} fulfillment={fulfillment} onFulfillment={setFulfillment} />
-                    <SearchField value={query} onChange={setQuery} className="w-[380px] self-center" inputClassName="h-11 rounded-full border-transparent bg-shop-sunken text-[15px]" />
+                    <SearchField
+                        value={query}
+                        onChange={setQuery}
+                        className="w-[380px] self-center"
+                        inputClassName="h-11 rounded-full border-transparent bg-shop-sunken text-[15px]"
+                    />
                 </div>
             }
             barangays={props.barangays}
             wide
         >
-            <StorefrontBody cart={cart} query={query} onQuery={setQuery} fulfillment={fulfillment} onFulfillment={setFulfillment} cartOpen={cartOpen} onCartOpen={setCartOpen} />
+            <StorefrontBody
+                cart={cart}
+                query={query}
+                onQuery={setQuery}
+                fulfillment={fulfillment}
+                onFulfillment={setFulfillment}
+                cartOpen={cartOpen}
+                onCartOpen={setCartOpen}
+            />
         </CustomerLayout>
     );
 }
@@ -143,6 +158,7 @@ function AnnouncementStrip({ onPickup }: { onPickup: () => void }) {
     const { props } = usePage<PageProps>();
     const { customer, loyaltyRules, store } = props;
     const { requireAuth } = useCustomerAuth();
+    const rewardsName = useRewardsName();
     const [dismissed, dismiss] = useDismissed(STRIP_DISMISSED_KEY);
 
     const showAccount = !customer || loyaltyRules.enabled;
@@ -156,17 +172,17 @@ function AnnouncementStrip({ onPickup }: { onPickup: () => void }) {
         <div className="relative bg-shop-accent text-shop-on-accent">
             <div className="mx-auto flex min-h-14 max-w-[1320px] items-center justify-center gap-3 py-2 pr-12 pl-4 lg:gap-5">
                 <Bike className="hidden h-7 w-7 sm:block" strokeWidth={1.75} aria-hidden />
-                {customer
-                    ? loyaltyRules.enabled && (
-                          <Link href="/account/rewards" className={action}>
-                              My Boundary Rewards card
-                          </Link>
-                      )
-                    : (
-                          <button type="button" onClick={() => requireAuth('register')} className={action}>
-                              {loyaltyRules.enabled ? 'Sign up for Boundary Rewards' : 'Create a free account'}
-                          </button>
-                      )}
+                {customer ? (
+                    loyaltyRules.enabled && (
+                        <Link href="/account/rewards" className={action}>
+                            My {rewardsName} card
+                        </Link>
+                    )
+                ) : (
+                    <button type="button" onClick={() => requireAuth('register')} className={action}>
+                        {loyaltyRules.enabled ? `Sign up for ${rewardsName}` : 'Create a free account'}
+                    </button>
+                )}
                 {showPickup && (
                     <button type="button" onClick={onPickup} className={cn(action, showAccount && 'hidden sm:inline-flex')}>
                         Order ahead for pickup
@@ -236,7 +252,10 @@ function CartButton({ count, onClick }: { count: number; onClick: () => void }) 
         >
             <ShoppingBag className="h-4.5 w-4.5" />
             {count > 0 && (
-                <span key={count} className="bc-bump absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-shop-accent px-1 text-[11px] font-bold text-shop-on-accent tabular-nums">
+                <span
+                    key={count}
+                    className="bc-bump absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-shop-accent px-1 text-[11px] font-bold text-shop-on-accent tabular-nums"
+                >
                     {count}
                 </span>
             )}
@@ -245,7 +264,15 @@ function CartButton({ count, onClick }: { count: number; onClick: () => void }) 
 }
 
 /** Delivery / pickup as underlined tabs. */
-function ServiceTabs({ settings, fulfillment, onFulfillment }: { settings: Settings; fulfillment: Fulfillment; onFulfillment: (f: Fulfillment) => void }) {
+function ServiceTabs({
+    settings,
+    fulfillment,
+    onFulfillment,
+}: {
+    settings: Settings;
+    fulfillment: Fulfillment;
+    onFulfillment: (f: Fulfillment) => void;
+}) {
     return (
         <div className="flex items-stretch" role="radiogroup" aria-label="Delivery or pickup">
             {(['delivery', 'pickup'] as const).map((f) => {
@@ -273,7 +300,17 @@ function ServiceTabs({ settings, fulfillment, onFulfillment }: { settings: Setti
     );
 }
 
-function SearchField({ value, onChange, className, inputClassName }: { value: string; onChange: (value: string) => void; className?: string; inputClassName?: string }) {
+function SearchField({
+    value,
+    onChange,
+    className,
+    inputClassName,
+}: {
+    value: string;
+    onChange: (value: string) => void;
+    className?: string;
+    inputClassName?: string;
+}) {
     return (
         <label className={cn('relative block', className)}>
             <span className="sr-only">Search the menu</span>
@@ -316,6 +353,8 @@ function StorefrontBody({ cart, query, onQuery, fulfillment, onFulfillment, cart
     const { props } = usePage<PageProps>();
     const { store, categories, products, storefrontPromos, loyaltyRules, activeOrder, customer } = props;
     const { requireAuth } = useCustomerAuth();
+    const businessName = useBusinessName();
+    const tagline = useTagline();
     const isDesktop = useIsDesktop();
 
     const [activeCat, setActiveCat] = useState<number | null>(categories[0]?.id ?? null);
@@ -335,7 +374,14 @@ function StorefrontBody({ cart, query, onQuery, fulfillment, onFulfillment, cart
 
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
-        let list = q ? products.filter((p) => p.name.toLowerCase().includes(q) || (p.category ?? '').toLowerCase().includes(q) || (p.description ?? '').toLowerCase().includes(q)) : products;
+        let list = q
+            ? products.filter(
+                  (p) =>
+                      p.name.toLowerCase().includes(q) ||
+                      (p.category ?? '').toLowerCase().includes(q) ||
+                      (p.description ?? '').toLowerCase().includes(q),
+              )
+            : products;
         if (availableOnly) list = list.filter((p) => !p.sold_out);
         return sort === 'menu' ? list : [...list].sort(SORTERS[sort]);
     }, [products, query, availableOnly, sort]);
@@ -354,6 +400,13 @@ function StorefrontBody({ cart, query, onQuery, fulfillment, onFulfillment, cart
             })),
         [sections],
     );
+    const heroImages = useMemo(() => {
+        const photographicProducts = products.filter((product) => product.image && !product.image.endsWith('.svg'));
+        const main = products.find((product) => product.name === 'Boundary Burger')?.image ?? photographicProducts[0]?.image ?? null;
+        const accent = products.find((product) => product.name === 'Strawberry Sparkle')?.image ?? photographicProducts.find((product) => product.image !== main)?.image ?? main;
+
+        return { main, accent };
+    }, [products]);
 
     // ── Brief skeleton flash while search / sort / filter re-renders the grid ──
     // Search + sort + availableOnly are client-side (useMemo), so there is no
@@ -411,12 +464,24 @@ function StorefrontBody({ cart, query, onQuery, fulfillment, onFulfillment, cart
                 toast(store.status.message ?? 'We are closed for online orders right now.');
                 return;
             }
-            cart.add({ product_id: p.id, variant_id: null, name: p.name, variant_name: null, image: p.image, unit_price: p.price, quantity: 1, note: '' });
+            cart.add({
+                product_id: p.id,
+                variant_id: null,
+                name: p.name,
+                variant_name: null,
+                image: p.image,
+                unit_price: p.price,
+                quantity: 1,
+                note: '',
+            });
         },
         [guard, isOpen, cart, store.status.message],
     );
 
-    const quickRemove = useCallback((p: MenuProduct) => cart.setQuantity(`${p.id}-base-`, (qtyByProduct.base[p.id] ?? 0) - 1), [cart, qtyByProduct.base]);
+    const quickRemove = useCallback(
+        (p: MenuProduct) => cart.setQuantity(`${p.id}-base-`, (qtyByProduct.base[p.id] ?? 0) - 1),
+        [cart, qtyByProduct.base],
+    );
 
     useEffect(() => {
         if (!customer) return;
@@ -435,7 +500,8 @@ function StorefrontBody({ cart, query, onQuery, fulfillment, onFulfillment, cart
     }, [customer, products]);
 
     // ── Scroll-spy ──
-    const stickyOffset = () => (document.getElementById('shop-header')?.offsetHeight ?? (isDesktop ? 120 : 56)) + (toolbarRef.current?.offsetHeight ?? 0) + 12;
+    const stickyOffset = () =>
+        (document.getElementById('shop-header')?.offsetHeight ?? (isDesktop ? 120 : 56)) + (toolbarRef.current?.offsetHeight ?? 0) + 12;
     // The active category is the last section whose heading has scrolled past the sticky toolbar.
     useEffect(() => {
         let frame = 0;
@@ -515,8 +581,18 @@ function StorefrontBody({ cart, query, onQuery, fulfillment, onFulfillment, cart
             <div className="lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-8 lg:px-6 lg:pt-6">
                 {/* ── Left rail (desktop) ─────────────────────────── */}
                 <aside className="hidden lg:block">
-                    <div className={cn('sticky top-34 flex flex-col gap-5', showWelcome ? 'max-h-[calc(100dvh-13.5rem)]' : 'max-h-[calc(100dvh-9.5rem)]')}>
-                        <RewardsCard customer={customer} rules={loyaltyRules} onJoin={() => requireAuth('register')} onLogin={() => requireAuth('login')} />
+                    <div
+                        className={cn(
+                            'sticky top-34 flex flex-col gap-5',
+                            showWelcome ? 'max-h-[calc(100dvh-13.5rem)]' : 'max-h-[calc(100dvh-9.5rem)]',
+                        )}
+                    >
+                        <RewardsCard
+                            customer={customer}
+                            rules={loyaltyRules}
+                            onJoin={() => requireAuth('register')}
+                            onLogin={() => requireAuth('login')}
+                        />
                         <FiltersCard
                             sort={sort}
                             onSort={setSort}
@@ -534,15 +610,22 @@ function StorefrontBody({ cart, query, onQuery, fulfillment, onFulfillment, cart
                     <StatusStrip isOpen={isOpen} status={store.status} activeOrder={activeOrder} />
                     {/* A desktop search swaps the discovery blocks for results */}
                     <div className={cn(searching && 'lg:hidden')}>
-                        <Hero customer={customer} store={store} fulfillment={fulfillment} onJoin={() => requireAuth('register')} />
+                        <Hero customer={customer} store={store} fulfillment={fulfillment} images={heroImages} onJoin={() => requireAuth('register')} />
                         <CategoryTiles sections={navSections} onSelect={jumpTo} className="mt-8" />
                         <PromoRail promos={storefrontPromos} className="mt-8" />
                     </div>
 
                     {/* Sticky search + chips (phones & tablets) */}
-                    <div ref={toolbarRef} className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-30 mt-6 bg-shop-bg/95 backdrop-blur-md lg:hidden">
+                    <div
+                        ref={toolbarRef}
+                        className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-30 mt-6 bg-shop-bg/95 backdrop-blur-md lg:hidden"
+                    >
                         <div className="px-4 pt-2">
-                            <SearchField value={query} onChange={onQuery} inputClassName="h-12 rounded-2xl border-shop-line bg-shop-surface text-base shadow-shop-sm" />
+                            <SearchField
+                                value={query}
+                                onChange={onQuery}
+                                inputClassName="h-12 rounded-2xl border-shop-line bg-shop-surface text-base shadow-shop-sm"
+                            />
                         </div>
                         <CategoryChips sections={navSections} active={activeCat} onSelect={jumpTo} />
                         <div className="h-px bg-shop-line" />
@@ -553,14 +636,26 @@ function StorefrontBody({ cart, query, onQuery, fulfillment, onFulfillment, cart
                         {sections.length === 0 && (
                             <div className="flex flex-col items-center py-20 text-center">
                                 <Search className="h-8 w-8 text-shop-muted" />
-                                <p className="font-display mt-3 text-xl font-semibold">
-                                    {products.length === 0 ? 'The menu is being updated' : searching ? `Nothing matches “${query}”` : 'Everything is sold out right now'}
+                                <p className="mt-3 font-display text-xl font-semibold">
+                                    {products.length === 0
+                                        ? 'The menu is being updated'
+                                        : searching
+                                          ? `Nothing matches “${query}”`
+                                          : 'Everything is sold out right now'}
                                 </p>
                                 <p className="mt-1 text-sm text-shop-muted">
-                                    {products.length === 0 ? 'Please check back in a little while.' : searching ? 'Try “burger”, “frappe” or “meal”.' : 'Show the full menu to see what is coming back.'}
+                                    {products.length === 0
+                                        ? 'Please check back in a little while.'
+                                        : searching
+                                          ? 'Try “burger”, “frappe” or “meal”.'
+                                          : 'Show the full menu to see what is coming back.'}
                                 </p>
                                 {(searching || availableOnly) && (
-                                    <button type="button" onClick={clearFilters} className="mt-4 cursor-pointer text-sm font-semibold text-shop-accent-ink underline underline-offset-4">
+                                    <button
+                                        type="button"
+                                        onClick={clearFilters}
+                                        className="mt-4 cursor-pointer text-sm font-semibold text-shop-accent-ink underline underline-offset-4"
+                                    >
                                         {searching ? 'Clear search' : 'Show the full menu'}
                                     </button>
                                 )}
@@ -607,10 +702,15 @@ function StorefrontBody({ cart, query, onQuery, fulfillment, onFulfillment, cart
 
                         <div className="mt-12 grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
                             <StoreCard store={store} />
-                            {loyaltyRules.enabled && <RewardsTeaser customer={customer} rules={loyaltyRules} onJoin={() => requireAuth('register')} />}
+                            {loyaltyRules.enabled && (
+                                <RewardsTeaser customer={customer} rules={loyaltyRules} onJoin={() => requireAuth('register')} />
+                            )}
                         </div>
                         <footer className="mt-10 flex flex-wrap items-center justify-between gap-2 border-t border-shop-line py-6 text-xs text-shop-muted">
-                            <span>© {new Date().getFullYear()} Boundary Café · Taste of Negros</span>
+                            <span>
+                                © {new Date().getFullYear()} {businessName}
+                                {tagline && ` · ${tagline}`}
+                            </span>
                             <Link href="/login" className="underline underline-offset-4 hover:text-shop-ink">
                                 Staff login
                             </Link>
@@ -626,11 +726,14 @@ function StorefrontBody({ cart, query, onQuery, fulfillment, onFulfillment, cart
                     <button
                         type="button"
                         onClick={() => onCartOpen(true)}
-                        className="bc-press bc-slide-up mx-auto flex h-14 w-full max-w-lg cursor-pointer items-center justify-between gap-3 rounded-2xl bg-shop-ink px-3 pr-4 text-shop-bg shadow-shop-lg"
+                        className="bc-press bc-slide-up shadow-shop-lg mx-auto flex h-14 w-full max-w-lg cursor-pointer items-center justify-between gap-3 rounded-2xl bg-shop-ink px-3 pr-4 text-shop-bg"
                         aria-label={`View order: ${cart.count} items`}
                     >
                         <span className="flex items-center gap-3">
-                            <span key={cart.count} className="bc-bump flex h-9 min-w-9 items-center justify-center rounded-xl bg-shop-accent px-2 text-sm font-bold text-shop-on-accent tabular-nums">
+                            <span
+                                key={cart.count}
+                                className="bc-bump flex h-9 min-w-9 items-center justify-center rounded-xl bg-shop-accent px-2 text-sm font-bold text-shop-on-accent tabular-nums"
+                            >
                                 {cart.count}
                             </span>
                             <span className="text-base font-semibold">View order</span>
@@ -643,7 +746,9 @@ function StorefrontBody({ cart, query, onQuery, fulfillment, onFulfillment, cart
                 </div>
             )}
 
-            {showWelcome && <WelcomeBar settings={store.settings} rules={loyaltyRules} onJoin={() => requireAuth('register')} onDismiss={dismissWelcome} />}
+            {showWelcome && (
+                <WelcomeBar settings={store.settings} rules={loyaltyRules} onJoin={() => requireAuth('register')} onDismiss={dismissWelcome} />
+            )}
 
             <ProductDetail
                 product={selected}
@@ -667,7 +772,7 @@ function StatusStrip({ isOpen, status, activeOrder }: { isOpen: boolean; status:
             <div className="px-4 pt-4 lg:px-0 lg:pt-0 lg:pb-4">
                 <Link
                     href={`/account/orders/${activeOrder.order_number}`}
-                    className="bc-press flex items-center gap-3 rounded-2xl bg-shop-navy p-3 pr-4 text-shop-navy-ink shadow-shop-md"
+                    className="bc-press shadow-shop-md flex items-center gap-3 rounded-2xl bg-shop-navy p-3 pr-4 text-shop-navy-ink"
                 >
                     <span className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-white/15">
                         <span className="bc-pulse absolute inset-2.5 rounded-full text-shop-accent" />
@@ -689,9 +794,7 @@ function StatusStrip({ isOpen, status, activeOrder }: { isOpen: boolean; status:
                     <Store className="mt-0.5 h-5 w-5 shrink-0" />
                     <div>
                         <p className="font-semibold">Closed for online orders</p>
-                        <p className="text-sm">
-                            {status.message ?? `We open at ${status.opens_at}.`} Browse now and order when we open.
-                        </p>
+                        <p className="text-sm">{status.message ?? `We open at ${status.opens_at}.`} Browse now and order when we open.</p>
                     </div>
                 </div>
             </div>
@@ -700,37 +803,61 @@ function StatusStrip({ isOpen, status, activeOrder }: { isOpen: boolean; status:
     return null;
 }
 
-function Hero({ customer, store, fulfillment, onJoin }: { customer: CustomerSession | null; store: PageProps['store']; fulfillment: Fulfillment; onJoin: () => void }) {
+function Hero({
+    customer,
+    store,
+    fulfillment,
+    images,
+    onJoin,
+}: {
+    customer: CustomerSession | null;
+    store: PageProps['store'];
+    fulfillment: Fulfillment;
+    images: { main: string | null; accent: string | null };
+    onJoin: () => void;
+}) {
     const s = store.settings;
+    const branchLabel = useBranchLabel(store.branch?.location);
+    const businessName = useBusinessName();
     return (
         <section className="px-4 pt-4 lg:px-0 lg:pt-0" aria-label="Welcome">
             <div className="relative isolate overflow-hidden rounded-2xl bg-shop-accent-soft p-4 sm:p-7">
                 {/* Lighter sweep behind the plate */}
                 <div className="absolute inset-y-0 right-0 -z-10 w-[48%] rounded-l-full bg-white/45 dark:bg-white/5" aria-hidden />
-                <p className="text-[13px] font-semibold text-shop-accent-ink sm:max-w-[60%] sm:text-sm">{customer ? `Magandang araw, ${customer.first_name}!` : 'Boundary Café · Mabinay'}</p>
+                <p className="text-[13px] font-semibold text-shop-accent-ink sm:max-w-[60%] sm:text-sm">
+                    {customer ? `Magandang araw, ${customer.first_name}!` : branchLabel}
+                </p>
                 <div className="mt-1 flex items-center gap-3 sm:block sm:max-w-[60%]">
-                    <h1 className="font-display min-w-0 flex-1 text-[clamp(1.3rem,6.4vw,1.75rem)] leading-[1.08] font-extrabold text-balance sm:text-[clamp(1.75rem,4.4vw,2.25rem)]">
-                        {customer ? 'What’s your Boundary order today?' : 'Boundary favourites, delivered in Mabinay.'}
+                    <h1 className="min-w-0 flex-1 font-display text-[clamp(1.3rem,6.4vw,1.75rem)] leading-[1.08] font-extrabold text-balance sm:text-[clamp(1.75rem,4.4vw,2.25rem)]">
+                        {customer ? `What’s your ${businessName} order today?` : `${businessName} favourites, delivered in Mabinay.`}
                     </h1>
                     {/* Plate: beside the headline on phones, out on the right edge from tablets up */}
-                    <div className="relative size-[30vw] max-h-32 max-w-32 shrink-0 sm:absolute sm:top-1/2 sm:right-8 sm:size-44 sm:max-h-none sm:max-w-none sm:-translate-y-1/2 lg:right-14">
-                        <img
-                            src="/uploads/optimized/boundary_burger.webp"
-                            alt=""
-                            fetchPriority="high"
-                            className="h-full w-full rounded-full object-cover object-[50%_42%] shadow-shop-lg ring-4 ring-shop-surface"
-                        />
-                        <img
-                            src="/uploads/optimized/strawberry_sparkle.webp"
-                            alt=""
-                            className="absolute -bottom-1 -left-8 hidden h-20 w-20 rounded-full object-cover shadow-shop-md ring-4 ring-shop-surface sm:block"
-                        />
-                    </div>
+                    {images.main && (
+                        <div className="relative size-[30vw] max-h-32 max-w-32 shrink-0 sm:absolute sm:top-1/2 sm:right-8 sm:size-44 sm:max-h-none sm:max-w-none sm:-translate-y-1/2 lg:right-14">
+                            <img
+                                src={images.main}
+                                alt=""
+                                fetchPriority="high"
+                                className="shadow-shop-lg h-full w-full rounded-full object-cover object-[50%_42%] ring-4 ring-shop-surface"
+                            />
+                            {images.accent && images.accent !== images.main && (
+                                <img
+                                    src={images.accent}
+                                    alt=""
+                                    className="shadow-shop-md absolute -bottom-1 -left-8 hidden h-20 w-20 rounded-full object-cover ring-4 ring-shop-surface sm:block"
+                                />
+                            )}
+                        </div>
+                    )}
                 </div>
                 <div className="mt-3.5 flex flex-wrap items-center gap-1.5 sm:mt-4 sm:max-w-[60%] sm:gap-2">
                     {!customer && (
                         <>
-                            <button type="button" onClick={onJoin} className="bc-press h-9 cursor-pointer rounded-lg bg-shop-accent px-4 text-sm font-semibold text-shop-on-accent hover:brightness-[1.04] sm:mr-1">
+                            <button
+                                type="button"
+                                onClick={onJoin}
+                                className="bc-press h-9 cursor-pointer rounded-lg bg-shop-accent px-4 text-sm font-semibold text-shop-on-accent hover:brightness-[1.04] sm:mr-1"
+                            >
                                 Sign up
                             </button>
                             {/* Phones: the pills get a row of their own under the button */}
@@ -764,7 +891,19 @@ function Hero({ customer, store, fulfillment, onJoin }: { customer: CustomerSess
 }
 
 /** Sidebar: the rewards programme as a dark card with the logo breaking out of the top edge. */
-function RewardsCard({ customer, rules, onJoin, onLogin }: { customer: CustomerSession | null; rules: PageProps['loyaltyRules']; onJoin: () => void; onLogin: () => void }) {
+function RewardsCard({
+    customer,
+    rules,
+    onJoin,
+    onLogin,
+}: {
+    customer: CustomerSession | null;
+    rules: PageProps['loyaltyRules'];
+    onJoin: () => void;
+    onLogin: () => void;
+}) {
+    const logoUrl = useLogoUrl();
+    const rewardsName = useRewardsName();
     if (customer && !rules.enabled) return null;
 
     const action = 'bc-press flex h-9 cursor-pointer items-center justify-center rounded-lg bg-white px-3 text-sm font-semibold text-shop-navy';
@@ -772,7 +911,7 @@ function RewardsCard({ customer, rules, onJoin, onLogin }: { customer: CustomerS
     return (
         <div className="relative mt-9 shrink-0 rounded-2xl bg-shop-navy px-4 pt-12 pb-4 text-center text-shop-navy-ink">
             <img
-                src="/uploads/optimized/logo.webp"
+                src={logoUrl}
                 alt=""
                 width={72}
                 height={72}
@@ -789,7 +928,9 @@ function RewardsCard({ customer, rules, onJoin, onLogin }: { customer: CustomerS
             ) : (
                 <>
                     <p className="font-display text-base leading-snug font-semibold text-balance">
-                        {rules.enabled ? `Earn 1 point for every ₱${rules.spend_per_point}. Join Boundary Rewards.` : 'Create an account to order for delivery or pickup.'}
+                        {rules.enabled
+                            ? `Earn 1 point for every ₱${rules.spend_per_point}. Join ${rewardsName}.`
+                            : 'Create an account to order for delivery or pickup.'}
                     </p>
                     <div className="mt-3 grid grid-cols-2 gap-2">
                         <button type="button" onClick={onJoin} className={action}>
@@ -832,7 +973,14 @@ function FiltersCard({
                 <div className="mt-1.5">
                     {SORTS.map((o) => (
                         <label key={o.value} className="flex h-9 cursor-pointer items-center gap-3 text-[15px]">
-                            <input type="radio" name="menu-sort" value={o.value} checked={sort === o.value} onChange={() => onSort(o.value)} className="peer sr-only" />
+                            <input
+                                type="radio"
+                                name="menu-sort"
+                                value={o.value}
+                                checked={sort === o.value}
+                                onChange={() => onSort(o.value)}
+                                className="peer sr-only"
+                            />
                             <span
                                 className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-shop-muted/60 transition-colors peer-checked:border-shop-ink peer-checked:bg-shop-ink peer-focus-visible:ring-2 peer-focus-visible:ring-shop-accent peer-focus-visible:ring-offset-2 after:h-2 after:w-2 after:rounded-full after:bg-shop-surface after:opacity-0 peer-checked:after:opacity-100"
                                 aria-hidden
@@ -866,7 +1014,19 @@ function FiltersCard({
 }
 
 /** Guests on desktop: a welcome bar pinned to the bottom of the window. */
-function WelcomeBar({ settings, rules, onJoin, onDismiss }: { settings: Settings; rules: PageProps['loyaltyRules']; onJoin: () => void; onDismiss: () => void }) {
+function WelcomeBar({
+    settings,
+    rules,
+    onJoin,
+    onDismiss,
+}: {
+    settings: Settings;
+    rules: PageProps['loyaltyRules'];
+    onJoin: () => void;
+    onDismiss: () => void;
+}) {
+    const logoUrl = useLogoUrl();
+    const rewardsName = useRewardsName();
     const perk = !settings.delivery_enabled
         ? null
         : settings.delivery_fee <= 0
@@ -878,8 +1038,8 @@ function WelcomeBar({ settings, rules, onJoin, onDismiss }: { settings: Settings
 
     return (
         <div className="fixed inset-x-0 bottom-0 z-30 hidden lg:block">
-            <div className="relative flex h-16 items-center justify-center gap-4 rounded-t-2xl bg-shop-navy px-16 text-shop-navy-ink shadow-shop-lg">
-                <img src="/uploads/optimized/logo.webp" alt="" width={40} height={40} className="h-10 w-10 rounded-full bg-white" />
+            <div className="shadow-shop-lg relative flex h-16 items-center justify-center gap-4 rounded-t-2xl bg-shop-navy px-16 text-shop-navy-ink">
+                <img src={logoUrl} alt="" width={40} height={40} className="h-10 w-10 rounded-full bg-white" />
                 <p className="font-display text-[17px] font-semibold">
                     {perk ? (
                         <>
@@ -888,13 +1048,17 @@ function WelcomeBar({ settings, rules, onJoin, onDismiss }: { settings: Settings
                         </>
                     ) : rules.enabled ? (
                         <>
-                            Welcome! Earn <span className={highlight}>points on every order</span> with Boundary Rewards.
+                            Welcome! Earn <span className={highlight}>points on every order</span> with {rewardsName}.
                         </>
                     ) : (
                         'Welcome! Order online for delivery or pickup in Mabinay.'
                     )}
                 </p>
-                <button type="button" onClick={onJoin} className="bc-press h-9 cursor-pointer rounded-lg bg-white px-4 text-sm font-semibold text-shop-navy">
+                <button
+                    type="button"
+                    onClick={onJoin}
+                    className="bc-press h-9 cursor-pointer rounded-lg bg-white px-4 text-sm font-semibold text-shop-navy"
+                >
                     Sign up
                 </button>
                 <button
@@ -911,9 +1075,10 @@ function WelcomeBar({ settings, rules, onJoin, onDismiss }: { settings: Settings
 }
 
 function StoreCard({ store }: { store: PageProps['store'] }) {
+    const branchLabel = useBranchLabel(store.branch?.location);
     return (
         <div className="rounded-2xl bg-shop-surface p-4 ring-1 ring-shop-line">
-            <p className="font-display font-semibold">{store.branch?.name ?? 'Boundary Café – Mabinay'}</p>
+            <p className="font-display font-semibold">{branchLabel}</p>
             <p className="mt-0.5 text-sm text-shop-muted">{store.branch?.address ?? 'Mabinay, Negros Oriental'}</p>
             <ul className="mt-3 space-y-1.5 text-sm">
                 <li className="flex items-center gap-2">
@@ -936,30 +1101,47 @@ function StoreCard({ store }: { store: PageProps['store'] }) {
 }
 
 function RewardsTeaser({ customer, rules, onJoin }: { customer: CustomerSession | null; rules: PageProps['loyaltyRules']; onJoin: () => void }) {
+    const rewardsName = useRewardsName();
     return (
         <section className="relative overflow-hidden rounded-2xl bg-shop-navy p-6 text-shop-navy-ink">
             <div className="relative z-10 max-w-md">
                 <p className="flex items-center gap-2 text-sm font-semibold text-white/80">
-                    <Gift className="h-4 w-4" /> Boundary Rewards
+                    <Gift className="h-4 w-4" /> {rewardsName}
                 </p>
-                <p className="font-display mt-2 text-2xl leading-tight font-bold">1 point for every ₱{rules.spend_per_point}. Delivery, pickup or dine-in.</p>
+                <p className="mt-2 font-display text-2xl leading-tight font-bold">
+                    1 point for every ₱{rules.spend_per_point}. Delivery, pickup or dine-in.
+                </p>
                 <p className="mt-2 text-sm text-white/75">
-                    Use points as cash at checkout{rules.birthday_bonus > 0 ? `, plus ${rules.birthday_bonus} bonus points in your birthday month` : ''}.
+                    Use points as cash at checkout
+                    {rules.birthday_bonus > 0 ? `, plus ${rules.birthday_bonus} bonus points in your birthday month` : ''}.
                 </p>
                 {customer ? (
-                    <Link href="/account/rewards" className="bc-press mt-4 inline-flex h-11 items-center rounded-xl bg-white px-4 text-sm font-semibold text-shop-navy">
+                    <Link
+                        href="/account/rewards"
+                        className="bc-press mt-4 inline-flex h-11 items-center rounded-xl bg-white px-4 text-sm font-semibold text-shop-navy"
+                    >
                         {customer.loyalty_points.toLocaleString()} points · open my card
                     </Link>
                 ) : (
-                    <button type="button" onClick={onJoin} className="bc-press mt-4 inline-flex h-11 cursor-pointer items-center rounded-xl bg-shop-accent px-4 text-sm font-semibold text-shop-on-accent">
+                    <button
+                        type="button"
+                        onClick={onJoin}
+                        className="bc-press mt-4 inline-flex h-11 cursor-pointer items-center rounded-xl bg-shop-accent px-4 text-sm font-semibold text-shop-on-accent"
+                    >
                         Join free
                     </button>
                 )}
             </div>
             <svg viewBox="0 0 320 40" className="pointer-events-none absolute -right-10 bottom-6 w-[70%] opacity-40" aria-hidden>
-                <path d="M4 30 C 34 30, 40 8, 74 10 S 112 34, 146 26 S 196 4, 236 14 S 280 34, 316 18" fill="none" stroke="#ff6a1f" strokeWidth="2.5" strokeDasharray="1.5 6" strokeLinecap="round" />
+                <path
+                    d="M4 30 C 34 30, 40 8, 74 10 S 112 34, 146 26 S 196 4, 236 14 S 280 34, 316 18"
+                    fill="none"
+                    stroke="#ff6a1f"
+                    strokeWidth="2.5"
+                    strokeDasharray="1.5 6"
+                    strokeLinecap="round"
+                />
             </svg>
         </section>
     );
 }
-

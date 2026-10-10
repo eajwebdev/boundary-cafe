@@ -84,3 +84,13 @@ export interface CustomerOption {
     customer_number: string;
     loyalty_points: number;
 }
+
+// Helper to identify weighted / per-kg products (Rice, Feeds, Grains, etc.)
+export const isWeightedKgItem = (unit?: string | null, name?: string | null): boolean => {
+    const u = (unit || '').trim().toLowerCase();
+    if (u === 'kg' || u === 'kilo' || u === 'kilogram') return true;
+    if (u === 'sack' || u === 'bag' || u === 'pc' || u === 'pack' || u === 'can' || u === 'bottle' || u === 'box') return false;
+    const n = (name || '').toLowerCase();
+    if (n.includes('sack') || n.includes('bag') || n.includes('pack') || n.includes('can') || n.includes('bottle')) return false;
+    return n.includes('rice') || n.includes('feed') || n.includes('palay') || n.includes('corn') || n.includes('grain');
+};

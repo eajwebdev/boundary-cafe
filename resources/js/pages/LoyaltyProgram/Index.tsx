@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 
 import { PageHeader, Panel, Stat, StatStrip } from '@/components/AdminKit';
 import { Switch } from '@/components/ui/switch';
+import { useRewardsName } from '@/hooks/use-business-name';
 import AdminLayout from '@/layouts/AdminLayout';
 import { cn } from '@/lib/utils';
 
@@ -43,6 +44,7 @@ const inputCls =
 const money = (n: number) => '₱' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function LoyaltyProgram({ rules, stats, top_members, flash }: Props) {
+    const rewardsName = useRewardsName();
     const form = useForm({ ...rules });
     const d = form.data;
     const errors = form.errors as Record<string, string>;
@@ -68,7 +70,7 @@ export default function LoyaltyProgram({ rules, stats, top_members, flash }: Pro
             >
                 {/* ── Header: title, programme switch, save ─────────────── */}
                 <PageHeader
-                    title="Boundary Rewards"
+                    title={rewardsName}
                     subtitle="Points for counter, dine-in and online orders — earned on completed sales, reversed on voids."
                 >
                     <label className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-semibold">

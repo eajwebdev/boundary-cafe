@@ -33,8 +33,8 @@ class SaleService
      * Charge a cart at the POS (optionally settling a pending table order).
      *
      * $data keys: items[{id, qty, variant_id}], payment_method, payment_amount,
-     * customer_id, customer_name, discount_percent, promo_id, loyalty_points,
-     * table_order_id.
+     * customer_id, customer_name, discount_percent, discount_type ('senior_pwd' | 'manual'), promo_id,
+     * loyalty_points, table_order_id.
      *
      * @return array{sale: Sale, result: array}
      */
@@ -93,7 +93,7 @@ class SaleService
 
             $notes = implode(' | ', array_filter([
                 $tableOrder ? 'Table '.$tableOrder->table?->table_number : null,
-                $discPct > 0 ? "Discount {$discPct}% (−₱".number_format($discAmt, 2).')' : null,
+                $discPct > 0 ? (($data['discount_type'] ?? null) === 'senior_pwd' ? 'Senior/PWD' : 'Discount')." {$discPct}% (−₱".number_format($discAmt, 2).')' : null,
                 $promoAmt > 0 ? "Promo {$promoLabel}: −₱".number_format($promoAmt, 2) : null,
                 $vatAmt > 0 ? "VAT {$vatRate}%: ₱".number_format($vatAmt, 2) : null,
                 $serviceChargeAmt > 0 ? 'Service charge: ₱'.number_format($serviceChargeAmt, 2) : null,
@@ -115,7 +115,11 @@ class SaleService
                 'payment_status' => 'paid',
                 'change_amount' => $change,
                 'discount_amount' => $discAmt + $promoAmt,
+                'manual_discount' => $discAmt,
+                'promo_discount' => $promoAmt,
+                'discount_type' => $discAmt > 0 ? (($data['discount_type'] ?? null) === 'senior_pwd' ? 'senior_pwd' : 'manual') : null,
                 'vat_amount' => $vatAmt,
+                'service_charge' => $serviceChargeAmt,
                 'loyalty_points_earned' => $loyalty['points_to_earn'],
                 'loyalty_points_redeemed' => $loyalty['points_to_redeem'],
                 'loyalty_discount' => $loyalty['discount'],
@@ -223,6 +227,7 @@ class SaleService
                 'payment_status' => 'paid',
                 'change_amount' => 0,
                 'discount_amount' => $order->promo_discount,
+                'promo_discount' => $order->promo_discount,
                 'delivery_fee' => $order->delivery_fee,
                 'vat_amount' => $order->vat_amount,
                 'loyalty_points_earned' => $order->loyalty_points_to_earn,

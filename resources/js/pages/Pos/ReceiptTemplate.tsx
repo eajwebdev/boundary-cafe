@@ -4,6 +4,7 @@ import { usePage } from '@inertiajs/react';
 import { Printer, Download } from 'lucide-react';
 import { useRef } from 'react';
 import { Button } from '@/components/ui/button';
+import { useLogoUrl } from '@/hooks/use-logo';
 import { fmtDate } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
@@ -89,7 +90,11 @@ const businessFooter: Record<string, string> = {
 export default function ReceiptTemplate({ sale, currency = '₱', showActions = true, compact = false, className }: Props) {
     const printRef = useRef<HTMLDivElement>(null);
     const settings =
-        usePage<{ settings?: { receipt_footer?: string; receipt_header?: string; show_cashier_on_receipt?: boolean } | null }>().props.settings ?? {};
+        usePage<{
+            settings?: { receipt_footer?: string; receipt_header?: string; show_cashier_on_receipt?: boolean; show_logo_on_receipt?: boolean } | null;
+        }>().props.settings ?? {};
+    const logoUrl = useLogoUrl();
+    const showLogo = settings.show_logo_on_receipt ?? true;
 
     const subtotal = sale.items.reduce((s, i) => s + i.price * i.quantity, 0);
     const isVoided = sale.status === 'voided';
@@ -98,6 +103,8 @@ export default function ReceiptTemplate({ sale, currency = '₱', showActions = 
     const header = settings.receipt_header || '';
     const paid = sale.amount_paid ?? sale.payment_amount;
     const balance = sale.balance_due ?? Math.max(0, sale.total - paid);
+    /** What the customer handed over: the amount applied to the sale plus any change given back. */
+    const tendered = paid + Math.max(0, sale.change_amount ?? 0);
 
     // ── Print ──────────────────────────────────────────────────────
     const handlePrint = () => {
@@ -124,6 +131,7 @@ export default function ReceiptTemplate({ sale, currency = '₱', showActions = 
                 .small   { font-size: 10px; }
                 .muted   { color: #555; }
                 .divider { border-top: 1px dashed #888; margin: 6px 0; }
+                .logo    { display: block; width: 56px; height: 56px; object-fit: contain; margin: 0 auto 4px; }
                 .row     { display: flex; justify-content: space-between; gap: 8px; padding: 1px 0; }
                 .row .label { flex: 1; min-width: 0; }
                 .row .val   { flex-shrink: 0; text-align: right; }
@@ -173,7 +181,7 @@ export default function ReceiptTemplate({ sale, currency = '₱', showActions = 
             lines.push(pad('Discount', `-${fmtMoney(sale.discount_amount, currency)}`));
         }
         lines.push(pad('TOTAL', fmtMoney(sale.total, currency)));
-        lines.push(pad(`Payment (${methodLabel[sale.payment_method] ?? sale.payment_method})`, fmtMoney(paid, currency)));
+        lines.push(pad(`Payment (${methodLabel[sale.payment_method] ?? sale.payment_method})`, fmtMoney(tendered, currency)));
         if (balance > 0) lines.push(pad('Balance', fmtMoney(balance, currency)));
         if (sale.due_date) lines.push(`Due: ${sale.due_date}`);
         if (sale.change_amount > 0) lines.push(pad('Change', fmtMoney(sale.change_amount, currency)));
@@ -195,6 +203,7 @@ export default function ReceiptTemplate({ sale, currency = '₱', showActions = 
             <div ref={printRef} className={cn('space-y-0 font-mono text-xs', compact ? 'text-[11px]' : '')}>
                 {/* Store header */}
                 <div className="center space-y-0.5 pb-3 text-center">
+                    {showLogo && <img src={logoUrl} alt="" className="logo mx-auto mb-1 h-14 w-14 object-contain" />}
                     {sale.branch_name && <p className="bold text-sm font-bold text-foreground">{sale.branch_name}</p>}
                     {sale.branch_code && <p className="small text-[10px] text-muted-foreground">{sale.branch_code}</p>}
                     {header && <p className="small text-[10px] text-muted-foreground">{header}</p>}
@@ -283,7 +292,7 @@ export default function ReceiptTemplate({ sale, currency = '₱', showActions = 
                     </div>
                     <div className="flex justify-between text-[11px]">
                         <span className="text-muted-foreground">Payment ({methodLabel[sale.payment_method] ?? sale.payment_method})</span>
-                        <span className="text-foreground tabular-nums">{fmtMoney(paid, currency)}</span>
+                        <span className="text-foreground tabular-nums">{fmtMoney(tendered, currency)}</span>
                     </div>
                     {balance > 0 && (
                         <div className="flex justify-between text-[11px] font-semibold text-amber-600 dark:text-amber-400">

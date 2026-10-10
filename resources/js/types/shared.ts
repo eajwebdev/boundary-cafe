@@ -5,6 +5,7 @@
 
 export interface SharedApp {
     name: string;
+    tagline: string;
     env: string;
     currency: string;
     ai_chat_enabled: boolean;
@@ -16,6 +17,8 @@ export interface SharedApp {
 export interface SharedBranch {
     id: number;
     name: string;
+    /** The place part of the name without the brand prefix, e.g. "Tagukon". */
+    location: string;
     code: string;
     business_type: string;
     is_active: boolean;

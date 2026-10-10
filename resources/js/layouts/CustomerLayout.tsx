@@ -1,6 +1,6 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Gift, Home, LogOut, ReceiptText, User } from 'lucide-react';
-import type { ReactNode} from 'react';
+import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -8,6 +8,8 @@ import { AuthTabs, LoginForm, RegisterForm } from '@/components/storefront/AuthF
 import { useIsDesktop } from '@/components/storefront/ui';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
+import { useBusinessName, useRewardsName } from '@/hooks/use-business-name';
+import { useLogoUrl } from '@/hooks/use-logo';
 import type { CustomerSession } from '@/lib/customer';
 import { cn } from '@/lib/utils';
 
@@ -49,6 +51,13 @@ const NAV = [
 ] as const;
 
 export default function CustomerLayout({ children, title, headerSlot, headerEnd, subHeader, topStrip, hideBottomNav, wide, barangays }: Props) {
+    const logoUrl = useLogoUrl();
+    const businessName = useBusinessName();
+    const rewardsName = useRewardsName();
+    // Wordmark: the last word of the business name takes the accent colour ("EAJ <Cafe>").
+    const nameWords = businessName.trim().split(/\s+/);
+    const nameTail = nameWords.pop() ?? '';
+    const nameLead = nameWords.join(' ');
     const page = usePage<{
         customer: CustomerSession | null;
         flash?: { success?: string | null; error?: string | null };
@@ -99,10 +108,10 @@ export default function CustomerLayout({ children, title, headerSlot, headerEnd,
             )}
         </div>
     );
-    const authTitle = mode === 'login' ? 'Welcome back' : 'Join Boundary Café';
+    const authTitle = mode === 'login' ? 'Welcome back' : `Join ${businessName}`;
     const authDesc =
         mode === 'login'
-            ? 'Log in to order, follow your delivery and collect Boundary Rewards.'
+            ? `Log in to order, follow your delivery and collect ${rewardsName}.`
             : 'Order for delivery or pickup anywhere in Mabinay, and earn points on every order.';
 
     return (
@@ -112,19 +121,32 @@ export default function CustomerLayout({ children, title, headerSlot, headerEnd,
                 <meta name="theme-color" content="#111b40" media="(prefers-color-scheme: dark)" />
             </Head>
             <div className="bc-shop min-h-dvh bg-shop-bg">
-                <a href="#shop-main" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-xl focus:bg-shop-surface focus:px-4 focus:py-2">
+                <a
+                    href="#shop-main"
+                    className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-xl focus:bg-shop-surface focus:px-4 focus:py-2"
+                >
                     Skip to content
                 </a>
 
                 {topStrip}
 
                 {/* ── Header ─────────────────────────────────────────── */}
-                <header id="shop-header" className="sticky top-0 z-40 border-b border-shop-line bg-shop-surface pt-[env(safe-area-inset-top)] shadow-shop-sm">
+                <header
+                    id="shop-header"
+                    className="shadow-shop-sm sticky top-0 z-40 border-b border-shop-line bg-shop-surface pt-[env(safe-area-inset-top)]"
+                >
                     <div className={cn('mx-auto flex h-14 items-center gap-2 px-4 lg:h-16 lg:gap-4 lg:px-6', maxW)}>
-                        <Link href="/" className="bc-press flex min-w-0 items-center gap-2.5 rounded-full" aria-label="Boundary Café — menu">
-                            <img src="/uploads/optimized/logo.webp" alt="" width={40} height={40} className="h-9 w-9 shrink-0 rounded-full ring-1 ring-shop-line lg:h-10 lg:w-10" />
-                            <span className="font-display truncate text-lg leading-none font-bold">
-                                Boundary <span className="text-shop-accent-ink">Café</span>
+                        <Link href="/" className="bc-press flex min-w-0 items-center gap-2.5 rounded-full" aria-label={`${businessName} — menu`}>
+                            <img
+                                src={logoUrl}
+                                alt=""
+                                width={40}
+                                height={40}
+                                className="h-9 w-9 shrink-0 rounded-full ring-1 ring-shop-line lg:h-10 lg:w-10"
+                            />
+                            <span className="truncate font-display text-lg leading-none font-bold">
+                                {nameLead && `${nameLead} `}
+                                <span className="text-shop-accent-ink">{nameTail}</span>
                             </span>
                         </Link>
 
@@ -153,7 +175,7 @@ export default function CustomerLayout({ children, title, headerSlot, headerEnd,
                                 <Link
                                     href="/account/rewards"
                                     className="bc-press flex h-9 items-center gap-1.5 rounded-full bg-shop-navy px-3 text-sm font-semibold text-shop-navy-ink lg:h-10"
-                                    aria-label={`${customer.loyalty_points} Boundary Rewards points`}
+                                    aria-label={`${customer.loyalty_points} ${rewardsName} points`}
                                 >
                                     <Gift className="h-4 w-4" />
                                     <span className="tabular-nums">{customer.loyalty_points.toLocaleString()}</span>
@@ -225,7 +247,9 @@ export default function CustomerLayout({ children, title, headerSlot, headerEnd,
                                         >
                                             <n.icon className="h-5.5 w-5.5" strokeWidth={active ? 2.4 : 1.9} />
                                         </span>
-                                        <span className={cn('text-[11px] font-semibold', active ? 'text-shop-ink' : 'text-shop-muted')}>{n.label}</span>
+                                        <span className={cn('text-[11px] font-semibold', active ? 'text-shop-ink' : 'text-shop-muted')}>
+                                            {n.label}
+                                        </span>
                                     </>
                                 );
                                 const cls = 'bc-press flex cursor-pointer flex-col items-center justify-center gap-0.5';
@@ -255,7 +279,10 @@ export default function CustomerLayout({ children, title, headerSlot, headerEnd,
                 </Dialog>
             ) : (
                 <Sheet open={authOpen} onOpenChange={setAuthOpen}>
-                    <SheetContent side="bottom" className="bc-shop max-h-[94dvh] gap-0 overflow-y-auto rounded-t-[28px] border-shop-line bg-shop-surface px-5 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+                    <SheetContent
+                        side="bottom"
+                        className="bc-shop max-h-[94dvh] gap-0 overflow-y-auto rounded-t-[28px] border-shop-line bg-shop-surface px-5 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
+                    >
                         <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-shop-line" aria-hidden />
                         <SheetTitle className="font-display text-2xl font-bold">{authTitle}</SheetTitle>
                         <SheetDescription className="mt-1 mb-5 text-shop-muted">{authDesc}</SheetDescription>

@@ -12,7 +12,6 @@ use App\Models\Sale;
 use App\Models\SystemSetting;
 use App\Services\LoyaltyService;
 use App\Services\SaleService;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -51,6 +50,7 @@ class PosController extends Controller
         }
 
         $session = null;
+        $staleSession = null;
         if ($branchId) {
             $sessionQuery = CashSession::where('branch_id', $branchId)
                 ->where('user_id', $user->id)
@@ -63,6 +63,17 @@ class PosController extends Controller
             }
 
             $session = $sessionQuery->latest('opened_at')->first();
+
+            // A cashier's session from an earlier day that was never closed: it must be counted and
+            // closed before today's can be opened (one open session per cashier).
+            if (! $session && $user->isCashier()) {
+                $staleSession = CashSession::where('branch_id', $branchId)
+                    ->where('user_id', $user->id)
+                    ->open()
+                    ->whereDate('opened_at', '<', today())
+                    ->latest('opened_at')
+                    ->first();
+            }
 
             if (! $session && ! $user->isCashier()) {
                 $session = CashSession::create([
@@ -180,8 +191,17 @@ class PosController extends Controller
                 'id' => $session->id, 'opening_cash' => (float) $session->opening_cash,
                 'opened_at' => $session->opened_at?->toIso8601String(), 'status' => $session->status,
             ] : null,
+            'stale_session' => $staleSession ? [
+                'id' => $staleSession->id,
+                'session_number' => $staleSession->session_number,
+                'opened_at' => $staleSession->opened_at?->toIso8601String(),
+                'opening_cash' => (float) $staleSession->opening_cash,
+                'expected_cash' => $staleSession->computeExpectedCash(),
+                'sale_count' => $staleSession->sales()->where('status', '!=', 'voided')->count(),
+                'require_count' => (bool) SystemSetting::get('cash.require_count_on_close', $staleSession->branch_id, true),
+            ] : null,
             'branch' => $activeBranch ? [
-                'id' => $activeBranch->id, 'name' => $activeBranch->name,
+                'id' => $activeBranch->id, 'name' => $activeBranch->display_name,
                 'business_type' => $activeBranch->business_type, 'feature_flags' => $activeBranch->feature_flags,
             ] : null,
             'preferred_layout' => $user->pos_layout ?? 'grid',
@@ -238,6 +258,7 @@ class PosController extends Controller
             'customer_id' => ['nullable', 'exists:customers,id'],
             'customer_name' => ['nullable', 'string', 'max:80'],
             'discount_percent' => ['nullable', 'numeric', 'between:0,100'],
+            'discount_type' => ['nullable', 'in:senior_pwd,manual'],
             'promo_id' => ['nullable', 'exists:promos,id'],
             'cash_session_id' => ['nullable', 'exists:cash_sessions,id'],
             'loyalty_points' => ['nullable', 'integer', 'min:0'],
@@ -327,7 +348,7 @@ class PosController extends Controller
             ],
             'branch' => $branch ? [
                 'id' => $branch->id,
-                'name' => $branch->name,
+                'name' => $branch->display_name,
                 'business_type' => $branch->business_type,
             ] : null,
             'is_admin' => $isAdmin,

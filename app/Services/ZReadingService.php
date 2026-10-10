@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ActivityLog;
 use App\Models\CashSession;
 use App\Models\CustomerPayment;
+use App\Models\Expense;
 use App\Models\Sale;
 use App\Models\SystemSetting;
 use App\Models\User;
@@ -36,7 +37,11 @@ class ZReadingService
     public function summarize(?int $branchId, string $date): array
     {
         $sales = Sale::query()
-            ->with(['items:id,sale_id,product_id,quantity,total', 'items.product:id,is_taxable'])
+            ->with([
+                'items:id,sale_id,product_id,product_variant_id,is_bundle_component,quantity,total',
+                'items.product:id,name,is_taxable,category_id',
+                'items.product.category:id,name',
+            ])
             ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
             ->whereDate('created_at', $date)
             ->orderBy('id')
@@ -48,6 +53,8 @@ class ZReadingService
         $netSales = round((float) $valid->sum('total'), 2);
         $discountTotal = round((float) $valid->sum('discount_amount'), 2);
         $loyaltyDiscountTotal = round((float) $valid->sum('loyalty_discount'), 2);
+        $seniorPwdDiscount = round((float) $valid->where('discount_type', 'senior_pwd')->sum('manual_discount'), 2);
+        $promoDiscount = round((float) $valid->sum('promo_discount'), 2);
 
         $collections = CustomerPayment::query()
             ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
@@ -61,9 +68,14 @@ class ZReadingService
             'items_sold' => round((float) $valid->sum(fn (Sale $sale) => $sale->items->sum('quantity')), 2),
             'gross_sales' => round($netSales + $discountTotal + $loyaltyDiscountTotal, 2),
             'discount_total' => $discountTotal,
+            'senior_pwd_discount' => $seniorPwdDiscount,
+            'promo_discount' => $promoDiscount,
+            // Whatever is neither Senior/PWD nor promo (older sales only stored the combined discount).
+            'manual_discount' => round(max(0, $discountTotal - $seniorPwdDiscount - $promoDiscount), 2),
             'loyalty_discount_total' => $loyaltyDiscountTotal,
             'net_sales' => $netSales,
             'delivery_fees' => round((float) $valid->sum('delivery_fee'), 2),
+            'service_charge_total' => round((float) $valid->sum('service_charge'), 2),
             'unpaid_total' => round((float) $valid->sum('balance_due'), 2),
             'void_count' => $voided->count(),
             'void_amount' => round((float) $voided->sum('total'), 2),
@@ -71,12 +83,17 @@ class ZReadingService
             'collections_total' => round((float) (clone $collections)->sum('amount'), 2),
             'collections_count' => (clone $collections)->count(),
             'opening_cash' => round((float) collect($sessions)->sum('opening_cash'), 2),
+            'cash_sales' => round((float) collect($sessions)->sum('cash_sales'), 2),
+            'cash_paid_out' => round((float) collect($sessions)->sum('paid_out'), 2),
             'expected_cash' => round((float) collect($sessions)->sum('expected_cash'), 2),
             'counted_cash' => round((float) collect($sessions)->sum('counted_cash'), 2),
             'over_short' => round((float) collect($sessions)->sum('over_short'), 2),
             'payments' => $this->paymentBreakdown($valid),
             'channels' => $this->channelBreakdown($valid),
             'sessions' => $sessions,
+            'payouts' => $this->payouts($sessions),
+            'top_items' => $this->topItems($valid),
+            'categories' => $this->categoryBreakdown($valid),
         ];
     }
 
@@ -223,10 +240,81 @@ class ZReadingService
                 'opened_at' => $session->opened_at?->toIso8601String(),
                 'closed_at' => $session->closed_at?->toIso8601String(),
                 'opening_cash' => (float) $session->opening_cash,
+                'cash_sales' => round($session->cash_sales_total, 2),
+                'paid_out' => round($session->petty_cash_paid, 2),
                 'expected_cash' => (float) ($session->expected_cash ?? $session->computeExpectedCash()),
                 'counted_cash' => (float) ($session->counted_cash ?? 0),
                 'over_short' => (float) ($session->over_short ?? 0),
             ])
+            ->all();
+    }
+
+    /**
+     * Cash taken out of the drawers that day (petty cash expenses), so the drawer math adds up on paper.
+     *
+     * @param  list<array<string, mixed>>  $sessions
+     * @return list<array{time: string|null, description: string, category: string|null, cashier: string|null, amount: float}>
+     */
+    private function payouts(array $sessions): array
+    {
+        $sessionIds = array_column($sessions, 'id');
+        if ($sessionIds === []) {
+            return [];
+        }
+
+        return Expense::with(['category:id,name', 'user:id,fname,lname'])
+            ->whereIn('cash_session_id', $sessionIds)
+            ->whereHas('pettyCashVoucher')
+            ->orderBy('created_at')
+            ->get()
+            ->map(fn (Expense $expense) => [
+                'time' => $expense->created_at?->toIso8601String(),
+                'description' => $expense->description ?: ($expense->category?->name ?? 'Expense'),
+                'category' => $expense->category?->name,
+                'cashier' => $expense->user?->full_name,
+                'amount' => round((float) $expense->amount, 2),
+            ])
+            ->all();
+    }
+
+    /**
+     * Best sellers by sales amount (bundle components are counted under their bundle).
+     *
+     * @param  Collection<int, Sale>  $sales
+     * @return list<array{name: string, quantity: float, amount: float}>
+     */
+    private function topItems(Collection $sales, int $limit = 10): array
+    {
+        return $sales->flatMap(fn (Sale $sale) => $sale->items)
+            ->reject(fn ($item) => (bool) $item->is_bundle_component)
+            ->groupBy('product_id')
+            ->map(fn (Collection $lines) => [
+                'name' => $lines->first()->product?->name ?? 'Item',
+                'quantity' => round((float) $lines->sum('quantity'), 2),
+                'amount' => round((float) $lines->sum('total'), 2),
+            ])
+            ->sortByDesc('amount')
+            ->take($limit)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  Collection<int, Sale>  $sales
+     * @return list<array{category: string, quantity: float, amount: float}>
+     */
+    private function categoryBreakdown(Collection $sales): array
+    {
+        return $sales->flatMap(fn (Sale $sale) => $sale->items)
+            ->reject(fn ($item) => (bool) $item->is_bundle_component)
+            ->groupBy(fn ($item) => $item->product?->category?->name ?? 'Uncategorized')
+            ->map(fn (Collection $lines, string $category) => [
+                'category' => $category,
+                'quantity' => round((float) $lines->sum('quantity'), 2),
+                'amount' => round((float) $lines->sum('total'), 2),
+            ])
+            ->sortByDesc('amount')
+            ->values()
             ->all();
     }
 

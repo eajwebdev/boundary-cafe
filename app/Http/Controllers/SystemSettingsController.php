@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\MenuHelper;
+use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\SystemSetting;
-use App\Models\ActivityLog;
-use App\Helpers\MenuHelper;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -53,14 +53,20 @@ class SystemSettingsController extends Controller
         'quotation',    // read by the public quotation pages, which have no branch
     ];
 
+    // Single keys that are system-wide: saved globally even from a branch's settings view.
+    private const GLOBAL_ONLY_KEYS = [
+        'general.color_theme',  // one palette for staff screens, POS, waiter app and the online store
+        'general.logo',         // one business logo everywhere, including the login page and online store
+    ];
+
     // ── Index ─────────────────────────────────────────────────────────────────
 
     public function index(Request $request): Response
     {
-        $user     = auth()->user();
+        $user = auth()->user();
         $branchId = $request->integer('branch_id') ?: null;
-        $isSuper  = $user->isSuperAdmin();
-        $isAdmin  = $user->isAdmin(); // super OR administrator
+        $isSuper = $user->isSuperAdmin();
+        $isAdmin = $user->isAdmin(); // super OR administrator
 
         // Super admin:    can view global scope AND any branch
         // Administrator:   can view global scope (filtered to ADMIN_GLOBAL_GROUPS)
@@ -93,35 +99,43 @@ class SystemSettingsController extends Controller
 
             // Modules group is handled by the dedicated module-toggles UI — never include here.
             // Also guard by key prefix for old rows that were saved with group = null.
-            if (in_array($group, self::SUPER_ADMIN_ONLY_GROUPS) || str_starts_with($key, 'modules.')) continue;
+            if (in_array($group, self::SUPER_ADMIN_ONLY_GROUPS) || str_starts_with($key, 'modules.')) {
+                continue;
+            }
 
             // Online ordering (menu 43) and loyalty (menu 44) have their own dedicated pages.
-            if (in_array($group, ['online', 'loyalty'], true)) continue;
+            if (in_array($group, ['online', 'loyalty'], true)) {
+                continue;
+            }
 
-            if ($branchId && in_array($group, self::GLOBAL_ONLY_GROUPS, true)) continue;
+            if ($branchId && in_array($group, self::GLOBAL_ONLY_GROUPS, true)) {
+                continue;
+            }
 
             // When an admin is in global scope (no branch selected), only show
             // the groups they are allowed to configure globally
-            if (! $isSuper && ! $branchId && ! in_array($group, self::ADMIN_GLOBAL_GROUPS)) continue;
+            if (! $isSuper && ! $branchId && ! in_array($group, self::ADMIN_GLOBAL_GROUPS)) {
+                continue;
+            }
 
-            $override = $branchRows->get($key);
-            $def      = $defaults->get($key, []);
+            $override = in_array($key, self::GLOBAL_ONLY_KEYS, true) ? null : $branchRows->get($key);
+            $def = $defaults->get($key, []);
 
             $groups[$group][$key] = [
-                'key'          => $key,
-                'label'        => $row->label        ?? ($def['label']       ?? $key),
-                'description'  => $row->description  ?? ($def['description'] ?? null),
-                'type'         => $row->type          ?? ($def['type']        ?? 'string'),
-                'options'      => $row->options
+                'key' => $key,
+                'label' => $row->label ?? ($def['label'] ?? $key),
+                'description' => $row->description ?? ($def['description'] ?? null),
+                'type' => $row->type ?? ($def['type'] ?? 'string'),
+                'options' => $row->options
                                     ? json_decode($row->options, true)
                                     : (isset($def['options']) ? json_decode($def['options'], true) : null),
-                'is_readonly'  => $row->is_readonly,
+                'is_readonly' => $row->is_readonly,
                 // Super-admin-only keys are read-only for admins even if shown
-                'super_only'   => in_array($key, self::SUPER_ADMIN_ONLY_KEYS)
+                'super_only' => in_array($key, self::SUPER_ADMIN_ONLY_KEYS)
                                 || in_array($group, self::SUPER_ADMIN_ONLY_GROUPS),
                 'global_value' => $row->value,
-                'value'        => $override?->value ?? $row->value,
-                'is_overridden'=> $override !== null,
+                'value' => $override?->value ?? $row->value,
+                'is_overridden' => $override !== null,
             ];
         }
 
@@ -129,17 +143,17 @@ class SystemSettingsController extends Controller
         $moduleSettings = $this->getModuleSettings();
 
         return Inertia::render('Settings/Index', [
-            'settings'          => $groups,
-            'module_settings'   => $moduleSettings,
+            'settings' => $groups,
+            'module_settings' => $moduleSettings,
             // Both super admin AND administrator can pick branches AND the global scope.
-            'branches'          => $isSuper || $user->isAdministrator()
-                ? Branch::orderBy('name')->get(['id','name','code','business_type'])
+            'branches' => $isSuper || $user->isAdministrator()
+                ? Branch::orderBy('name')->get(['id', 'name', 'code', 'business_type'])
                 : null,
-            'active_branch_id'  => $branchId,
-            'is_super_admin'    => $isSuper,
-            'is_administrator'  => $user->isAdministrator(),
+            'active_branch_id' => $branchId,
+            'is_super_admin' => $isSuper,
+            'is_administrator' => $user->isAdministrator(),
             // Pass grouped menus so the UI can render feature flags for super admin and administrator
-            'menu_groups'       => ($isSuper || $user->isAdministrator()) ? MenuHelper::grouped() : [],
+            'menu_groups' => ($isSuper || $user->isAdministrator()) ? MenuHelper::grouped() : [],
         ]);
     }
 
@@ -147,10 +161,10 @@ class SystemSettingsController extends Controller
 
     public function save(Request $request): RedirectResponse
     {
-        $user         = auth()->user();
-        $branchId     = $request->integer('branch_id') ?: null;
-        $isSuper      = $user->isSuperAdmin();
-        $values       = $request->input('settings', []);
+        $user = auth()->user();
+        $branchId = $request->integer('branch_id') ?: null;
+        $isSuper = $user->isSuperAdmin();
+        $values = $request->input('settings', []);
         $enabledMenus = $request->input('enabled_menus');
 
         if ((empty($values) || ! is_array($values)) && $enabledMenus === null) {
@@ -168,55 +182,74 @@ class SystemSettingsController extends Controller
             ->get()
             ->keyBy('key');
 
-        $saved   = 0;
+        $saved = 0;
         $changed = [];
 
         foreach ($values as $key => $rawValue) {
             $def = $definitions->get($key);
-            if (! $def)             continue;
-            if ($def->is_readonly)  continue;
-            if ($branchId && in_array($def->group, self::GLOBAL_ONLY_GROUPS, true)) continue;
+            if (! $def) {
+                continue;
+            }
+            if ($def->is_readonly) {
+                continue;
+            }
+            if ($branchId && in_array($def->group, self::GLOBAL_ONLY_GROUPS, true)) {
+                continue;
+            }
 
             // Non-super admins: block modules group and super-admin-only keys
             if (! $isSuper) {
                 $group = explode('.', $key)[0];
-                if (in_array($group, self::SUPER_ADMIN_ONLY_GROUPS)) continue;
-                if (in_array($key,   self::SUPER_ADMIN_ONLY_KEYS))   continue;
+                if (in_array($group, self::SUPER_ADMIN_ONLY_GROUPS)) {
+                    continue;
+                }
+                if (in_array($key, self::SUPER_ADMIN_ONLY_KEYS)) {
+                    continue;
+                }
                 // When saving global scope, admin may only touch allowed groups
-                if (! $branchId && ! in_array($group, self::ADMIN_GLOBAL_GROUPS)) continue;
+                if (! $branchId && ! in_array($group, self::ADMIN_GLOBAL_GROUPS)) {
+                    continue;
+                }
             }
 
             $value = match ($def->type) {
                 'boolean' => filter_var($rawValue, FILTER_VALIDATE_BOOLEAN) ? 'true' : 'false',
-                'integer' => (string) (int)   $rawValue,
+                'integer' => (string) (int) $rawValue,
                 'decimal' => (string) (float) $rawValue,
-                default    => (string) ($rawValue ?? ''),
+                default => (string) ($rawValue ?? ''),
             };
 
+            $scope = in_array($key, self::GLOBAL_ONLY_KEYS, true) ? null : $branchId;
+
             $existing = SystemSetting::where('key', $key)
-                ->where('branch_id', $branchId)
+                ->where('branch_id', $scope)
                 ->first();
 
             $oldValue = $existing?->value ?? $def->value;
 
             if ($oldValue !== $value) {
-                SystemSetting::set($key, $value, $branchId);
+                SystemSetting::set($key, $value, $scope);
                 $changed[$key] = ['from' => $oldValue, 'to' => $value];
                 $saved++;
+            }
+
+            if ($scope === null && in_array($key, self::GLOBAL_ONLY_KEYS, true)) {
+                // Branch rows of a system-wide key are never read; drop any left from older saves.
+                SystemSetting::where('key', $key)->whereNotNull('branch_id')->get()->each->delete();
             }
         }
 
         if ($saved > 0) {
             ActivityLog::create([
-                'user_id'      => auth()->id(),
-                'action'       => 'settings_saved',
+                'user_id' => auth()->id(),
+                'action' => 'settings_saved',
                 'subject_type' => SystemSetting::class,
-                'subject_id'   => 0,
-                'properties'   => [
+                'subject_id' => 0,
+                'properties' => [
                     'branch_id' => $branchId,
-                    'scope'     => $branchId ? "branch:{$branchId}" : 'global',
-                    'changed'   => $changed,
-                    'ip'        => $request->ip(),
+                    'scope' => $branchId ? "branch:{$branchId}" : 'global',
+                    'changed' => $changed,
+                    'ip' => $request->ip(),
                 ],
             ]);
         }
@@ -248,13 +281,13 @@ class SystemSettingsController extends Controller
 
     private function applyModuleSettings(array $enabled, ?string $ip): void
     {
-        $allIds     = array_keys(MenuHelper::all());
+        $allIds = array_keys(MenuHelper::all());
         $menuLabels = MenuHelper::all();
-        $changed    = [];
+        $changed = [];
 
         foreach ($allIds as $id) {
-            $idStr     = (string) $id;
-            $key       = "modules.menu_{$idStr}";
+            $idStr = (string) $id;
+            $key = "modules.menu_{$idStr}";
             $isEnabled = in_array($idStr, array_map('strval', $enabled));
             $isCurrentlyEnabled = SystemSetting::isModuleEnabled($idStr);
 
@@ -263,10 +296,10 @@ class SystemSettingsController extends Controller
                 SystemSetting::updateOrCreate(
                     ['key' => $key, 'branch_id' => null],
                     [
-                        'value'  => $new,
-                        'group'  => 'modules',
-                        'type'   => 'boolean',
-                        'label'  => $menuLabels[$id] ?? $key,
+                        'value' => $new,
+                        'group' => 'modules',
+                        'type' => 'boolean',
+                        'label' => $menuLabels[$id] ?? $key,
                     ]
                 );
                 $changed[$idStr] = $new;
@@ -275,13 +308,13 @@ class SystemSettingsController extends Controller
 
         SystemSetting::flushCache(null);
 
-        if (!empty($changed)) {
+        if (! empty($changed)) {
             ActivityLog::create([
-                'user_id'      => auth()->id(),
-                'action'       => 'modules_updated',
+                'user_id' => auth()->id(),
+                'action' => 'modules_updated',
                 'subject_type' => SystemSetting::class,
-                'subject_id'   => 0,
-                'properties'   => ['changed' => $changed, 'ip' => $ip],
+                'subject_id' => 0,
+                'properties' => ['changed' => $changed, 'ip' => $ip],
             ]);
         }
     }
@@ -290,7 +323,7 @@ class SystemSettingsController extends Controller
 
     public function reset(Request $request, string $key): RedirectResponse
     {
-        $user     = auth()->user();
+        $user = auth()->user();
         $branchId = $request->integer('branch_id') ?: $user->branch_id;
 
         if (! $branchId) {
@@ -312,29 +345,30 @@ class SystemSettingsController extends Controller
             'logo' => ['required', 'image', 'mimes:jpeg,png,jpg,gif,webp,svg', 'max:2048'],
         ]);
 
-        $user     = auth()->user();
-        $branchId = $request->integer('branch_id') ?: null;
+        abort_unless(auth()->user()->isAdmin(), 403);
 
-        if (! $user->isSuperAdmin() && $branchId !== $user->branch_id) {
-            abort(403);
-        }
-
-        $old = SystemSetting::get('general.logo', $branchId);
-        if ($old && Storage::disk('public')->exists($old)) {
-            Storage::disk('public')->delete($old);
-        }
+        // The business logo is system-wide (staff screens, POS, waiter app, online store, login, receipts),
+        // so it is always stored globally, whichever branch view it was uploaded from.
+        $previous = SystemSetting::where('key', 'general.logo')->pluck('value');
 
         $path = $request->file('logo')->store('logos', 'public');
-        SystemSetting::set('general.logo', $path, $branchId);
+        SystemSetting::set('general.logo', $path);
+        SystemSetting::where('key', 'general.logo')->whereNotNull('branch_id')->get()->each->delete();
 
-        return back()->with('message', ['type' => 'success', 'text' => 'Logo uploaded.']);
+        foreach ($previous as $old) {
+            if ($old && str_starts_with($old, 'logos/') && Storage::disk('public')->exists($old)) {
+                Storage::disk('public')->delete($old);
+            }
+        }
+
+        return back()->with('message', ['type' => 'success', 'text' => 'Logo uploaded. It now shows everywhere.']);
     }
 
     // ── Helper: read which menus are enabled ──────────────────────────────────
     private function getModuleSettings(): array
     {
         $menuLabels = MenuHelper::all();
-        $result     = [];
+        $result = [];
 
         foreach ($menuLabels as $id => $label) {
             $idStr = (string) $id;

@@ -39,7 +39,18 @@ import { fmtDate } from '@/lib/date';
 import { cn } from '@/lib/utils';
 import { routes } from '@/routes';
 
-import { CHANNEL_LABELS, PAYMENT_LABELS, overShortLabel, overShortTone, peso, zLabel } from './kit';
+import {
+    CHANNEL_LABELS,
+    CategoriesPanel,
+    DiscountLines,
+    DrawerPanel,
+    PAYMENT_LABELS,
+    TopItemsPanel,
+    overShortLabel,
+    overShortTone,
+    peso,
+    zLabel,
+} from './kit';
 import type { ZFigures } from './kit';
 
 interface HistoryRow {
@@ -206,11 +217,11 @@ export default function ZReadingsIndex() {
                                     <Panel icon={ShoppingBag} title={`Sales · ${dayLabel(date, 'MMM d')}`}>
                                         <div>
                                             <Line label="Gross sales" value={peso(preview.gross_sales)} />
-                                            <Line label="Less discounts & promos" value={`−${peso(preview.discount_total)}`} />
-                                            {preview.loyalty_discount_total > 0 && (
-                                                <Line label="Less loyalty points" value={`−${peso(preview.loyalty_discount_total)}`} />
-                                            )}
+                                            <DiscountLines figures={preview} />
                                             <Line strong label="Net sales" value={peso(preview.net_sales)} />
+                                            {preview.service_charge_total > 0 && (
+                                                <Line label="Includes service charge" value={peso(preview.service_charge_total)} />
+                                            )}
                                             {preview.delivery_fees > 0 && <Line label="Includes delivery fees" value={peso(preview.delivery_fees)} />}
                                             {preview.unpaid_total > 0 && (
                                                 <Line label="Still unpaid (on credit)" value={peso(preview.unpaid_total)} tone="warning" />
@@ -264,6 +275,8 @@ export default function ZReadingsIndex() {
                                         )}
                                     </Panel>
 
+                                    <DrawerPanel figures={preview} className={cn(!preview.vat_enabled && 'md:col-span-2')} />
+
                                     {preview.vat_enabled && (
                                         <Panel icon={Percent} title={`VAT (${preview.vat_rate}%)`}>
                                             <div>
@@ -274,7 +287,7 @@ export default function ZReadingsIndex() {
                                         </Panel>
                                     )}
 
-                                    <Panel flush icon={Banknote} title="Cash sessions" className={cn(!preview.vat_enabled && 'md:col-span-2')}>
+                                    <Panel flush icon={Banknote} title="Cash sessions" className="md:col-span-2">
                                         {preview.sessions.length === 0 ? (
                                             <p className="px-4 py-6 text-center text-sm text-muted-foreground">No cash sessions on this day.</p>
                                         ) : (
@@ -319,6 +332,9 @@ export default function ZReadingsIndex() {
                                             </div>
                                         )}
                                     </Panel>
+
+                                    <TopItemsPanel items={preview.top_items} />
+                                    <CategoriesPanel categories={preview.categories} />
                                 </div>
 
                                 <CloseDayPanel

@@ -4,7 +4,7 @@
     $fallbackIcon = asset('uploads/logo.png');
 @endphp
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="{{ ($appearance ?? 'system') === 'dark' ? 'dark' : '' }}" data-theme="{{ \App\Models\SystemSetting::get('general.color_theme', null, 'ea') }}" data-app-name="{{ $businessName }}">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="{{ ($appearance ?? 'system') === 'dark' ? 'dark' : '' }}" data-theme="{{ \App\Models\SystemSetting::get('general.color_theme', null, 'ea') }}" data-menu-seeder="{{ config('app.menu_seeder') }}" data-app-name="{{ $businessName }}">
     <head>
         <meta charset="utf-8">
         <meta name="csrf-token" content="{{ csrf_token() }}">

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Customer;
 use App\Http\Controllers\Controller;
 use App\Models\Barangay;
 use App\Models\Customer;
+use App\Models\SystemSetting;
 use App\Services\OnlineOrderService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -133,9 +134,11 @@ class AuthController extends Controller
         Auth::guard('customer')->login($customer, true);
         $request->session()->regenerate();
 
+        $rewardsName = SystemSetting::rewardsName();
+
         return redirect()->intended('/')->with('success', $claimable
-            ? 'Account created — your existing Boundary Rewards points are now linked.'
-            : 'Welcome to Boundary Cafe! Your Boundary Rewards card is ready.');
+            ? "Account created — your existing {$rewardsName} points are now linked."
+            : 'Welcome to '.SystemSetting::businessName()."! Your {$rewardsName} card is ready.");
     }
 
     public function logout(Request $request): RedirectResponse

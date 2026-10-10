@@ -15,6 +15,9 @@ return [
 
     'name' => env('APP_NAME', 'Laravel'),
 
+    // Which menu `php artisan db:seed` creates: "boundary" (Boundary Cafe) or "eaj" (EAJ Restaurant / Cafe System).
+    'menu_seeder' => env('MENU_SEEDER', 'boundary'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment

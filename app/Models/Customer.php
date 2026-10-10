@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
-use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 
 class Customer extends Authenticatable
@@ -89,7 +89,7 @@ class Customer extends Authenticatable
         static::creating(function (Customer $customer) {
             $token = (string) Str::uuid();
             $customer->loyalty_token ??= $token;
-            $customer->customer_number ??= 'BC-'.strtoupper(substr(str_replace('-', '', $token), 0, 10));
+            $customer->customer_number ??= SystemSetting::orderPrefix().'-'.strtoupper(substr(str_replace('-', '', $token), 0, 10));
             $customer->joined_at ??= today();
         });
     }

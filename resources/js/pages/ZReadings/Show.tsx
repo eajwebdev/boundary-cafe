@@ -9,7 +9,7 @@ import { fmtDate } from '@/lib/date';
 import { cn } from '@/lib/utils';
 import { routes } from '@/routes';
 
-import { CHANNEL_LABELS, PAYMENT_LABELS, overShortLabel, overShortTone, peso, zLabel } from './kit';
+import { CHANNEL_LABELS, CategoriesPanel, DrawerPanel, PAYMENT_LABELS, TopItemsPanel, overShortLabel, overShortTone, peso, zLabel } from './kit';
 import type { ZFigures } from './kit';
 
 interface Reading extends ZFigures {
@@ -114,51 +114,58 @@ export default function ZReadingShow() {
                         </div>
                     </div>
 
-                    <Panel flush icon={Banknote} title="Cash sessions">
-                        {reading.sessions.length === 0 ? (
-                            <p className="px-4 py-6 text-center text-sm text-muted-foreground">No cash sessions on this day.</p>
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                    <thead className="border-b border-border">
-                                        <tr>
-                                            <th className={thCls}>Cashier</th>
-                                            <th className={cn(thCls, 'hidden text-right sm:table-cell')}>Opening</th>
-                                            <th className={cn(thCls, 'text-right')}>Expected</th>
-                                            <th className={cn(thCls, 'text-right')}>Counted</th>
-                                            <th className={cn(thCls, 'text-right')}>Over / short</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-border">
-                                        {reading.sessions.map((s) => (
-                                            <tr
-                                                key={s.id}
-                                                className="cursor-pointer hover:bg-muted/30"
-                                                onClick={() => router.visit(routes.cashSessions.show(s.id))}
-                                            >
-                                                <td className="px-4 py-2">
-                                                    <p className="font-semibold">{s.cashier}</p>
-                                                    <p className="font-mono text-[11px] text-muted-foreground">{s.session_number}</p>
-                                                </td>
-                                                <td className="hidden px-4 py-2 text-right tabular-nums sm:table-cell">{peso(s.opening_cash)}</td>
-                                                <td className="px-4 py-2 text-right tabular-nums">{peso(s.expected_cash)}</td>
-                                                <td className="px-4 py-2 text-right tabular-nums">{peso(s.counted_cash)}</td>
-                                                <td className="px-4 py-2 text-right">
-                                                    <StatusPill tone={overShortTone(s.over_short)}>{overShortLabel(s.over_short)}</StatusPill>
-                                                </td>
+                    <div className="grid content-start gap-4">
+                        <DrawerPanel figures={reading} />
+                        <Panel flush icon={Banknote} title="Cash sessions">
+                            {reading.sessions.length === 0 ? (
+                                <p className="px-4 py-6 text-center text-sm text-muted-foreground">No cash sessions on this day.</p>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead className="border-b border-border">
+                                            <tr>
+                                                <th className={thCls}>Cashier</th>
+                                                <th className={cn(thCls, 'hidden text-right sm:table-cell')}>Opening</th>
+                                                <th className={cn(thCls, 'text-right')}>Expected</th>
+                                                <th className={cn(thCls, 'text-right')}>Counted</th>
+                                                <th className={cn(thCls, 'text-right')}>Over / short</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                        {reading.notes && (
-                            <div className="border-t border-border px-4 py-3 text-sm">
-                                <p className="text-[11px] font-semibold text-muted-foreground">Notes</p>
-                                <p className="whitespace-pre-line">{reading.notes}</p>
-                            </div>
-                        )}
-                    </Panel>
+                                        </thead>
+                                        <tbody className="divide-y divide-border">
+                                            {reading.sessions.map((s) => (
+                                                <tr
+                                                    key={s.id}
+                                                    className="cursor-pointer hover:bg-muted/30"
+                                                    onClick={() => router.visit(routes.cashSessions.show(s.id))}
+                                                >
+                                                    <td className="px-4 py-2">
+                                                        <p className="font-semibold">{s.cashier}</p>
+                                                        <p className="font-mono text-[11px] text-muted-foreground">{s.session_number}</p>
+                                                    </td>
+                                                    <td className="hidden px-4 py-2 text-right tabular-nums sm:table-cell">{peso(s.opening_cash)}</td>
+                                                    <td className="px-4 py-2 text-right tabular-nums">{peso(s.expected_cash)}</td>
+                                                    <td className="px-4 py-2 text-right tabular-nums">{peso(s.counted_cash)}</td>
+                                                    <td className="px-4 py-2 text-right">
+                                                        <StatusPill tone={overShortTone(s.over_short)}>{overShortLabel(s.over_short)}</StatusPill>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                            {reading.notes && (
+                                <div className="border-t border-border px-4 py-3 text-sm">
+                                    <p className="text-[11px] font-semibold text-muted-foreground">Notes</p>
+                                    <p className="whitespace-pre-line">{reading.notes}</p>
+                                </div>
+                            )}
+                        </Panel>
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <TopItemsPanel items={reading.top_items} />
+                            <CategoriesPanel categories={reading.categories} />
+                        </div>
+                    </div>
                 </div>
             </div>
         </AdminLayout>
@@ -206,9 +213,15 @@ function ZReceipt({ reading, business, copyLabel }: { reading: Reading; business
 
             <Heading>SALES</Heading>
             <Row label="Gross sales" value={peso(reading.gross_sales)} />
-            <Row label="Less discounts" value={`−${peso(reading.discount_total)}`} />
-            {reading.loyalty_discount_total > 0 && <Row label="Less loyalty" value={`−${peso(reading.loyalty_discount_total)}`} />}
+            {reading.senior_pwd_discount > 0 && <Row label="Less Senior/PWD" value={`−${peso(reading.senior_pwd_discount)}`} />}
+            {reading.promo_discount > 0 && <Row label="Less promos" value={`−${peso(reading.promo_discount)}`} />}
+            {reading.manual_discount > 0 && <Row label="Less other discounts" value={`−${peso(reading.manual_discount)}`} />}
+            {reading.discount_total === 0 && <Row label="Less discounts" value={peso(0)} />}
+            {reading.loyalty_discount_total > 0 && <Row label="Less loyalty points" value={`−${peso(reading.loyalty_discount_total)}`} />}
             <Row label="NET SALES" value={peso(reading.net_sales)} className="total font-bold" />
+            {reading.service_charge_total > 0 && (
+                <Row label="Incl. service charge" value={peso(reading.service_charge_total)} className="indent pl-2" />
+            )}
             {reading.delivery_fees > 0 && <Row label="Incl. delivery fees" value={peso(reading.delivery_fees)} className="indent pl-2" />}
             <Row label="Transactions" value={reading.transaction_count} />
             <Row label="Items sold" value={reading.items_sold} />
@@ -246,12 +259,37 @@ function ZReceipt({ reading, business, copyLabel }: { reading: Reading; business
             <Divider />
             <Heading>CASH DRAWER</Heading>
             <Row label="Opening cash" value={peso(reading.opening_cash)} />
-            <Row label="Expected cash" value={peso(reading.expected_cash)} />
+            <Row label="+ Cash sales" value={peso(reading.cash_sales)} />
+            <Row label="- Cash paid out" value={reading.cash_paid_out > 0 ? `−${peso(reading.cash_paid_out)}` : peso(0)} />
+            {(reading.payouts ?? []).map((payout, i) => (
+                <Row key={i} label={payout.description} value={`−${peso(payout.amount)}`} className="indent pl-2" />
+            ))}
+            <Row label="= Expected cash" value={peso(reading.expected_cash)} className="total font-bold" />
             <Row label="Counted cash" value={peso(reading.counted_cash)} />
             <Row label="Over / short" value={overShortLabel(reading.over_short)} className="total font-bold" />
             {reading.sessions.map((s) => (
                 <Row key={s.id} label={s.cashier} value={overShortLabel(s.over_short)} className="indent pl-2" />
             ))}
+
+            {(reading.top_items ?? []).length > 0 && (
+                <>
+                    <Divider />
+                    <Heading>TOP ITEMS</Heading>
+                    {(reading.top_items ?? []).map((item) => (
+                        <Row key={item.name} label={`${item.quantity} × ${item.name}`} value={peso(item.amount)} />
+                    ))}
+                </>
+            )}
+
+            {(reading.categories ?? []).length > 0 && (
+                <>
+                    <Divider />
+                    <Heading>BY CATEGORY</Heading>
+                    {(reading.categories ?? []).map((c) => (
+                        <Row key={c.category} label={`${c.category} (${c.quantity})`} value={peso(c.amount)} />
+                    ))}
+                </>
+            )}
 
             <Divider />
             <Row label="Previous grand total" value={peso(reading.previous_grand_total)} />

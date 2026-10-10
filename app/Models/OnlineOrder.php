@@ -93,7 +93,7 @@ class OnlineOrder extends Model
 
     public static function generateOrderNumber(): string
     {
-        $prefix = 'BC-ONL-'.now()->format('ymd').'-';
+        $prefix = SystemSetting::orderPrefix().'-ONL-'.now()->format('ymd').'-';
         for ($i = 0; $i < 10; $i++) {
             $candidate = $prefix.str_pad((string) random_int(1, 9999), 4, '0', STR_PAD_LEFT);
             if (! static::where('order_number', $candidate)->exists()) {
@@ -286,7 +286,7 @@ class OnlineOrder extends Model
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
             'branch' => [
-                'name' => $this->branch?->name,
+                'name' => $this->branch?->display_name,
                 'phone' => $this->branch?->phone ?: SystemSetting::get('general.phone', $this->branch_id, ''),
                 'address' => $this->branch?->address,
             ],

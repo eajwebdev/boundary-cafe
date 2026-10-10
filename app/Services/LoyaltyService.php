@@ -11,7 +11,7 @@ use App\Models\User;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Boundary Rewards — the single points engine for counter, dine-in and online sales.
+ * Rewards programme — the single points engine for counter, dine-in and online sales.
  *
  * Settings (loyalty.*): enabled, spend_per_point, peso_per_point, minimum_redeem,
  * maximum_redeem, tiers_enabled, tiers (JSON), birthday_bonus.
@@ -167,7 +167,7 @@ class LoyaltyService
         $customer->increment('loyalty_points', $bonus);
         $customer->increment('lifetime_points_earned', $bonus);
         $customer->refresh();
-        $this->log($customer, $sale, $user, LoyaltyTransaction::TYPE_BONUS, $bonus, 'Happy birthday from Boundary Cafe!');
+        $this->log($customer, $sale, $user, LoyaltyTransaction::TYPE_BONUS, $bonus, 'Happy birthday from '.SystemSetting::businessName($sale->branch_id).'!');
     }
 
     /**

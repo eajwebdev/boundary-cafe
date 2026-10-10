@@ -354,7 +354,7 @@ function ModuleRow({
 // ─── Color theme picker ───────────────────────────────────────────────────────
 
 const COLOR_THEMES = [
-    { key: 'ea', label: 'Boundary Cafe', description: 'Royal Blue & Orange', swatch: 'linear-gradient(135deg, #062581 0 56%, #FF5A0A 56% 100%)', ring: '#FF5A0A' },
+    { key: 'ea', label: 'Classic', description: 'Royal Blue & Orange', swatch: 'linear-gradient(135deg, #062581 0 56%, #FF5A0A 56% 100%)', ring: '#FF5A0A' },
     { key: 'indigo', label: 'Indigo', description: 'Deep blue-purple', swatch: 'linear-gradient(135deg, #3730a3 0%, #4f46e5 100%)', ring: '#4f46e5' },
     { key: 'violet', label: 'Violet', description: 'Rich purple', swatch: 'linear-gradient(135deg, #4c1d95 0%, #7c3aed 100%)', ring: '#7c3aed' },
     { key: 'emerald', label: 'Emerald', description: 'Fresh green', swatch: 'linear-gradient(135deg, #065f46 0%, #059669 100%)', ring: '#059669' },

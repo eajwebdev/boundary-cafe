@@ -44,7 +44,7 @@ type SharedApp = {
 /** The slice of the shared Inertia props that carries the branding. */
 type BrandProps = { app?: SharedApp };
 
-const fallbackAppName = import.meta.env.VITE_APP_NAME || 'Boundary Cafe';
+const fallbackAppName = import.meta.env.VITE_APP_NAME || 'POS';
 let currentAppName = document.documentElement.dataset.appName || fallbackAppName;
 
 function setIconHref(selector: string, href: string) {

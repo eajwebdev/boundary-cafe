@@ -123,6 +123,11 @@ class CashSessionController extends Controller
             abort(403, 'Unauthorized.');
         }
 
+        // From the POS a cashier can only close their own (left-open) session.
+        if ($request->routeIs('pos.session.close') && $session->user_id !== $user->id) {
+            abort(403, 'You can only close your own session here.');
+        }
+
         if ($session->isClosed()) {
             return back()->withErrors(['error' => 'This session is already closed.']);
         }

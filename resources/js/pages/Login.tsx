@@ -6,12 +6,12 @@ import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 
+import { postDemoLogin } from '@/actions/App/Http/Controllers/LoginAuthController';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { routes } from '@/routes';
-import { postDemoLogin } from '@/actions/App/Http/Controllers/LoginAuthController';
 
 interface DemoUser {
     id: number;
@@ -26,6 +26,8 @@ interface LoginProps {
     errors?: Record<string, string>;
     business_name?: string;
     logo_url?: string | null;
+    tagline?: string;
+    locations?: string;
     is_demo?: boolean;
     demo_users?: DemoUser[];
 }
@@ -39,6 +41,8 @@ export default function Login({
     errors: serverErrors,
     business_name: propBusinessName,
     logo_url: propLogoUrl,
+    tagline = '',
+    locations = '',
     is_demo = false,
     demo_users = [],
 }: LoginProps) {
@@ -66,11 +70,7 @@ export default function Login({
 
     const handleQuickLogin = (user: DemoUser) => {
         setLoggingInUser(user.username);
-        router.post(
-            postDemoLogin.url(),
-            { username: user.username },
-            { onFinish: () => setLoggingInUser(null) },
-        );
+        router.post(postDemoLogin.url(), { username: user.username }, { onFinish: () => setLoggingInUser(null) });
     };
 
     const quickUsers = (demo_users || []).filter((user) => user.role !== 'super_admin');
@@ -86,18 +86,18 @@ export default function Login({
                 <div className="bc-login-orb bc-login-orb-two" aria-hidden="true" />
 
                 <main className="bc-login-shell">
-                    <section className="bc-login-brand-panel" aria-label="About Boundary Café">
-                        <img className="bc-login-brand-image" src="/uploads/optimized/banner.webp" alt="" />
+                    <section className="bc-login-brand-panel" aria-label={`About ${businessName}`}>
+                        <img className="bc-login-brand-image bc-login-brand-mark" src={logoUrl ?? fallbackLogo} alt="" />
                         <div className="bc-login-brand-overlay" aria-hidden="true" />
 
                         <div className="bc-login-brand-content">
-                            <a href="/" className="bc-login-lockup" aria-label="Boundary Café home">
+                            <a href="/" className="bc-login-lockup" aria-label={`${businessName} home`}>
                                 <span className="bc-login-logo-tile">
                                     <img src={logoUrl ?? fallbackLogo} alt="" />
                                 </span>
                                 <span>
                                     <strong>{businessName}</strong>
-                                    <small>Taste of Negros</small>
+                                    {tagline && <small>{tagline}</small>}
                                 </span>
                             </a>
 
@@ -113,19 +113,21 @@ export default function Login({
                                 <span>
                                     <ShieldCheck size={17} aria-hidden="true" /> Protected workspace
                                 </span>
-                                <span>
-                                    <MapPin size={17} aria-hidden="true" /> Tagukon · Mabinay
-                                </span>
+                                {locations && (
+                                    <span>
+                                        <MapPin size={17} aria-hidden="true" /> {locations}
+                                    </span>
+                                )}
                             </div>
                         </div>
                     </section>
 
                     <section className="bc-login-form-panel">
-                        <a href="/" className="bc-login-mobile-lockup" aria-label="Boundary Café home">
+                        <a href="/" className="bc-login-mobile-lockup" aria-label={`${businessName} home`}>
                             <img src={logoUrl ?? fallbackLogo} alt="" />
                             <span>
                                 <strong>{businessName}</strong>
-                                <small>Taste of Negros</small>
+                                {tagline && <small>{tagline}</small>}
                             </span>
                         </a>
 

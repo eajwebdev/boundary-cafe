@@ -28,16 +28,27 @@ class DatabaseSeeder extends Seeder
             BarangaySeeder::class,
             CustomerSeeder::class,
 
-            // ── 6. Cafe products — COOP Main Campus (CMC) ─────────
-            //    Most of the menu is made to order: the recipe seeder adds
-            //    raw ingredients and the recipe for each made-to-order item.
-            BoundaryCafeProductSeeder::class,
-            BoundaryCafeRecipeSeeder::class,
+            // ── 6. Cafe products (MENU_SEEDER in .env: boundary | eaj) ──
+            ...$this->menuSeeders(),
             DiningTableSeeder::class,
 
             // ── 7. Customer ordering app demo data ────────────────
             //    Registered customers, storefront promos, online orders
             OnlineOrderingDemoSeeder::class,
         ]);
+    }
+
+    /**
+     * Which menu to seed. "eaj" is the EAJ Restaurant / Cafe Management System catalog (same items as Boundary Cafe,
+     * EAJ branding and product images). "boundary" (the default) is the Boundary Cafe menu. Most of either menu is
+     * made to order, so a recipe seeder adds the raw ingredients and a recipe for each made-to-order item.
+     *
+     * @return array<int, class-string<Seeder>>
+     */
+    private function menuSeeders(): array
+    {
+        return config('app.menu_seeder') === 'eaj'
+            ? [EajCafeProductSeeder::class, EajCafeRecipeSeeder::class]
+            : [BoundaryCafeProductSeeder::class, BoundaryCafeRecipeSeeder::class];
     }
 }

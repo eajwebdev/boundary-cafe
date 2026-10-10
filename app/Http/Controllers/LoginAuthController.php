@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ActivityLog;
+use App\Models\Branch;
 use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -67,9 +68,23 @@ class LoginAuthController extends Controller
         return Inertia::render('Login', [
             'business_name' => SystemSetting::businessName(),
             'logo_url' => SystemSetting::logoUrl(),
+            'tagline' => (string) SystemSetting::get('general.tagline', null, ''),
+            'locations' => $this->branchLocations(),
             'is_demo' => $isDemo,
             'demo_users' => $demoUsers,
         ]);
+    }
+
+    /** Active branch places for the login page, e.g. "Boundary Cafe – Tagukon" becomes "Tagukon". */
+    private function branchLocations(): string
+    {
+        return Branch::where('is_active', true)
+            ->orderBy('id')
+            ->get(['id', 'name'])
+            ->map(fn (Branch $branch) => $branch->location)
+            ->filter()
+            ->unique()
+            ->implode(' · ');
     }
 
     public function postLogin(Request $request): RedirectResponse

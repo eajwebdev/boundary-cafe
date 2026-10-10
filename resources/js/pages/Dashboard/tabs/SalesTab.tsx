@@ -26,7 +26,7 @@ export default function SalesTab({ data, loading, has }: Props) {
             ],
             options: {
                 ...t.base,
-                colors: [t.series[0], t.dark ? '#7d7c76' : '#a3a29c'],
+                colors: [t.series[0], t.series[4]],
                 stroke: { width: [2, 2], curve: 'monotoneCubic', dashArray: [0, 5] },
                 fill: { type: ['gradient', 'solid'], gradient: { opacityFrom: 0.25, opacityTo: 0.02 }, opacity: [1, 0] },
                 xaxis: { ...t.base.xaxis, categories: data.trend.map((d: any) => shortDate(d.date)), tickAmount: Math.min(10, data.trend.length) },
@@ -54,16 +54,16 @@ export default function SalesTab({ data, loading, has }: Props) {
                         enableShades: false,
                         colorScale: {
                             ranges: [
-                                { from: 0, to: 0, color: t.dark ? '#262624' : '#f1f0ec', name: 'none' },
-                                { from: 0.01, to: max * 0.25, color: t.dark ? '#1e3a5f' : '#cfe1f7' },
-                                { from: max * 0.25, to: max * 0.5, color: t.dark ? '#24589a' : '#86b5ec' },
-                                { from: max * 0.5, to: max * 0.75, color: t.dark ? '#3987e5' : '#2a78d6' },
-                                { from: max * 0.75, to: max + 1, color: t.dark ? '#8fbcf3' : '#174a8a' },
+                                { from: 0, to: 0, color: t.heatmap[0], name: 'none' },
+                                { from: 0.01, to: max * 0.25, color: t.heatmap[1] },
+                                { from: max * 0.25, to: max * 0.5, color: t.heatmap[2] },
+                                { from: max * 0.5, to: max * 0.75, color: t.heatmap[3] },
+                                { from: max * 0.75, to: max + 1, color: t.heatmap[4] },
                             ],
                         },
                     },
                 },
-                stroke: { width: 2, colors: [t.dark ? '#1a1a19' : '#ffffff'] },
+                stroke: { width: 2, colors: [t.surface] },
                 tooltip: { ...t.base.tooltip, y: { formatter: (v: number, o: any) => `${money(v)} · ${o?.w?.config?.series?.[o.seriesIndex]?.data?.[o.dataPointIndex]?.txns ?? 0} txns` } },
             },
         };

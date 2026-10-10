@@ -2,6 +2,7 @@ import { Head, Link, usePage } from '@inertiajs/react';
 import { ArrowLeft, Calendar, Download, History, Receipt, User } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import type React from 'react';
+import { useRewardsName } from '@/hooks/use-business-name';
 import AdminLayout from '@/layouts/AdminLayout';
 import { cn } from '@/lib/utils';
 import { routes } from '@/routes';
@@ -90,6 +91,7 @@ interface PageProps {
 export default function CustomerShow() {
     const { props } = usePage<PageProps>();
     const { customer, sales, currency, loyaltyTransactions } = props;
+    const rewardsName = useRewardsName();
     const fmt = (n: number) => `${currency}${Number(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     return (
@@ -111,7 +113,7 @@ export default function CustomerShow() {
                 <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
                     <div className="rounded-2xl bg-[var(--boundary-blue)] p-5 text-white shadow-lg">
                         <div className="flex items-center justify-between">
-                            <p className="font-black">BOUNDARY REWARDS</p>
+                            <p className="font-black uppercase">{rewardsName}</p>
                             <span className="text-xs text-white/60">{customer.customer_number}</span>
                         </div>
                         <div className="mt-4 rounded-xl bg-white p-4">
@@ -146,7 +148,7 @@ export default function CustomerShow() {
                                     <div key={entry.id} className="flex items-center justify-between gap-4 py-3">
                                         <div>
                                             <p className="text-sm font-semibold capitalize">{entry.type}</p>
-                                            <p className="text-xs text-muted-foreground">{entry.reason ?? entry.branch ?? 'Boundary Rewards'}</p>
+                                            <p className="text-xs text-muted-foreground">{entry.reason ?? entry.branch ?? rewardsName}</p>
                                         </div>
                                         <div className="text-right">
                                             <p className={cn('font-black', entry.points >= 0 ? 'text-emerald-600' : 'text-orange-600')}>

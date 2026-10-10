@@ -30,7 +30,7 @@ class CheckoutController extends Controller
             'store' => [
                 'status' => $this->online->storeStatus($branch),
                 'settings' => $this->online->settings($branch),
-                'branch' => $branch ? ['name' => $branch->name, 'address' => $branch->address] : null,
+                'branch' => $branch ? ['name' => $branch->name, 'location' => $branch->location, 'address' => $branch->address] : null,
             ],
             'contact' => ['name' => $customer->name, 'contact_number' => $customer->contact_number],
         ]);

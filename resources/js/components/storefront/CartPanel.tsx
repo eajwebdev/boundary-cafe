@@ -1,6 +1,7 @@
 import { Bike, Clock3, ShoppingBag, Store } from 'lucide-react';
 
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
+import { useLogoUrl } from '@/hooks/use-logo';
 import type { CartLine } from '@/lib/customer';
 import { cn } from '@/lib/utils';
 
@@ -32,7 +33,21 @@ interface Props {
 }
 
 /** The order summary — persistent right rail on desktop, bottom/right sheet elsewhere. */
-export function CartPanel({ lines, subtotal, count, onQuantity, onClear, settings, fulfillment, onFulfillment, isOpen, closedReason, onCheckout, variant }: Props) {
+export function CartPanel({
+    lines,
+    subtotal,
+    count,
+    onQuantity,
+    onClear,
+    settings,
+    fulfillment,
+    onFulfillment,
+    isOpen,
+    closedReason,
+    onCheckout,
+    variant,
+}: Props) {
+    const logoUrl = useLogoUrl();
     const minLeft = Math.max(0, settings.min_order - subtotal);
     const freeFrom = settings.free_delivery_min;
     const fee = fulfillment === 'delivery' ? (freeFrom > 0 && subtotal >= freeFrom ? 0 : settings.delivery_fee) : 0;
@@ -43,7 +58,12 @@ export function CartPanel({ lines, subtotal, count, onQuantity, onClear, setting
             : `${settings.prep_minutes}–${settings.prep_minutes + 10} min`;
 
     return (
-        <div className={cn('flex h-full min-h-0 flex-col', variant === 'rail' && 'rounded-[26px] bg-shop-surface shadow-shop-md ring-1 ring-shop-line')}>
+        <div
+            className={cn(
+                'flex h-full min-h-0 flex-col',
+                variant === 'rail' && 'shadow-shop-md rounded-[26px] bg-shop-surface ring-1 ring-shop-line',
+            )}
+        >
             <div className="px-5 pt-5">
                 <div className="flex items-baseline justify-between">
                     <h2 className="font-display text-xl font-bold">Your order</h2>
@@ -68,7 +88,7 @@ export function CartPanel({ lines, subtotal, count, onQuantity, onClear, setting
                                 onClick={() => onFulfillment(f)}
                                 className={cn(
                                     'bc-press flex h-10 cursor-pointer items-center justify-center gap-1.5 rounded-xl text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40',
-                                    fulfillment === f ? 'bg-shop-surface text-shop-ink shadow-shop-sm' : 'text-shop-muted',
+                                    fulfillment === f ? 'shadow-shop-sm bg-shop-surface text-shop-ink' : 'text-shop-muted',
                                 )}
                             >
                                 <Icon className="h-4 w-4" />
@@ -85,13 +105,15 @@ export function CartPanel({ lines, subtotal, count, onQuantity, onClear, setting
             {lines.length === 0 ? (
                 <div className="flex flex-1 flex-col items-center justify-center px-8 py-10 text-center">
                     <div className="relative">
-                        <img src="/uploads/optimized/logo.webp" alt="" className="h-20 w-20 rounded-full opacity-90 ring-8 ring-shop-sunken" />
+                        <img src={logoUrl} alt="" className="h-20 w-20 rounded-full opacity-90 ring-8 ring-shop-sunken" />
                         <span className="absolute -right-1 -bottom-1 flex h-9 w-9 items-center justify-center rounded-full bg-shop-accent text-shop-on-accent">
                             <ShoppingBag className="h-4 w-4" />
                         </span>
                     </div>
-                    <p className="font-display mt-5 text-lg font-semibold">Nothing here yet</p>
-                    <p className="mt-1 max-w-[16rem] text-sm text-shop-muted">Tap the + on anything that looks good. Your order builds up right here.</p>
+                    <p className="mt-5 font-display text-lg font-semibold">Nothing here yet</p>
+                    <p className="mt-1 max-w-[16rem] text-sm text-shop-muted">
+                        Tap the + on anything that looks good. Your order builds up right here.
+                    </p>
                 </div>
             ) : (
                 <>
@@ -124,9 +146,17 @@ export function CartPanel({ lines, subtotal, count, onQuantity, onClear, setting
                     <div className="px-3 pb-3">
                         <div className="bc-ticket rounded-[22px] bg-shop-sunken px-4 pt-4 pb-4" style={{ ['--ticket-cut' as string]: '34%' }}>
                             {minLeft > 0 ? (
-                                <Progress label={`Add ₱${minLeft.toLocaleString()} more to reach the minimum order`} value={subtotal / settings.min_order} tone="warning" />
+                                <Progress
+                                    label={`Add ₱${minLeft.toLocaleString()} more to reach the minimum order`}
+                                    value={subtotal / settings.min_order}
+                                    tone="warning"
+                                />
                             ) : fulfillment === 'delivery' && freeFrom > 0 && subtotal < freeFrom ? (
-                                <Progress label={`₱${(freeFrom - subtotal).toLocaleString()} more for free delivery`} value={subtotal / freeFrom} tone="accent" />
+                                <Progress
+                                    label={`₱${(freeFrom - subtotal).toLocaleString()} more for free delivery`}
+                                    value={subtotal / freeFrom}
+                                    tone="accent"
+                                />
                             ) : fulfillment === 'delivery' && freeFrom > 0 ? (
                                 <p className="text-sm font-semibold text-shop-success">Free delivery unlocked. Hatid na!</p>
                             ) : (
@@ -135,7 +165,9 @@ export function CartPanel({ lines, subtotal, count, onQuantity, onClear, setting
                             <div className="bc-tear my-3.5" />
                             <dl className="space-y-1.5 text-sm">
                                 <div className="flex justify-between">
-                                    <dt className="text-shop-muted">Subtotal · {count} item{count !== 1 ? 's' : ''}</dt>
+                                    <dt className="text-shop-muted">
+                                        Subtotal · {count} item{count !== 1 ? 's' : ''}
+                                    </dt>
                                     <dd className="font-semibold">
                                         <Price value={subtotal} />
                                     </dd>
@@ -143,7 +175,9 @@ export function CartPanel({ lines, subtotal, count, onQuantity, onClear, setting
                                 {fulfillment === 'delivery' && (
                                     <div className="flex justify-between">
                                         <dt className="text-shop-muted">Delivery fee</dt>
-                                        <dd className="font-semibold">{fee === 0 ? <span className="text-shop-success">Free</span> : <Price value={fee} />}</dd>
+                                        <dd className="font-semibold">
+                                            {fee === 0 ? <span className="text-shop-success">Free</span> : <Price value={fee} />}
+                                        </dd>
                                     </div>
                                 )}
                                 <div className="flex justify-between pt-1.5 text-base">
@@ -158,7 +192,11 @@ export function CartPanel({ lines, subtotal, count, onQuantity, onClear, setting
                     </div>
 
                     <div className="border-t border-shop-line px-5 pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))] lg:pb-5">
-                        {!isOpen && <p className="mb-2 rounded-xl bg-shop-warning-soft px-3 py-2 text-sm text-shop-warning">{closedReason ?? 'We are closed for online orders right now.'}</p>}
+                        {!isOpen && (
+                            <p className="mb-2 rounded-xl bg-shop-warning-soft px-3 py-2 text-sm text-shop-warning">
+                                {closedReason ?? 'We are closed for online orders right now.'}
+                            </p>
+                        )}
                         <ShopButton size="lg" block disabled={!isOpen || minLeft > 0} onClick={onCheckout} className="justify-between">
                             <span>Go to checkout</span>
                             <Price value={total} />
@@ -175,7 +213,13 @@ function Progress({ label, value, tone }: { label: string; value: number; tone: 
     return (
         <div>
             <p className={cn('text-sm font-semibold', tone === 'warning' ? 'text-shop-warning' : 'text-shop-accent-ink')}>{label}</p>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-shop-surface" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
+            <div
+                className="mt-2 h-2 overflow-hidden rounded-full bg-shop-surface"
+                role="progressbar"
+                aria-valuenow={Math.round(pct)}
+                aria-valuemin={0}
+                aria-valuemax={100}
+            >
                 <div className="h-full rounded-full bg-shop-accent transition-[width] duration-500 ease-shop" style={{ width: `${pct}%` }} />
             </div>
         </div>

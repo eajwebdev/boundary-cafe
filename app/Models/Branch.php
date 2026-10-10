@@ -288,6 +288,29 @@ class Branch extends Model
         return static::businessTypes()[$this->business_type] ?? ucfirst($this->business_type);
     }
 
+    /**
+     * The place part of the branch name, without the brand prefix,
+     * e.g. "Boundary Cafe – Tagukon" becomes "Tagukon". Pages pair it with
+     * the business name from settings so a rename shows everywhere.
+     */
+    public function getLocationAttribute(): string
+    {
+        return trim((string) preg_replace('/^.*\s[–—-]\s/u', '', (string) $this->name));
+    }
+
+    /**
+     * The name shown on the POS, receipts and the store: the business name from
+     * settings plus the place, e.g. "EAJ Cafe – Mabinay", whatever brand the
+     * branch record itself was created under.
+     */
+    public function getDisplayNameAttribute(): string
+    {
+        $businessName = SystemSetting::businessName($this->id);
+        $location = $this->location;
+
+        return $location !== '' && $location !== $businessName ? "{$businessName} – {$location}" : $businessName;
+    }
+
     // ── Feature Flag Helpers ───────────────────────────────────────
 
     public function usesTableOrdering(): bool

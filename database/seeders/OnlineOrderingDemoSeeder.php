@@ -119,7 +119,7 @@ class OnlineOrderingDemoSeeder extends Seeder
             'description' => '10% off orders of ₱500 or more — applied automatically at checkout.',
             'discount_type' => 'percent', 'discount_value' => 10, 'applies_to' => 'all',
             'minimum_purchase' => 500, 'is_active' => true, 'show_on_storefront' => true,
-            'banner_image' => file_exists(public_path('uploads/optimized/banner.webp')) ? '/uploads/optimized/banner.webp' : '/uploads/banner.png',
+            'banner_image' => $this->promoBanner(),
             'channels' => 'both',
         ]);
 
@@ -130,6 +130,17 @@ class OnlineOrderingDemoSeeder extends Seeder
             'minimum_purchase' => 300, 'max_uses_per_customer' => 1, 'is_active' => true, 'show_on_storefront' => true,
             'banner_image' => null, 'channels' => 'online',
         ]);
+    }
+
+    private function promoBanner(): string
+    {
+        if (config('app.menu_seeder') === 'eaj') {
+            return '/images/products/eaj/boundary-favorites-snack-bundle.webp';
+        }
+
+        return file_exists(public_path('uploads/optimized/banner.webp'))
+            ? '/uploads/optimized/banner.webp'
+            : '/uploads/banner.png';
     }
 
     private function order(Branch $branch, Customer $customer, string $type, string $status, array $lines, int $daysAgo, $menu, ?User $staff): void

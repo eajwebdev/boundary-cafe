@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\CheckMenuAccess;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\KeepFlashForBackgroundRequests;
 use App\Http\Middleware\RestrictOrderTakerAccess;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -24,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
+            KeepFlashForBackgroundRequests::class,
         ]);
 
         $middleware->alias([

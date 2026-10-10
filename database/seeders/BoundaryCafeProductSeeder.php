@@ -11,7 +11,7 @@ use Illuminate\Database\Seeder;
 class BoundaryCafeProductSeeder extends Seeder
 {
     /** Estimated launch prices. Update this one list after owner approval. */
-    private array $menu = [
+    public const MENU = [
         ['Signature Blends', 'Strawberry Cloud', 145], ['Signature Blends', 'Muscovado Caramel Espresso Frappe', 165], ['Signature Blends', 'Muscovado Cream Latte', 145], ['Signature Blends', 'Dark Chocolate Cloud', 145],
         ['Coffee', 'French Vanilla Latte', 135], ['Coffee', 'Americano', 95], ['Coffee', 'Caramel Latte', 135], ['Coffee', 'Salted Caramel Latte', 145], ['Coffee', 'White Chocolate', 145], ['Coffee', 'Spanish Latte', 145], ['Coffee', 'Matcha Espresso Fusion', 155], ['Coffee', 'Mocha Latte', 145],
         ['Non-Coffee', 'Strawberry Sparkle', 115], ['Non-Coffee', 'Blueberry Sparkle', 115], ['Non-Coffee', 'Fresh Calamansi', 95], ['Non-Coffee', 'Dark Chocolate', 125], ['Non-Coffee', 'Strawberry Latte', 135], ['Non-Coffee', 'Matcha Latte', 145],
@@ -38,7 +38,7 @@ class BoundaryCafeProductSeeder extends Seeder
     {
         $categories = Category::pluck('id', 'name');
         $branches = Branch::whereIn('code', ['BC-TAG', 'BC-MAB', 'BC-MAIN'])->get();
-        foreach ($this->menu as $index => [$category, $name, $price]) {
+        foreach (self::MENU as $index => [$category, $name, $price]) {
             $isStocked = in_array($category, self::STOCKED_CATEGORIES, true);
             $product = Product::updateOrCreate(['barcode' => 'BC'.str_pad((string) ($index + 1), 5, '0', STR_PAD_LEFT)], [
                 'name' => $name, 'category_id' => $categories[$category], 'description' => "Boundary Cafe {$category} item. Seed price is an editable estimate.",
@@ -55,7 +55,7 @@ class BoundaryCafeProductSeeder extends Seeder
                 ]);
             }
         }
-        $this->command->info('Boundary Cafe menu seeded ('.count($this->menu).' items across 3 branches).');
+        $this->command->info('Boundary Cafe menu seeded ('.count(self::MENU).' items across 3 branches).');
     }
 
     /** Product photos in public/uploads/optimized (webp), keyed by "Category|Name". */

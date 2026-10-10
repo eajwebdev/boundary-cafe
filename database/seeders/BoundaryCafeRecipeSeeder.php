@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductStock;
 use App\Models\RecipeIngredient;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Seeder;
 use RuntimeException;
 
@@ -182,10 +183,19 @@ class BoundaryCafeRecipeSeeder extends Seeder
         ];
     }
 
+    /** Barcode prefix of the menu these recipes belong to (EajCafeRecipeSeeder uses "EAJ"). */
+    protected string $menuBarcodePrefix = 'BC';
+
+    /** Branches that get the ingredient stock. */
+    protected function branches(): Collection
+    {
+        return Branch::whereIn('code', ['BC-TAG', 'BC-MAB', 'BC-MAIN'])->get();
+    }
+
     public function run(): void
     {
         $category = Category::firstOrCreate(['name' => 'Raw Materials']);
-        $branches = Branch::whereIn('code', ['BC-TAG', 'BC-MAB', 'BC-MAIN'])->get();
+        $branches = $this->branches();
 
         $ingredients = [];
         $number = 0;
@@ -202,7 +212,7 @@ class BoundaryCafeRecipeSeeder extends Seeder
             $ingredients[$name] = $ingredient;
         }
 
-        $madeToOrder = Product::where('product_type', 'made_to_order')->where('barcode', 'like', 'BC%')->get()->keyBy('name');
+        $madeToOrder = Product::where('product_type', 'made_to_order')->where('barcode', 'like', $this->menuBarcodePrefix.'%')->get()->keyBy('name');
         foreach ($this->recipes() as $productName => $lines) {
             $product = $madeToOrder[$productName] ?? throw new RuntimeException("Recipe for unknown made-to-order product \"{$productName}\".");
 

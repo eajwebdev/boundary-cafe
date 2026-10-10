@@ -26,6 +26,8 @@ import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { Price, ProductImage, QtyControl, ShopButton, useIsDesktop } from '@/components/storefront/ui';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
+import { useBranchLabel, useBusinessName, useRewardsName } from '@/hooks/use-business-name';
+import { useLogoUrl } from '@/hooks/use-logo';
 import { jsonRequest } from '@/lib/customer';
 import { useFloorUpdates } from '@/lib/realtime';
 import { cn } from '@/lib/utils';
@@ -65,7 +67,7 @@ interface PageProps {
     tables: Table[];
     products: Product[];
     categories: { id: number; name: string }[];
-    auth: { user: { fname: string; lname: string; branch?: { name: string } | null; is_waiter?: boolean; access: string[] } };
+    auth: { user: { fname: string; lname: string; branch?: { name: string; location?: string } | null; is_waiter?: boolean; access: string[] } };
     flash?: { success?: string | null; error?: string | null };
     errors: Record<string, string>;
     [key: string]: unknown;
@@ -124,6 +126,8 @@ function since(mins: number | null) {
 }
 
 export default function Waiter() {
+    const logoUrl = useLogoUrl();
+    const businessName = useBusinessName();
     const { props } = usePage<PageProps>();
     const [tables, setTables] = useState(props.tables);
     const [table, setTable] = useState<Table | null>(null);
@@ -178,6 +182,7 @@ export default function Waiter() {
     const user = props.auth.user;
     const canPos = user.access?.includes('2');
     const initials = `${user.fname?.[0] ?? ''}${user.lname?.[0] ?? ''}`.toUpperCase();
+    const branchLabel = useBranchLabel(user.branch?.location);
 
     return (
         <div className="bc-shop min-h-dvh bg-shop-bg text-shop-ink">
@@ -196,7 +201,7 @@ export default function Waiter() {
                         </button>
                     ) : (
                         <span className="shadow-shop-sm flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white p-1 ring-1 ring-black/5">
-                            <img src="/uploads/optimized/logo.webp" alt="Boundary Café" className="h-full w-full object-contain" />
+                            <img src={logoUrl} alt={businessName} className="h-full w-full object-contain" />
                         </span>
                     )}
                     <div className="min-w-0 flex-1">
@@ -211,7 +216,7 @@ export default function Waiter() {
                         ) : (
                             <>
                                 <p className="truncate font-display text-xl leading-tight font-bold">Table service</p>
-                                <p className="truncate text-xs text-shop-muted">{user.branch?.name ?? 'Boundary Café'}</p>
+                                <p className="truncate text-xs text-shop-muted">{branchLabel}</p>
                             </>
                         )}
                     </div>
@@ -878,6 +883,7 @@ function Ticket({
     sending: boolean;
     onSend: () => void;
 }) {
+    const rewardsName = useRewardsName();
     const [noteOpen, setNoteOpen] = useState<Record<string, boolean>>({});
     const [memberQuery, setMemberQuery] = useState('');
     const [memberMsg, setMemberMsg] = useState<string | null>(null);
@@ -1020,7 +1026,7 @@ function Ticket({
                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-shop-warning-soft text-shop-warning">
                             <Star className="h-3.5 w-3.5 fill-current" />
                         </span>
-                        Boundary Rewards
+                        {rewardsName}
                         <span className="font-normal text-shop-muted">(optional)</span>
                     </p>
                     {member ? (
