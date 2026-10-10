@@ -133,7 +133,8 @@ class StockAdjustmentController extends Controller
             $qty = (int) $validated['quantity'];
 
             // Deduct stock (clamp at 0 to avoid negative stock)
-            $productStock->decrement('stock', min($qty, $productStock->stock));
+            $stockDeducted = min($qty, (float) $productStock->stock);
+            $productStock->decrement('stock', $stockDeducted);
 
             $adjustment = StockAdjustment::create([
                 'branch_id' => $branchId,
@@ -141,6 +142,7 @@ class StockAdjustmentController extends Controller
                 'recorded_by' => $user->id,
                 'type' => $validated['type'],
                 'quantity' => $qty,
+                'stock_deducted' => $stockDeducted,
                 'unit_cost' => $unitCost,
                 'note' => $validated['note'] ?? null,
             ]);
@@ -176,10 +178,10 @@ class StockAdjustmentController extends Controller
         $this->authorizeBranch($stockAdjustment->branch_id);
 
         DB::transaction(function () use ($stockAdjustment, $user) {
-            // Restore the stock that was deducted
+            // Restore the stock that was deducted (older adjustments did not record it, so fall back to the quantity)
             ProductStock::where('product_id', $stockAdjustment->product_id)
                 ->where('branch_id', $stockAdjustment->branch_id)
-                ->increment('stock', $stockAdjustment->quantity);
+                ->increment('stock', $stockAdjustment->stock_deducted ?? $stockAdjustment->quantity);
 
             ActivityLog::create([
                 'user_id' => $user->id,

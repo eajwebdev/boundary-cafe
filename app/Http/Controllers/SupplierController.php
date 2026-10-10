@@ -3,12 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Supplier;
-use App\Models\Order;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
-use Illuminate\Validation\Rule;
 
 class SupplierController extends Controller
 {
@@ -16,32 +15,32 @@ class SupplierController extends Controller
     {
         $suppliers = Supplier::query()
             ->withCount(['orders', 'branches'])
-            ->get();                            
+            ->get();
 
         return Inertia::render('Suppliers/Index', [
-            'suppliers' => $suppliers,          
+            'suppliers' => $suppliers,
         ]);
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name'           => 'required|string|max:255|unique:suppliers,name',
-            'is_campus'      => 'nullable|boolean',
-            'phone'          => 'nullable|string|max:50',
-            'address'        => 'nullable|string|max:255',
+            'name' => 'required|string|max:255|unique:suppliers,name',
+            'is_campus' => 'nullable|boolean',
+            'phone' => 'nullable|string|max:50',
+            'address' => 'nullable|string|max:255',
             'contact_person' => 'nullable|string|max:100',
         ], [
             'name.unique' => 'A supplier with this name already exists.',
             'name.required' => 'Please enter a supplier name.',
-            'name.max'      => 'The name cannot be longer than 255 characters.',
+            'name.max' => 'The name cannot be longer than 255 characters.',
         ]);
 
         Supplier::create([
-            'name'           => trim($validated['name']),
-            'is_campus'      => $validated['is_campus'] ?? false,
-            'phone'          => $validated['phone'] ?? null,
-            'address'        => $validated['address'] ?? null,
+            'name' => trim($validated['name']),
+            'is_campus' => $validated['is_campus'] ?? false,
+            'phone' => $validated['phone'] ?? null,
+            'address' => $validated['address'] ?? null,
             'contact_person' => $validated['contact_person'] ?? null,
         ]);
 
@@ -54,28 +53,29 @@ class SupplierController extends Controller
     public function update(Request $request, Supplier $supplier)
     {
         $validated = $request->validate([
-            'name'           => [
+            'name' => [
                 'required',
                 'string',
                 'max:255',
                 Rule::unique('suppliers', 'name')->ignore($supplier->id),
             ],
-            'is_campus'      => 'nullable|boolean',
-            'phone'          => 'nullable|string|max:50',
-            'address'        => 'nullable|string|max:255',
+            'is_campus' => 'nullable|boolean',
+            'phone' => 'nullable|string|max:50',
+            'address' => 'nullable|string|max:255',
             'contact_person' => 'nullable|string|max:100',
         ], [
             'name.required' => 'Please enter a supplier name.',
-            'name.max'      => 'Name cannot be longer than 255 characters.',
-            'name.unique'   => 'A supplier with this name already exists.',
+            'name.max' => 'Name cannot be longer than 255 characters.',
+            'name.unique' => 'A supplier with this name already exists.',
         ]);
 
         $supplier->update([
-            'name'           => trim($validated['name']),
-            'is_campus'      => $validated['is_campus'] ?? $supplier->is_campus,
-            'phone'          => $validated['phone'] ?? $supplier->phone,
-            'address'        => $validated['address'] ?? $supplier->address,
-            'contact_person' => $validated['contact_person'] ?? $supplier->contact_person,
+            'name' => trim($validated['name']),
+            'is_campus' => $validated['is_campus'] ?? $supplier->is_campus,
+            // A field sent empty clears it; a field not sent at all keeps its value.
+            'phone' => array_key_exists('phone', $validated) ? $validated['phone'] : $supplier->phone,
+            'address' => array_key_exists('address', $validated) ? $validated['address'] : $supplier->address,
+            'contact_person' => array_key_exists('contact_person', $validated) ? $validated['contact_person'] : $supplier->contact_person,
         ]);
 
         return back()->with('message', [

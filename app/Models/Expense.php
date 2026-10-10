@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -22,17 +22,18 @@ class Expense extends Model
         'reference_number',
         'receipt_img',
         'description',
+        'notes',
         'status',
     ];
 
     protected $casts = [
-        'amount'       => 'decimal:2',
+        'amount' => 'decimal:2',
         'expense_date' => 'date',
     ];
 
     protected $attributes = [
         'payment_method' => 'cash',
-        'status'         => 'approved',
+        'status' => 'approved',
     ];
 
     // ── Boot ───────────────────────────────────────────────────────
@@ -99,7 +100,7 @@ class Expense extends Model
 
     public function getFormattedAmountAttribute(): string
     {
-        return '₱' . number_format($this->amount, 2);
+        return '₱'.number_format($this->amount, 2);
     }
 
     public function getFormattedDateAttribute(): string

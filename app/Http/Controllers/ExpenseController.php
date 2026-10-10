@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ActivityLog;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
-use App\Models\ActivityLog;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -16,7 +16,7 @@ class ExpenseController extends Controller
     public function index(): Response
     {
         $user = Auth::user();
-        $branchId = $user->branch_id;
+        $branchId = $this->workingBranchId();
         $isManager = $user->hasElevatedAccess() || in_array($user->role ?? '', ['manager', 'administrator', 'super_admin']);
 
         $expenses = Expense::with(['category', 'user'])
@@ -32,13 +32,13 @@ class ExpenseController extends Controller
             ->sum('amount');
 
         return Inertia::render('Expenses/Index', [
-            'expenses'       => $expenses,
-            'categories'     => $categories,
+            'expenses' => $expenses,
+            'categories' => $categories,
             'total_this_month' => (float) $totalThisMonth,
-            'is_manager'     => $isManager,
-            'current_user'   => [
-                'id'   => $user->id,
-                'name' => trim($user->fname . ' ' . $user->lname),
+            'is_manager' => $isManager,
+            'current_user' => [
+                'id' => $user->id,
+                'name' => trim($user->fname.' '.$user->lname),
                 'role' => $user->role ?? 'unknown',
             ],
         ]);
@@ -50,40 +50,40 @@ class ExpenseController extends Controller
 
         $validated = $request->validate([
             'expense_category_id' => ['required', 'exists:expense_categories,id'],
-            'amount'              => ['required', 'numeric', 'min:0.01'],
-            'expense_date'        => ['required', 'date'],
-            'description'         => ['required', 'string', 'max:500'],
-            'payment_method'      => ['required', 'in:cash,bank,card'],
-            'notes'               => ['nullable', 'string', 'max:1000'],
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'expense_date' => ['required', 'date'],
+            'description' => ['required', 'string', 'max:500'],
+            'payment_method' => ['required', 'in:cash,bank,card'],
+            'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $status = 'approved';
 
         $expense = Expense::create([
-            'branch_id'           => $user->branch_id,
-            'user_id'             => $user->id,
+            'branch_id' => $this->workingBranchId(),
+            'user_id' => $user->id,
             'expense_category_id' => $validated['expense_category_id'],
-            'amount'              => $validated['amount'],
-            'expense_date'        => $validated['expense_date'],
-            'description'         => trim($validated['description']),
-            'payment_method'      => $validated['payment_method'],
-            'notes'               => $validated['notes'] ?? null,
-            'status'              => $status,
+            'amount' => $validated['amount'],
+            'expense_date' => $validated['expense_date'],
+            'description' => trim($validated['description']),
+            'payment_method' => $validated['payment_method'],
+            'notes' => $validated['notes'] ?? null,
+            'status' => $status,
         ]);
 
         ActivityLog::create([
-            'user_id'      => $user->id,
-            'action'       => 'expense_created',
+            'user_id' => $user->id,
+            'action' => 'expense_created',
             'subject_type' => Expense::class,
-            'subject_id'   => $expense->id,
-            'properties'   => [
-                'amount'      => (float) $validated['amount'],
+            'subject_id' => $expense->id,
+            'properties' => [
+                'amount' => (float) $validated['amount'],
                 'category_id' => $validated['expense_category_id'],
                 'description' => $validated['description'],
             ],
         ]);
 
-        $msg = "Expense of ₱" . number_format($expense->amount, 2) . " recorded.";
+        $msg = 'Expense of ₱'.number_format($expense->amount, 2).' recorded.';
 
         return back()->with('message', ['type' => 'success', 'text' => $msg]);
     }
@@ -92,57 +92,62 @@ class ExpenseController extends Controller
     {
         $this->authorizeBranch($expense->branch_id);
         $expense->load(['category', 'user']);
+
         return Inertia::render('Expenses/Show', ['expense' => $expense]);
     }
 
     public function update(Request $request, Expense $expense): RedirectResponse
     {
         $user = Auth::user();
-        if (!$user->hasElevatedAccess()) abort(403);
+        if (! $user->hasElevatedAccess()) {
+            abort(403);
+        }
         $this->authorizeBranch($expense->branch_id);
 
         $validated = $request->validate([
             'expense_category_id' => ['required', 'exists:expense_categories,id'],
-            'amount'              => ['required', 'numeric', 'min:0.01'],
-            'expense_date'        => ['required', 'date'],
-            'description'         => ['required', 'string', 'max:500'],
-            'payment_method'      => ['required', 'in:cash,bank,card'],
-            'notes'               => ['nullable', 'string', 'max:1000'],
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'expense_date' => ['required', 'date'],
+            'description' => ['required', 'string', 'max:500'],
+            'payment_method' => ['required', 'in:cash,bank,card'],
+            'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $expense->update($validated);
 
         ActivityLog::create([
-            'user_id'      => $user->id,
-            'action'       => 'expense_updated',
+            'user_id' => $user->id,
+            'action' => 'expense_updated',
             'subject_type' => Expense::class,
-            'subject_id'   => $expense->id,
+            'subject_id' => $expense->id,
         ]);
 
         return back()->with('message', [
             'type' => 'success',
-            'text' => "Expense updated successfully.",
+            'text' => 'Expense updated successfully.',
         ]);
     }
 
     public function destroy(Expense $expense): RedirectResponse
     {
         $user = Auth::user();
-        if (!$user->hasElevatedAccess()) abort(403);
+        if (! $user->hasElevatedAccess()) {
+            abort(403);
+        }
         $this->authorizeBranch($expense->branch_id);
 
         $expense->delete();
 
         ActivityLog::create([
-            'user_id'      => $user->id,
-            'action'       => 'expense_deleted',
+            'user_id' => $user->id,
+            'action' => 'expense_deleted',
             'subject_type' => Expense::class,
-            'subject_id'   => $expense->id,
+            'subject_id' => $expense->id,
         ]);
 
         return back()->with('message', [
             'type' => 'success',
-            'text' => "Expense deleted successfully.",
+            'text' => 'Expense deleted successfully.',
         ]);
     }
 }

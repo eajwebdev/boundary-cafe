@@ -13,20 +13,32 @@ class StockAdjustment extends Model
         'recorded_by',
         'type',
         'quantity',
+        'stock_deducted',
         'unit_cost',
         'note',
     ];
 
     protected $casts = [
-        'quantity'  => 'integer',
+        'quantity' => 'integer',
         'unit_cost' => 'decimal:2',
     ];
 
     // ── Relationships ─────────────────────────────────────────────────────────
 
-    public function branch(): BelongsTo     { return $this->belongsTo(Branch::class); }
-    public function product(): BelongsTo    { return $this->belongsTo(Product::class); }
-    public function recordedBy(): BelongsTo { return $this->belongsTo(User::class, 'recorded_by'); }
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
+
+    public function recordedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'recorded_by');
+    }
 
     // ── Accessors ─────────────────────────────────────────────────────────────
 
@@ -38,18 +50,25 @@ class StockAdjustment extends Model
     public static function typeLabel(string $type): string
     {
         return match ($type) {
-            'damage'     => 'Damage',
-            'loss'       => 'Loss',
-            'expired'    => 'Expired',
-            'theft'      => 'Theft',
+            'damage' => 'Damage',
+            'loss' => 'Loss',
+            'expired' => 'Expired',
+            'theft' => 'Theft',
             'correction' => 'Correction',
-            'other'      => 'Other',
-            default      => ucfirst($type),
+            'other' => 'Other',
+            default => ucfirst($type),
         };
     }
 
     // ── Scopes ────────────────────────────────────────────────────────────────
 
-    public function scopeForBranch($query, int $branchId) { return $query->where('branch_id', $branchId); }
-    public function scopeOfType($query, string $type)      { return $query->where('type', $type); }
+    public function scopeForBranch($query, int $branchId)
+    {
+        return $query->where('branch_id', $branchId);
+    }
+
+    public function scopeOfType($query, string $type)
+    {
+        return $query->where('type', $type);
+    }
 }
