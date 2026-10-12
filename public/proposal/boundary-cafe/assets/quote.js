@@ -21,7 +21,7 @@
         ['Point of sale', [
           'POS for dine-in & take-out, split tender and receipts',
           'Sales history, voids and reprints',
-          'Customers with Boundary Rewards loyalty',
+          'Customer records and purchase history',
         ]],
         ['Menu, inventory & purchasing', [
           'Products & categories with photos',
@@ -52,13 +52,16 @@
         'Product variants, add-ons and bundles / meal sets',
         'Losses & damages, and stock transfers between branches',
         'Promos & discounts, shown on the POS and storefront',
-        'Loyalty tiers and birthday bonus points',
         'Priority support with daily backups',
       ],
     },
   };
 
   var ADDON_INFO = {
+    rewards: {
+      name: 'Loyalty Rewards',
+      desc: 'Points on every purchase, redeemable at the POS and online, with loyalty tiers and birthday bonus points.',
+    },
     storefront: {
       name: 'Online Storefront',
       desc: 'Customer ordering website with sign-up and login, Mabinay delivery-zone map, live order tracking, and an online orders board for staff.',
@@ -86,7 +89,6 @@
   };
 
   var FREE_MODULES = [
-    ['Loyalty Rewards', 'Points on every purchase, redeemable at the POS and online.'],
     ['Custom Domain & Branding', 'Your own web address, SSL, and your logo and colours.'],
     ['Analytics Dashboard Pro', 'Tabbed dashboard for sales, inventory, customers and orders, plus the expense report.'],
     ['Purchasing & Suppliers', 'Purchase orders, goods receiving (GRN) and a supplier directory.'],
