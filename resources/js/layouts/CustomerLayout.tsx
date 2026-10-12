@@ -124,8 +124,8 @@ export default function CustomerLayout({ children, title, headerSlot, headerEnd,
     return (
         <AuthSheetContext.Provider value={{ requireAuth, customer }}>
             <Head title={title}>
-                <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-                <meta name="theme-color" content="#111b40" media="(prefers-color-scheme: dark)" />
+                {/* The customer side is always light (see app.tsx), so the browser bar stays white too. */}
+                <meta name="theme-color" content="#ffffff" />
             </Head>
             <div className="bc-shop min-h-dvh bg-shop-bg">
                 <a

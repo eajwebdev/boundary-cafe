@@ -4,7 +4,7 @@ import { createInertiaApp, router } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 // ── Theme support ───────────────────────────────────────────────────────────────
 import { ThemeProvider } from 'next-themes';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import '../css/app.css';
 
@@ -15,9 +15,30 @@ import { Toaster } from '@/components/ui/sonner';
 // ── Optional: StrictMode only in development ───────────────────────────────────
 const StrictModeWrapper = import.meta.env.DEV ? React.StrictMode : React.Fragment;
 
-function Providers({ children }: { children: React.ReactNode }) {
+/** Customer-facing pages (storefront, checkout, account…) are always shown in the light theme. */
+function isCustomerPage(component: string): boolean {
+    return component === 'Landing/Index' || component.startsWith('Customer/');
+}
+
+/** The page component on screen, kept current across Inertia navigations. */
+function useCurrentPage(initial: string): string {
+    const [component, setComponent] = useState(initial);
+    useEffect(() => router.on('navigate', (event) => setComponent(event.detail.page.component)), []);
+    return component;
+}
+
+function Providers({ initialPage, children }: { initialPage: string; children: React.ReactNode }) {
+    const forcedTheme = isCustomerPage(useCurrentPage(initialPage)) ? 'light' : undefined;
+
     return (
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange storageKey="psis-theme">
+        <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+            storageKey="psis-theme"
+            forcedTheme={forcedTheme}
+        >
             {children}
             <ConfirmDialogHost />
             <Toaster
@@ -93,7 +114,7 @@ createInertiaApp({
 
         createRoot(el).render(
             <StrictModeWrapper>
-                <Providers>
+                <Providers initialPage={props.initialPage.component}>
                     <App {...props} />
                 </Providers>
             </StrictModeWrapper>,
