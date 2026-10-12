@@ -17,14 +17,23 @@ class LoyaltyTransaction extends Model
 
     public const TYPE_BONUS = 'bonus';
 
+    /** Points held for a reward claim (becomes TYPE_REDEEM when the claim is redeemed). */
+    public const TYPE_RESERVE = 'reserve';
+
+    /** Held points returned because a reward claim was cancelled, expired or voided. */
+    public const TYPE_RELEASE = 'release';
+
+    public const TYPE_EXPIRE = 'expire';
+
     protected $fillable = [
-        'customer_id', 'branch_id', 'sale_id', 'user_id', 'type',
-        'points', 'balance_after', 'reason',
+        'customer_id', 'branch_id', 'sale_id', 'reward_claim_id', 'user_id', 'type',
+        'points', 'balance_after', 'reason', 'meta',
     ];
 
     protected $casts = [
         'points' => 'integer',
         'balance_after' => 'integer',
+        'meta' => 'array',
     ];
 
     public function customer(): BelongsTo
@@ -40,6 +49,11 @@ class LoyaltyTransaction extends Model
     public function sale(): BelongsTo
     {
         return $this->belongsTo(Sale::class);
+    }
+
+    public function rewardClaim(): BelongsTo
+    {
+        return $this->belongsTo(LoyaltyRewardClaim::class, 'reward_claim_id');
     }
 
     public function user(): BelongsTo

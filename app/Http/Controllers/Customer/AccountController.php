@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\Barangay;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
+use App\Models\CustomerSocialAccount;
 use App\Models\LoyaltyTransaction;
 use App\Services\DeliveryZoneService;
+use App\Services\LoyaltyRewardService;
 use App\Services\LoyaltyService;
 use App\Services\OnlineOrderService;
 use Illuminate\Http\RedirectResponse;
@@ -42,6 +44,19 @@ class AccountController extends Controller
                 'birthday' => $customer->birthday?->toDateString(),
                 'customer_number' => $customer->customer_number,
                 'joined_at' => $customer->joined_at?->toDateString(),
+                'has_password' => $customer->hasOnlineAccount(),
+                'loyalty_points' => (int) $customer->loyalty_points,
+                'orders_count' => $customer->onlineOrders()->count(),
+                'active_orders_count' => $customer->onlineOrders()->active()->count(),
+            ],
+            'social' => [
+                'available' => CustomerSocialAccount::enabledProviders(),
+                'linked' => $customer->socialAccounts()->get(['provider', 'email', 'created_at'])->map(fn (CustomerSocialAccount $a) => [
+                    'provider' => $a->provider,
+                    'label' => CustomerSocialAccount::label($a->provider),
+                    'email' => $a->email,
+                    'linked_at' => $a->created_at?->toIso8601String(),
+                ])->values(),
             ],
             'addresses' => $customer->addresses()->get()->map(fn (CustomerAddress $a) => $a->toFrontend())->values(),
             'zone' => $this->zone->toFrontend(),
@@ -74,13 +89,15 @@ class AccountController extends Controller
 
     public function updatePassword(Request $request): RedirectResponse
     {
+        $customer = $this->customer();
+        // Accounts made with Google/Facebook have no password yet: they can set one without a current password.
+        $hasPassword = $customer->hasOnlineAccount();
         $data = $request->validate([
-            'current_password' => ['required', 'string'],
+            'current_password' => [$hasPassword ? 'required' : 'nullable', 'string'],
             'password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
         ]);
 
-        $customer = $this->customer();
-        if (! Hash::check($data['current_password'], $customer->password)) {
+        if ($hasPassword && ! Hash::check($data['current_password'], $customer->password)) {
             throw ValidationException::withMessages(['current_password' => 'Your current password is incorrect.']);
         }
 
@@ -89,9 +106,10 @@ class AccountController extends Controller
         return back()->with('success', 'Password changed.');
     }
 
-    public function rewards(): Response
+    public function rewards(LoyaltyRewardService $rewards): Response
     {
-        $customer = $this->customer();
+        $rewards->expireStale($this->customer());
+        $customer = $this->customer()->refresh();
         $branchId = app(OnlineOrderService::class)->branch()?->id;
 
         return Inertia::render('Customer/Rewards', [
@@ -100,13 +118,32 @@ class AccountController extends Controller
                 'customer_number' => $customer->customer_number,
                 'loyalty_token' => $customer->loyalty_token,
                 'card_url' => route('loyalty.card', $customer->loyalty_token),
+                'masked_contact' => $customer->maskedContactNumber(),
                 'points' => (int) $customer->loyalty_points,
+                'reserved_points' => (int) $customer->reserved_points,
                 'lifetime_earned' => (int) $customer->lifetime_points_earned,
                 'lifetime_redeemed' => (int) $customer->lifetime_points_redeemed,
                 'enabled' => (bool) $customer->loyalty_enabled,
+                'joined_at' => $customer->joined_at?->format('M Y'),
             ],
             'tier' => $this->loyalty->tierFor($customer, $branchId),
             'rules' => $this->loyalty->rules($branchId),
+            // Rewards are claimed in-store at any branch, so the catalog is not filtered by branch here.
+            'catalog' => $rewards->catalog()->map(fn ($reward) => $rewards->rewardToFrontend($reward, $branchId))->values(),
+            'claims' => $customer->rewardClaims()->with(['items', 'branch:id,name'])->limit(20)->get()
+                ->map(fn ($claim) => $rewards->claimToCustomer($claim))->values(),
+            'purchases' => $customer->sales()->with('branch:id,name')->where('status', 'completed')->latest()->limit(20)
+                ->get(['id', 'receipt_number', 'branch_id', 'total', 'loyalty_points_earned', 'reward_retail_value', 'channel', 'created_at'])
+                ->map(fn ($sale) => [
+                    'id' => $sale->id,
+                    'receipt_number' => $sale->receipt_number,
+                    'branch' => $sale->branch?->name,
+                    'total' => (float) $sale->total,
+                    'points_earned' => (int) $sale->loyalty_points_earned,
+                    'is_reward' => (float) $sale->total === 0.0 && (float) $sale->reward_retail_value > 0,
+                    'channel' => $sale->channel,
+                    'created_at' => $sale->created_at?->toIso8601String(),
+                ])->values(),
             'transactions' => $customer->loyaltyTransactions()->limit(50)->get()->map(fn (LoyaltyTransaction $t) => [
                 'id' => $t->id,
                 'type' => $t->type,

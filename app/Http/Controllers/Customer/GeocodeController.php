@@ -26,6 +26,8 @@ class GeocodeController extends Controller
             'label' => $result['label'] ?? null,
             'barangay' => $result['barangay'] ?? null,
             'municipality' => $result['municipality'] ?? null,
+            'province' => $result['province'] ?? null,
+            'zip_code' => $result['zip_code'] ?? null,
             'resolved' => $result !== null,
         ]);
     }

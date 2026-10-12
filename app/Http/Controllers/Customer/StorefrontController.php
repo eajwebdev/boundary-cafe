@@ -48,7 +48,8 @@ class StorefrontController extends Controller
             'barangays' => fn () => Barangay::deliverable()->ordered()->pluck('name'),
             'loyaltyRules' => [
                 'enabled' => $this->loyalty->enabled($branch?->id),
-                'spend_per_point' => $this->loyalty->rules($branch?->id)['spend_per_point'],
+                'spend_increment' => $this->loyalty->rules($branch?->id)['spend_increment'],
+                'points_per_increment' => $this->loyalty->rules($branch?->id)['points_per_increment'],
                 'birthday_bonus' => $this->loyalty->rules($branch?->id)['birthday_bonus'],
             ],
             'activeOrder' => $activeOrder ? [

@@ -112,7 +112,8 @@ export function ReportHeader({
     title: string;
     context: ReportContext;
     scope?: string;
-    onPdf: () => void;
+    /** Omit for a screen-only report: the PDF button is hidden. */
+    onPdf?: () => void;
     children?: React.ReactNode;
 }) {
     return (
@@ -128,9 +129,11 @@ export function ReportHeader({
             }
         >
             {children}
-            <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={onPdf}>
-                <FileDown className="h-4 w-4" /> Download PDF
-            </Button>
+            {onPdf && (
+                <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={onPdf}>
+                    <FileDown className="h-4 w-4" /> Download PDF
+                </Button>
+            )}
         </PageHeader>
     );
 }

@@ -19,7 +19,7 @@ interface Props {
 
 /**
  * Photo-first menu card.
- *   < 640px: horizontal row (text left, square photo right) — fast to scan on a phone.
+ *   < 640px: compact horizontal row (text left, small square photo right) so a phone shows ~6 items per screen.
  *   ≥ 640px: vertical tile (4:3 photo on top).
  */
 function ProductCardBase({ product: p, baseQty, totalQty, disabled, onOpen, onQuickAdd, onQuickRemove }: Props) {
@@ -29,15 +29,20 @@ function ProductCardBase({ product: p, baseQty, totalQty, disabled, onOpen, onQu
     return (
         <article
             className={cn(
-                'group relative flex h-full cursor-pointer gap-3 rounded-2xl bg-shop-surface p-3 shadow-shop-sm ring-1 ring-shop-line transition-[box-shadow,transform] duration-300 ease-shop sm:flex-col-reverse sm:gap-0 sm:p-0',
-                !soldOut && 'hover:-translate-y-0.5 hover:shadow-shop-md',
+                'group shadow-shop-sm relative flex h-full cursor-pointer gap-3 rounded-2xl bg-shop-surface p-2.5 ring-1 ring-shop-line transition-[box-shadow,transform] duration-300 ease-shop sm:flex-col-reverse sm:gap-0 sm:p-0',
+                !soldOut && 'hover:shadow-shop-md hover:-translate-y-0.5',
                 soldOut && 'cursor-not-allowed',
                 totalQty > 0 && 'ring-2 ring-shop-accent/60',
             )}
         >
             {/* Text */}
-            <div className="flex min-w-0 flex-1 flex-col sm:p-4 sm:pt-3">
-                <h3 className={cn('font-display text-[17px] leading-snug font-semibold text-shop-ink', soldOut && 'text-shop-muted')}>
+            <div className="flex min-w-0 flex-1 flex-col py-0.5 sm:p-4 sm:pt-3">
+                <h3
+                    className={cn(
+                        'line-clamp-2 font-display text-[15px] leading-snug font-semibold text-shop-ink sm:text-[17px]',
+                        soldOut && 'text-shop-muted',
+                    )}
+                >
                     <button
                         type="button"
                         className="cursor-pointer text-left after:absolute after:inset-0 after:rounded-2xl focus-visible:outline-none"
@@ -51,9 +56,11 @@ function ProductCardBase({ product: p, baseQty, totalQty, disabled, onOpen, onQu
                         {p.name}
                     </button>
                 </h3>
-                {p.description && <p className="mt-1 line-clamp-2 text-sm leading-snug text-shop-muted">{p.description}</p>}
-                <div className="mt-auto flex items-end justify-between gap-2 pt-3">
-                    <p className="text-[17px] font-bold text-shop-ink">
+                {p.description && (
+                    <p className="mt-0.5 line-clamp-1 text-[13px] leading-snug text-shop-muted sm:mt-1 sm:line-clamp-2 sm:text-sm">{p.description}</p>
+                )}
+                <div className="mt-auto flex items-end justify-between gap-2 pt-1.5 sm:pt-3">
+                    <p className="text-[15px] font-bold text-shop-ink sm:text-[17px]">
                         {hasOptions && <span className="mr-1 text-xs font-medium text-shop-muted">from</span>}
                         <Price value={p.price} />
                     </p>
@@ -62,17 +69,19 @@ function ProductCardBase({ product: p, baseQty, totalQty, disabled, onOpen, onQu
             </div>
 
             {/* Photo */}
-            <div className="relative h-28 w-28 shrink-0 sm:h-auto sm:w-full">
+            <div className="relative h-[84px] w-[84px] shrink-0 sm:h-auto sm:w-full">
                 <ProductImage
                     src={p.image}
                     alt={p.name}
                     className={cn(
-                        'h-full w-full rounded-xl sm:aspect-[4/3] sm:rounded-b-none sm:rounded-t-2xl [&_img]:group-hover:scale-[1.03]',
+                        'h-full w-full rounded-xl sm:aspect-[4/3] sm:rounded-t-2xl sm:rounded-b-none [&_img]:group-hover:scale-[1.03]',
                         soldOut && 'opacity-60 grayscale',
                     )}
                 />
                 {soldOut ? (
-                    <span className="absolute inset-x-2 bottom-2 rounded-xl bg-shop-ink/85 py-1.5 text-center text-xs font-semibold text-shop-bg">Sold out today</span>
+                    <span className="absolute inset-x-2 bottom-2 rounded-xl bg-shop-ink/85 py-1.5 text-center text-xs font-semibold text-shop-bg">
+                        Sold out today
+                    </span>
                 ) : (
                     <div className="absolute -right-1.5 -bottom-1.5 z-10 sm:right-3 sm:bottom-3">
                         {hasOptions ? (

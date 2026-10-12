@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Customer;
 use App\Models\LoyaltyTransaction;
+use App\Notifications\LoyaltyActivity;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,6 +28,8 @@ class LoyaltyController extends Controller
                 'name' => $customer->name,
                 'customer_number' => $customer->customer_number,
                 'loyalty_token' => $customer->loyalty_token,
+                'card_url' => route('loyalty.card', $customer->loyalty_token),
+                'masked_contact' => $customer->maskedContactNumber(),
                 'points' => $customer->loyalty_points,
                 'branch' => $customer->branch?->name,
                 'joined_at' => $customer->joined_at?->format('F Y'),
@@ -34,12 +37,24 @@ class LoyaltyController extends Controller
         ]);
     }
 
+    /**
+     * Identify a member at the POS from their card QR (raw token or card link), member number
+     * or mobile number. Members are shared by every branch. Identifying a member never spends
+     * points — that needs the separate reward QR.
+     */
     public function lookup(Request $request): JsonResponse
     {
-        $data = $request->validate(['code' => ['required', 'string', 'max:100']]);
+        $data = $request->validate(['code' => ['required', 'string', 'max:200']]);
         $code = trim($data['code']);
+        if (str_contains($code, '/loyalty/card/')) {
+            $code = Str::of($code)->after('/loyalty/card/')->before('?')->trim('/')->toString();
+        }
+        $phone = Customer::normalisePhone($code);
+
         $customer = Customer::where('is_active', true)->where('loyalty_enabled', true)
-            ->where(fn ($query) => $query->where('loyalty_token', $code)->orWhere('customer_number', $code))
+            ->where(fn ($query) => $query->where('loyalty_token', $code)
+                ->orWhere('customer_number', strtoupper($code))
+                ->when($phone && preg_match('/^09\d{9}$/', $phone), fn ($q) => $q->orWhere('contact_number', $phone)))
             ->firstOrFail();
 
         return response()->json([
@@ -47,7 +62,9 @@ class LoyaltyController extends Controller
             'name' => $customer->name,
             'customer_number' => $customer->customer_number,
             'contact' => $this->mask($customer->contact_number),
+            'contact_number' => $customer->contact_number,
             'points' => $customer->loyalty_points,
+            'reserved_points' => $customer->reserved_points,
         ]);
     }
 
@@ -79,6 +96,16 @@ class LoyaltyController extends Controller
             'balance_after' => $newBalance,
             'reason' => $data['reason'],
         ]);
+
+        if ($actual !== 0) {
+            $customer->notify(new LoyaltyActivity(
+                kind: LoyaltyActivity::POINTS_ADJUSTED,
+                title: $actual > 0 ? "{$actual} points added" : abs($actual).' points deducted',
+                body: $data['reason'],
+                points: $actual,
+                balance: $newBalance,
+            ));
+        }
 
         return back()->with('success', 'Loyalty points adjusted.');
     }

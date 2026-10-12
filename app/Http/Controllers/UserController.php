@@ -65,7 +65,7 @@ class UserController extends Controller
         // Administrator → only manager and cashier (cannot promote to admin-tier)
         $assignableRoles = $isSuper
             ? User::roles()
-            : collect(User::roles())->only(['manager', 'cashier', 'waiter'])->toArray();
+            : collect(User::roles())->only(['manager', 'cashier', 'waiter', 'rider'])->toArray();
 
         // Menus the actor can grant, filtered by enabled modules
         $enabledMenuIds = $this->getEnabledMenuIds();
@@ -105,7 +105,7 @@ class UserController extends Controller
 
         $allowedRoles = $isSuper
             ? array_keys(User::roles())
-            : ['manager', 'cashier', 'waiter'];
+            : ['manager', 'cashier', 'waiter', 'rider'];
 
         $validated = $request->validate([
             'fname' => ['required', 'string', 'max:255'],
@@ -171,7 +171,7 @@ class UserController extends Controller
 
         $allowedRoles = $isSuper
             ? array_keys(User::roles())
-            : ['manager', 'cashier', 'waiter'];
+            : ['manager', 'cashier', 'waiter', 'rider'];
 
         $validated = $request->validate([
             'fname' => ['required', 'string', 'max:255'],
@@ -289,6 +289,12 @@ class UserController extends Controller
         if ($role === User::ROLE_WAITER) {
             return User::ORDER_TAKER_MENUS;
         }
+
+        if ($role === User::ROLE_RIDER) {
+            return User::RIDER_MENUS;
+        }
+
+        $access = array_values(array_filter($access, fn ($id) => ! in_array((string) $id, MenuHelper::roleOnly(), true)));
 
         if ($isSuper) {
             return $access;

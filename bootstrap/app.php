@@ -4,6 +4,7 @@ use App\Http\Middleware\CheckMenuAccess;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\KeepFlashForBackgroundRequests;
 use App\Http\Middleware\RestrictOrderTakerAccess;
+use App\Http\Middleware\RestrictRiderAccess;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -31,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'access' => CheckMenuAccess::class,
             'order-taker' => RestrictOrderTakerAccess::class,
+            'rider-only' => RestrictRiderAccess::class,
         ]);
 
         $middleware->redirectTo(

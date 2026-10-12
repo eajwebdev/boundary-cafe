@@ -240,6 +240,11 @@ class LoginAuthController extends Controller
             return route('table-orders.index');
         }
 
+        // Riders land on their deliveries
+        if ($user->isRider()) {
+            return route('rider.dashboard');
+        }
+
         // Cashiers always land on POS — never on dashboard
         if ($user->isCashier()) {
             return route('pos.index');

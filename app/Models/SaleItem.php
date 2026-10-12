@@ -2,8 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Services\ProductCostService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -19,16 +20,24 @@ class SaleItem extends Model
         'product_variant_id',
         'bundle_sale_item_id',    // parent bundle row (null if not a component)
         'is_bundle_component',    // true = this row is a component, hidden on receipt
+        'is_reward',              // true = given for loyalty points (price 0)
+        'reward_points',
+        'retail_price',           // menu price at the time — reference value of a reward
+        'unit_cost',
         'quantity',
         'price',
         'total',
     ];
 
     protected $casts = [
-        'quantity'            => 'float',
-        'price'               => 'decimal:2',
-        'total'               => 'decimal:2',
+        'quantity' => 'float',
+        'price' => 'decimal:2',
+        'total' => 'decimal:2',
         'is_bundle_component' => 'boolean',
+        'is_reward' => 'boolean',
+        'reward_points' => 'integer',
+        'retail_price' => 'decimal:2',
+        'unit_cost' => 'decimal:2',
     ];
 
     protected $attributes = [
@@ -44,12 +53,31 @@ class SaleItem extends Model
                 $item->total = round($item->quantity * (float) $item->price, 2);
             }
         });
+
+        // Freeze what the item cost when it was sold, so later price changes do not rewrite past margins.
+        static::creating(function (SaleItem $item) {
+            if ($item->unit_cost !== null || ! $item->product_id) {
+                return;
+            }
+            $branchId = Sale::whereKey($item->sale_id)->value('branch_id');
+            $product = Product::find($item->product_id);
+            if ($branchId && $product) {
+                $item->unit_cost = app(ProductCostService::class)->unitCost($product, (int) $branchId, $item->product_variant_id);
+            }
+        });
     }
 
     // ── Relationships ──────────────────────────────────────────────
 
-    public function sale(): BelongsTo    { return $this->belongsTo(Sale::class); }
-    public function product(): BelongsTo { return $this->belongsTo(Product::class); }
+    public function sale(): BelongsTo
+    {
+        return $this->belongsTo(Sale::class);
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
 
     public function variant(): BelongsTo
     {
@@ -70,14 +98,32 @@ class SaleItem extends Model
 
     // ── Helpers ────────────────────────────────────────────────────
 
-    public function isBundleHeader(): bool    { return $this->product?->isBundle() && !$this->is_bundle_component; }
-    public function isBundleComponent(): bool { return (bool) $this->is_bundle_component; }
-    public function isStandaloneItem(): bool  { return !$this->is_bundle_component && !$this->isBundleHeader(); }
+    public function isBundleHeader(): bool
+    {
+        return $this->product?->isBundle() && ! $this->is_bundle_component;
+    }
+
+    public function isBundleComponent(): bool
+    {
+        return (bool) $this->is_bundle_component;
+    }
+
+    public function isStandaloneItem(): bool
+    {
+        return ! $this->is_bundle_component && ! $this->isBundleHeader();
+    }
 
     // ── Accessors ──────────────────────────────────────────────────
 
-    public function getFormattedPriceAttribute(): string { return '₱' . number_format($this->price, 2); }
-    public function getFormattedTotalAttribute(): string { return '₱' . number_format($this->total, 2); }
+    public function getFormattedPriceAttribute(): string
+    {
+        return '₱'.number_format($this->price, 2);
+    }
+
+    public function getFormattedTotalAttribute(): string
+    {
+        return '₱'.number_format($this->total, 2);
+    }
 
     /**
      * Display name for receipts and reports.
@@ -89,11 +135,11 @@ class SaleItem extends Model
         $name = $this->product?->name ?? 'Unknown';
 
         if ($this->variant) {
-            $name .= ' (' . $this->variant->name . ')';
+            $name .= ' ('.$this->variant->name.')';
         }
 
         if ($this->is_bundle_component) {
-            $name = '  — ' . $name; // indent component rows on receipt
+            $name = '  — '.$name; // indent component rows on receipt
         }
 
         return $name;

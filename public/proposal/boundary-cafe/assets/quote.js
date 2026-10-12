@@ -21,7 +21,7 @@
         ['Point of sale', [
           'POS for dine-in & take-out, split tender and receipts',
           'Sales history, voids and reprints',
-          'Customers with Boundary Rewards loyalty',
+          'Customer list with purchase history',
         ]],
         ['Menu, inventory & purchasing', [
           'Products & categories with photos',
@@ -52,7 +52,6 @@
         'Product variants, add-ons and bundles / meal sets',
         'Losses & damages, and stock transfers between branches',
         'Promos & discounts, shown on the POS and storefront',
-        'Loyalty tiers and birthday bonus points',
         'Priority support with daily backups',
       ],
     },
@@ -71,6 +70,10 @@
       name: 'Face Attendance',
       desc: 'Staff time in and out on their own phone with a PIN, a GPS check that they are at the branch, and face recognition. A live face check (head turns and mouth movement in a random order) rejects photos and recorded videos, and each employee can only clock in from their own registered phone, so a co-worker cannot clock them in over a video call. Includes the attendance log with a photo of every time in and out.',
     },
+    loyalty: {
+      name: 'Loyalty Rewards',
+      desc: 'Points on every purchase, redeemable at the POS and online. Includes a digital member card with QR, a rewards catalog customers claim from their phone, member tiers and a birthday bonus.',
+    },
     epayment: {
       name: 'E-Payment Integration (PayMongo)',
       desc: 'Accept GCash, Maya, cards and QR Ph online and at the counter through PayMongo. Payments are confirmed automatically on the order.',
@@ -86,7 +89,6 @@
   };
 
   var FREE_MODULES = [
-    ['Loyalty Rewards', 'Points on every purchase, redeemable at the POS and online.'],
     ['Custom Domain & Branding', 'Your own web address, SSL, and your logo and colours.'],
     ['Analytics Dashboard Pro', 'Tabbed dashboard for sales, inventory, customers and orders, plus the expense report.'],
     ['Purchasing & Suppliers', 'Purchase orders, goods receiving (GRN) and a supplier directory.'],
@@ -441,30 +443,44 @@
   }
 
   // ── Downloadable document ──────────────────────────────
+  function docLabel(number, text) {
+    return '<p class="doc-label">' + (number ? '<b>' + number + '</b> · ' : '') + text + '</p>';
+  }
+
+  function docRow(index, name, desc, type, amount, isFree) {
+    return '<tr><td class="doc-num">' + String(index).padStart(2, '0') + '</td>' +
+      '<td><div class="doc-item">' + name + '</div>' + (desc ? '<div class="doc-desc">' + desc + '</div>' : '') + '</td>' +
+      '<td' + (isFree ? ' class="doc-inc"' : '') + '>' + type + '</td>' +
+      '<td' + (isFree ? ' class="doc-inc"' : '') + '>' + amount + '</td></tr>';
+  }
+
+  function signatureBlock(party, role) {
+    return '<div><strong>' + party + '</strong><span>' + role + '</span>' +
+      '<dl><dt>Signature</dt><dd></dd><dt>Printed name</dt><dd></dd><dt>Date</dt><dd></dd></dl></div>';
+  }
+
   function buildDocument() {
     var quote = computeQuote();
     var info = PLAN_INFO[state.plan];
     var branchWord = state.branches === 1 ? 'branch' : 'branches';
+    var addonCount = quote.paid.length + quote.included.length;
+    var index = 0;
 
-    var rows = '<tr><td><div class="doc-item">' + info.name + ' plan</div><div class="doc-desc">' + info.tagline + '</div></td>' +
-      '<td>Base plan</td><td>' + peso(quote.planPrice) + '</td></tr>';
+    var rows = docRow(++index, info.name + ' plan', info.tagline, 'Base plan', peso(quote.planPrice));
     rows += quote.paid.map(function (addon) {
-      return '<tr><td><div class="doc-item">' + ADDON_INFO[addon.id].name + '</div><div class="doc-desc">' + ADDON_INFO[addon.id].desc + '</div></td>' +
-        '<td>Add-on</td><td>' + peso(addon.price) + '</td></tr>';
+      return docRow(++index, ADDON_INFO[addon.id].name, ADDON_INFO[addon.id].desc, 'Add-on', peso(addon.price));
     }).join('');
     rows += quote.included.map(function (addon) {
-      return '<tr><td><div class="doc-item">' + ADDON_INFO[addon.id].name + '</div><div class="doc-desc">' + ADDON_INFO[addon.id].desc + '</div></td>' +
-        '<td class="doc-inc">Included</td><td class="doc-inc">' + peso(0) + '</td></tr>';
+      return docRow(++index, ADDON_INFO[addon.id].name, ADDON_INFO[addon.id].desc, 'Included', peso(0), true);
     }).join('');
-    rows += '<tr><td><div class="doc-item">Free modules</div><div class="doc-desc">' +
-      FREE_MODULES.map(function (mod) { return mod[0]; }).join(' · ') + '</div></td><td class="doc-inc">Free</td><td class="doc-inc">' + peso(0) + '</td></tr>';
+    rows += docRow(++index, 'Free modules', FREE_MODULES.map(function (mod) { return mod[0]; }).join(' · '), 'Free', peso(0), true);
 
-    var features = state.plan === 'advance'
-      ? PLAN_INFO.standard.groups.reduce(function (all, g) { return all.concat(g[1]); }, [])
-          .map(function (f) { return '<li>' + featureText(f) + '</li>'; }).join('') +
-        info.plus.map(function (f) { return '<li class="plus">' + featureText(f) + '</li>'; }).join('')
-      : info.groups.reduce(function (all, g) { return all.concat(g[1]); }, [])
-          .map(function (f) { return '<li>' + featureText(f) + '</li>'; }).join('');
+    var standardFeatures = PLAN_INFO.standard.groups.reduce(function (all, g) { return all.concat(g[1]); }, []);
+    var features = standardFeatures.map(function (f) { return '<li>' + featureText(f) + '</li>'; }).join('') +
+      (info.plus || []).map(function (f) { return '<li class="plus">' + featureText(f) + '</li>'; }).join('');
+    var legend = info.plus
+      ? '<p class="doc-legend"><span><i></i>Standard features</span><span><i class="plus"></i>Added in ' + info.name + '</span></p>'
+      : '';
 
     var extras = Q.extras(quote).map(function (row) {
       return '<div><span>' + row[0] + '</span><span>' + peso(row[1]) + '</span></div>';
@@ -477,37 +493,46 @@
     var doc = document.createElement('div');
     doc.className = 'doc';
     doc.innerHTML =
-      '<div class="doc-head"><img src="' + Q.assetBase + 'eaj-logo.png" alt="EAJ Web Development Services">' +
-        '<div class="masthead-quote"><p class="quote-word">QUOTE<span>.</span></p><dl class="meta">' + metaRows() + '</dl></div></div>' +
-      '<div class="doc-accent"></div>' +
+      '<header class="doc-head">' +
+        '<div class="doc-brand"><img src="' + Q.assetBase + 'eaj-icon.png" alt="EAJ">' +
+          '<div><strong>EAJ Web Development Services</strong><span>Software development & hosting</span></div></div>' +
+        '<div class="doc-title"><h1>QUOTATION<span>.</span></h1><dl class="doc-meta">' + metaRows() + '</dl></div>' +
+      '</header>' +
+      '<div class="doc-rule"></div>' +
       '<div class="doc-parties">' +
-        '<div><p class="party-label">Prepared for</p><strong>' + escapeHtml(details.client_name) + '</strong><span>' + escapeHtml(details.client_address) + '</span></div>' +
-        '<div><p class="party-label">Prepared by</p><strong>EAJ Web Development Services</strong><span>Software development & hosting</span></div>' +
-        '<div><p class="party-label">Project</p><strong>' + escapeHtml(details.project_name) + '</strong><span>' + escapeHtml(details.project_note) + '</span></div>' +
+        '<div>' + docLabel('', 'Prepared for') + '<strong>' + escapeHtml(details.client_name) + '</strong><span>' + escapeHtml(details.client_address) + '</span></div>' +
+        '<div>' + docLabel('', 'Prepared by') + '<strong>EAJ Web Development Services</strong><span>Software development & hosting</span></div>' +
+        '<div>' + docLabel('', 'Project') + '<strong>' + escapeHtml(details.project_name) + '</strong><span>' + escapeHtml(details.project_note) + '</span></div>' +
       '</div>' +
-      '<div class="doc-section avoid-break"><p class="eyebrow doc-eyebrow">01 · Your selection · ' + Q.docTitle + '</p>' +
+      '<section class="doc-section avoid-break">' + docLabel('01', 'Your selection · ' + Q.docTitle) +
         '<div class="doc-selection"><div><h3>' + info.name + ' plan</h3><p>' + state.branches + ' ' + branchWord + ' · ' +
           (Q.hasMonths ? monthsLabel(state.months) + ' · ' : '') +
-          (quote.paid.length + quote.included.length) + ' add-on' + ((quote.paid.length + quote.included.length) === 1 ? '' : 's') + ' · ' + Q.billingValue + '</p></div>' +
+          addonCount + ' add-on' + (addonCount === 1 ? '' : 's') + ' · ' + Q.billingValue + '</p></div>' +
         '<div class="doc-big">' + peso(quote.total) + '<small>' + Q.totalLabel(quote) +
-          (quote.discount ? ' · ' + quote.discountPercent + '% off' : '') + '</small></div></div></div>' +
-      '<div class="doc-section"><p class="eyebrow doc-eyebrow">02 · Breakdown · price per branch</p>' +
-        '<table class="doc-table"><thead><tr><th>Item</th><th>Type</th><th>' + Q.priceColumn + '</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+          (quote.discount ? ' · ' + quote.discountPercent + '% off' : '') + '</small></div></div>' +
+      '</section>' +
+      '<section class="doc-section">' + docLabel('02', 'Breakdown · price per branch') +
+        '<table class="doc-table"><thead><tr><th>#</th><th>Item</th><th>Type</th><th>' + Q.priceColumn + '</th></tr></thead><tbody>' + rows + '</tbody></table>' +
         '<div class="doc-totals avoid-break">' +
           calcRows(quote).map(function (row) {
             return '<div class="' + (row[2] || '') + '"><span>' + row[0] + '</span><span>' + row[1] + '</span></div>';
           }).join('') +
           '<div class="doc-grand"><span>' + Q.totalLabel(quote) + '</span><span>' + peso(quote.total) + '</span></div>' +
           extras +
-        '</div></div>' +
-      '<div class="doc-section doc-page-break"><p class="eyebrow">03 · What\'s included</p><h2>' + info.name + ' plan features</h2><ul class="doc-features">' + features + '</ul></div>' +
-      '<div class="doc-section"><p class="eyebrow">04 · Terms</p><h2>Terms & conditions</h2><ul class="doc-terms">' + terms + '</ul></div>' +
-      '<div class="doc-section"><p class="eyebrow">05 · Acceptance</p><h2>Conforme</h2>' +
-        '<p style="color:var(--muted);margin:0">Please sign below to confirm the selected plan and add-ons. We will schedule setup and staff training after we receive your signed copy.</p>' +
-        '<div class="doc-sign"><div><strong>EAJ Web Development Services</strong><span>Authorized representative · Date</span></div>' +
-        '<div><strong>' + escapeHtml(details.client_name) + '</strong><span>Owner / authorized representative · Date</span></div></div>' +
-        '<div class="doc-foot"><img src="' + Q.assetBase + 'eaj-mark.png" alt=""><span>Thank you for choosing EAJ Web Development Services.</span></div>' +
-      '</div>';
+        '</div>' +
+        '<p class="doc-note">' + escapeHtml(Q.totalNote(quote, peso)) + ' Prices in Philippine Peso, excluding applicable government taxes.</p>' +
+      '</section>' +
+      '<section class="doc-section doc-page-break">' + docLabel('03', 'What\'s included') + '<h2>' + info.name + ' plan features</h2>' + legend +
+        '<ul class="doc-features">' + features + '</ul></section>' +
+      '<section class="doc-section">' + docLabel('04', 'Terms') + '<h2>Terms & conditions</h2><ul class="doc-terms">' + terms + '</ul></section>' +
+      '<section class="doc-section avoid-break">' + docLabel('05', 'Acceptance') + '<h2>Conforme</h2>' +
+        '<p style="color:var(--muted)">By signing below, both parties agree to the selected plan, add-ons and terms in this quotation. We will schedule setup and staff training once we receive the signed copy.</p>' +
+        '<div class="doc-sign">' +
+          signatureBlock('EAJ Web Development Services', 'Authorized representative') +
+          signatureBlock(escapeHtml(details.client_name), 'Owner / authorized representative') +
+        '</div>' +
+        '<div class="doc-foot"><span>' + escapeHtml(Q.number) + ' · ' + escapeHtml(details.client_name) + '</span><span>Thank you for choosing EAJ Web Development Services.</span></div>' +
+      '</section>';
     return doc;
   }
 
@@ -532,19 +557,29 @@
     var label = button.innerHTML;
     button.disabled = true;
     button.textContent = 'Preparing PDF…';
-    // html2canvas measures against the viewport, so a visible scrollbar shifts the capture and clips the right edge.
+    // html2canvas measures against the viewport: a visible scrollbar clips the right edge, and a scrolled page
+    // (with smooth scrolling on) shifts the whole capture down, leaving a blank first page and cutting off the end.
+    // So capture from the very top with instant scrolling, then put the visitor back where they were.
     var rootStyle = document.documentElement.style;
-    var previousOverflow = rootStyle.overflow;
-    var restore = function () { rootStyle.overflow = previousOverflow; button.disabled = false; button.innerHTML = label; };
+    var previous = { overflow: rootStyle.overflow, scrollBehavior: rootStyle.scrollBehavior, x: window.scrollX, y: window.scrollY };
+    var restore = function () {
+      rootStyle.overflow = previous.overflow;
+      window.scrollTo(previous.x, previous.y);
+      rootStyle.scrollBehavior = previous.scrollBehavior;
+      button.disabled = false;
+      button.innerHTML = label;
+    };
 
     Promise.all([loadScript(HTML2PDF_SRC), document.fonts ? document.fonts.ready : null])
       .then(function () {
+        rootStyle.scrollBehavior = 'auto';
+        window.scrollTo(0, 0);
         rootStyle.overflow = 'hidden';
         return window.html2pdf().set({
-          margin: [10, 10, 12, 10],
+          margin: [14, 13, 16, 13],
           filename: fileName(),
           image: { type: 'jpeg', quality: 0.95 },
-          html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+          html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0 },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
           pagebreak: { mode: ['css', 'legacy'], avoid: ['.avoid-break', 'tr'] },
         }).from(buildDocument()).save();
@@ -553,14 +588,47 @@
       .catch(function () { restore(); printQuote(); });
   }
 
-  function printQuote() {
+  // Puts a fresh copy of the document (current selection) into the print area.
+  function preparePrint() {
     var root = el('print-root');
     root.innerHTML = '';
     root.appendChild(buildDocument());
-    var previousTitle = document.title;
-    document.title = fileName().replace(/\.pdf$/, '');
-    window.print();
-    document.title = previousTitle;
+    return root;
+  }
+
+  // Waits for the fonts and the logo, so the printout never comes out with a blank logo or fallback fonts.
+  function whenReady(root) {
+    var images = Array.prototype.map.call(root.querySelectorAll('img'), function (img) {
+      if (img.complete && img.naturalWidth) return Promise.resolve();
+      return new Promise(function (resolve) { img.onload = img.onerror = resolve; });
+    });
+    var fonts = document.fonts ? document.fonts.ready : Promise.resolve();
+    var timeout = new Promise(function (resolve) { setTimeout(resolve, 3000); });
+    return Promise.race([Promise.all(images.concat([fonts])), timeout]);
+  }
+
+  var titleBeforePrint = null;
+  function restoreTitle() {
+    if (titleBeforePrint !== null) document.title = titleBeforePrint;
+    titleBeforePrint = null;
+  }
+
+  var printing = false;
+  function printQuote() {
+    if (printing) return;
+    printing = true;
+    var button = el('btn-print');
+    button.disabled = true;
+    whenReady(preparePrint()).then(function () {
+      // The page title becomes the suggested file name when saving as PDF.
+      titleBeforePrint = document.title;
+      document.title = fileName().replace(/\.pdf$/, '');
+      printing = false;
+      button.disabled = false;
+      window.print();
+      // Some browsers (e.g. Safari on iPhone) return before the dialog closes; afterprint restores the title there.
+      setTimeout(restoreTitle, 1000);
+    });
   }
 
   function copyLink() {
@@ -590,10 +658,14 @@
     el('mobile-download').addEventListener('click', function () { downloadPdf(this); });
     el('btn-print').addEventListener('click', printQuote);
     el('btn-link').addEventListener('click', copyLink);
+    // Ctrl+P / the browser menu: print the current selection too.
     window.addEventListener('beforeprint', function () {
-      if (!el('print-root').firstChild) el('print-root').appendChild(buildDocument());
+      if (!printing && titleBeforePrint === null) preparePrint();
     });
-    window.addEventListener('afterprint', function () { el('print-root').innerHTML = ''; });
+    window.addEventListener('afterprint', function () {
+      restoreTitle();
+      el('print-root').innerHTML = '';
+    });
   }
 
   // ── Boot ───────────────────────────────────────────────

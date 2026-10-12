@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class CustomerAddress extends Model
 {
     protected $fillable = [
-        'customer_id', 'label', 'barangay', 'street', 'landmark', 'notes_for_rider',
+        'customer_id', 'label', 'barangay', 'municipality', 'province', 'zip_code', 'street', 'landmark', 'notes_for_rider',
         'lat', 'lng', 'formatted_address', 'is_default',
     ];
 
@@ -29,6 +29,10 @@ class CustomerAddress extends Model
             'id' => $this->id,
             'label' => $this->label,
             'barangay' => $this->barangay,
+            'municipality' => $this->municipality,
+            'province' => $this->province,
+            'zip_code' => $this->zip_code,
+            'locality' => $this->locality(),
             'street' => $this->street,
             'landmark' => $this->landmark,
             'notes_for_rider' => $this->notes_for_rider,
@@ -36,7 +40,20 @@ class CustomerAddress extends Model
             'lng' => (float) $this->lng,
             'formatted_address' => $this->formatted_address,
             'is_default' => (bool) $this->is_default,
-            'summary' => collect([$this->street, $this->barangay, 'Mabinay'])->filter()->implode(', '),
+            'summary' => collect([$this->street, $this->locality()])->filter()->implode(', '),
         ];
+    }
+
+    /** "Dahile, Mabinay, Negros Oriental 6207" */
+    public function locality(): string
+    {
+        return static::formatLocality($this->barangay, $this->municipality, $this->province, $this->zip_code);
+    }
+
+    public static function formatLocality(?string $barangay, ?string $municipality, ?string $province, ?string $zipCode): string
+    {
+        $line = collect([$barangay, $municipality ?: 'Mabinay', $province ?: 'Negros Oriental'])->filter()->implode(', ');
+
+        return trim($line.' '.($zipCode ?? ''));
     }
 }

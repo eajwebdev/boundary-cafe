@@ -5,19 +5,29 @@ namespace App\Services;
 use App\Models\Customer;
 use App\Models\LoyaltyTransaction;
 use App\Models\OnlineOrder;
+use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Notifications\LoyaltyActivity;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
  * Rewards programme — the single points engine for counter, dine-in and online sales.
  *
- * Settings (loyalty.*): enabled, spend_per_point, peso_per_point, minimum_redeem,
- * maximum_redeem, tiers_enabled, tiers (JSON), birthday_bonus.
+ * Earning: FLOOR(eligible amount / spend_increment) × points_per_increment (× tier multiplier).
+ * Spending: points buy reward items claimed in-store (LoyaltyRewardService); the older
+ * "points as a peso discount" stays available behind loyalty.allow_peso_discount.
+ *
+ * Settings (loyalty.*): enabled, spend_increment, points_per_increment, earn_channels,
+ * excluded_category_ids, allow_peso_discount, peso_per_point, minimum_redeem, maximum_redeem,
+ * claim_expiry_minutes, points_expiry_months, tiers_enabled, tiers (JSON), birthday_bonus.
  */
 class LoyaltyService
 {
+    public const CHANNELS = ['counter', 'dine_in', 'online'];
+
     public const DEFAULT_TIERS = [
         ['name' => 'Bronze', 'min' => 0, 'multiplier' => 1],
         ['name' => 'Silver', 'min' => 500, 'multiplier' => 1.25],
@@ -32,9 +42,18 @@ class LoyaltyService
     /** Programme rules for display on the storefront and settings page. */
     public function rules(?int $branchId = null): array
     {
+        $channels = SystemSetting::get('loyalty.earn_channels', $branchId, self::CHANNELS);
+        $excluded = SystemSetting::get('loyalty.excluded_category_ids', $branchId, []);
+
         return [
             'enabled' => $this->enabled($branchId),
-            'spend_per_point' => max(1, (float) SystemSetting::get('loyalty.spend_per_point', $branchId, 100)),
+            'spend_increment' => max(1, (float) SystemSetting::get('loyalty.spend_increment', $branchId, 100)),
+            'points_per_increment' => max(0, (int) SystemSetting::get('loyalty.points_per_increment', $branchId, 5)),
+            'earn_channels' => array_values(array_intersect(self::CHANNELS, is_array($channels) ? $channels : self::CHANNELS)),
+            'excluded_category_ids' => array_values(array_map('intval', is_array($excluded) ? $excluded : [])),
+            'allow_peso_discount' => (bool) SystemSetting::get('loyalty.allow_peso_discount', $branchId, false),
+            'claim_expiry_minutes' => min(1440, max(5, (int) SystemSetting::get('loyalty.claim_expiry_minutes', $branchId, 120))),
+            'points_expiry_months' => max(0, (int) SystemSetting::get('loyalty.points_expiry_months', $branchId, 0)),
             'peso_per_point' => max(0.01, (float) SystemSetting::get('loyalty.peso_per_point', $branchId, 1)),
             'minimum_redeem' => max(1, (int) SystemSetting::get('loyalty.minimum_redeem', $branchId, 10)),
             'maximum_redeem' => max(0, (int) SystemSetting::get('loyalty.maximum_redeem', $branchId, 500)),
@@ -93,14 +112,56 @@ class LoyaltyService
         ];
     }
 
-    public function quote(Customer $customer, float $eligibleTotal, int $requestedPoints, ?int $branchId): array
+    /**
+     * Points for an amount: FLOOR(amount / increment) × points per increment, then the tier multiplier.
+     * e.g. every ₱100 = 5 pts → ₱99 = 0, ₱250 = 10, ₱490 = 20.
+     */
+    public function pointsFor(float $eligibleAmount, ?int $branchId = null, float $multiplier = 1.0): int
+    {
+        $rules = $this->rules($branchId);
+        $increments = (int) floor(round(max(0, $eligibleAmount), 2) / $rules['spend_increment']);
+
+        return (int) floor($increments * $rules['points_per_increment'] * max(1, $multiplier));
+    }
+
+    /**
+     * Share (0–1) of a cart that earns points: reward lines and lines in excluded categories do not.
+     *
+     * @param  array<int, array{product_id: int|null, total: float|int|string, is_reward?: bool}>  $lines
+     */
+    public function earnableShare(array $lines, ?int $branchId = null): float
+    {
+        $subtotal = (float) collect($lines)->sum(fn ($line) => (float) $line['total']);
+        if ($subtotal <= 0) {
+            return 0.0;
+        }
+
+        $excluded = $this->rules($branchId)['excluded_category_ids'];
+        $excludedProductIds = $excluded === []
+            ? []
+            : Product::whereIn('id', collect($lines)->pluck('product_id')->filter()->unique())
+                ->whereIn('category_id', $excluded)->pluck('id')->all();
+
+        $earnable = (float) collect($lines)
+            ->reject(fn ($line) => ! empty($line['is_reward']) || in_array($line['product_id'], $excludedProductIds, true))
+            ->sum(fn ($line) => (float) $line['total']);
+
+        return max(0.0, min(1.0, $earnable / $subtotal));
+    }
+
+    /**
+     * @return array{points_to_redeem: int, discount: float, points_to_earn: int}
+     */
+    public function quote(Customer $customer, float $eligibleTotal, int $requestedPoints, ?int $branchId, string $channel = 'counter', float $earnableShare = 1.0): array
     {
         if (! $customer->loyalty_enabled || ! $this->enabled($branchId)) {
             return ['points_to_redeem' => 0, 'discount' => 0.0, 'points_to_earn' => 0];
         }
 
         $rules = $this->rules($branchId);
-        $redeem = max(0, min($requestedPoints, (int) $customer->loyalty_points, $rules['maximum_redeem']));
+        $redeem = $rules['allow_peso_discount']
+            ? max(0, min($requestedPoints, (int) $customer->loyalty_points, $rules['maximum_redeem']))
+            : 0;
 
         if ($redeem > 0 && $redeem < $rules['minimum_redeem']) {
             throw ValidationException::withMessages(['loyalty_points' => "A minimum of {$rules['minimum_redeem']} points is required."]);
@@ -109,7 +170,9 @@ class LoyaltyService
         $redeem = min($redeem, (int) floor($eligibleTotal / $rules['peso_per_point']));
         $discount = round($redeem * $rules['peso_per_point'], 2);
         $multiplier = $this->tierFor($customer, $branchId)['multiplier'];
-        $earn = (int) floor((max(0, $eligibleTotal - $discount) / $rules['spend_per_point']) * $multiplier);
+        $earn = in_array($channel, $rules['earn_channels'], true)
+            ? $this->pointsFor(max(0, $eligibleTotal - $discount) * $earnableShare, $branchId, $multiplier)
+            : 0;
 
         return ['points_to_redeem' => $redeem, 'discount' => $discount, 'points_to_earn' => $earn];
     }
@@ -140,7 +203,8 @@ class LoyaltyService
             $customer->increment('loyalty_points', $earned);
             $customer->increment('lifetime_points_earned', $earned);
             $customer->refresh();
-            $this->log($customer, $sale, $user, LoyaltyTransaction::TYPE_EARN, $earned, "Earned on {$sale->receipt_number}");
+            $this->log($customer, $sale, $user, LoyaltyTransaction::TYPE_EARN, $earned, "Earned on {$sale->receipt_number}", $this->ruleSnapshot($customer, $sale));
+            $this->notifyEarned($customer, $sale, $earned, LoyaltyActivity::POINTS_EARNED);
         }
 
         $this->maybeAwardBirthdayBonus($sale, $customer, $user);
@@ -168,6 +232,7 @@ class LoyaltyService
         $customer->increment('lifetime_points_earned', $bonus);
         $customer->refresh();
         $this->log($customer, $sale, $user, LoyaltyTransaction::TYPE_BONUS, $bonus, 'Happy birthday from '.SystemSetting::businessName($sale->branch_id).'!');
+        $this->notifyEarned($customer, $sale, $bonus, LoyaltyActivity::BIRTHDAY_BONUS);
     }
 
     /**
@@ -265,18 +330,107 @@ class LoyaltyService
         ]);
     }
 
+    /**
+     * Expire the balance of members with no earning activity for the configured number of months.
+     * Returns how many members lost points. Safe to run repeatedly (an emptied wallet is skipped).
+     */
+    public function expireInactivePoints(): int
+    {
+        $months = $this->rules()['points_expiry_months'];
+        if ($months <= 0) {
+            return 0;
+        }
+
+        $cutoff = now()->subMonths($months);
+        $expired = 0;
+
+        Customer::where('loyalty_points', '>', 0)
+            ->whereDoesntHave('loyaltyTransactions', fn ($q) => $q
+                ->whereIn('type', [LoyaltyTransaction::TYPE_EARN, LoyaltyTransaction::TYPE_BONUS, LoyaltyTransaction::TYPE_ADJUSTMENT])
+                ->where('created_at', '>=', $cutoff))
+            ->where('created_at', '<', $cutoff)
+            ->pluck('id')
+            ->each(function (int $customerId) use ($months, &$expired) {
+                DB::transaction(function () use ($customerId, $months, &$expired) {
+                    $customer = Customer::whereKey($customerId)->lockForUpdate()->first();
+                    $points = (int) $customer?->loyalty_points;
+                    if ($points <= 0) {
+                        return;
+                    }
+
+                    $customer->update(['loyalty_points' => 0]);
+                    LoyaltyTransaction::create([
+                        'customer_id' => $customer->id, 'type' => LoyaltyTransaction::TYPE_EXPIRE,
+                        'points' => -$points, 'balance_after' => 0,
+                        'reason' => "Points expired after {$months} months without activity",
+                    ]);
+                    $customer->notify(new LoyaltyActivity(
+                        kind: LoyaltyActivity::POINTS_EXPIRED,
+                        title: "{$points} points expired",
+                        body: "Points expire after {$months} months without a purchase. Order again to start earning.",
+                        points: -$points,
+                        balance: 0,
+                    ));
+                    $expired++;
+                });
+            });
+
+        return $expired;
+    }
+
     private function reservationReason(OnlineOrder $order): string
     {
         return "Held for online order {$order->order_number}";
     }
 
-    private function log(Customer $customer, Sale $sale, ?User $user, string $type, int $points, string $reason): void
+    /**
+     * The earning rule in force when points were issued, kept on the ledger row so a
+     * later rule change never alters how an old transaction was calculated.
+     *
+     * @return array<string, mixed>
+     */
+    private function ruleSnapshot(Customer $customer, Sale $sale): array
+    {
+        $rules = $this->rules($sale->branch_id);
+
+        return [
+            'spend_increment' => $rules['spend_increment'],
+            'points_per_increment' => $rules['points_per_increment'],
+            'tier_multiplier' => $this->tierFor($customer, $sale->branch_id)['multiplier'],
+            'excluded_category_ids' => $rules['excluded_category_ids'],
+            'sale_total' => (float) $sale->total,
+            'channel' => $sale->channel,
+        ];
+    }
+
+    /** "You earned 20 points" in the customer's notification history. */
+    private function notifyEarned(Customer $customer, Sale $sale, int $points, string $kind): void
+    {
+        $isBirthday = $kind === LoyaltyActivity::BIRTHDAY_BONUS;
+        $branchName = $sale->branch?->name;
+
+        $customer->notify(new LoyaltyActivity(
+            kind: $kind,
+            title: $isBirthday ? "Happy birthday! +{$points} points" : "You earned {$points} points",
+            body: $isBirthday
+                ? 'A birthday gift from '.SystemSetting::businessName($sale->branch_id).'. Enjoy!'
+                : 'From your ₱'.number_format((float) $sale->total, 2)." order {$sale->receipt_number}".($branchName ? " at {$branchName}" : '').'.',
+            points: $points,
+            balance: (int) $customer->loyalty_points,
+            reference: $sale->receipt_number,
+        ));
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $meta
+     */
+    private function log(Customer $customer, Sale $sale, ?User $user, string $type, int $points, string $reason, ?array $meta = null): void
     {
         LoyaltyTransaction::create([
             'customer_id' => $customer->id, 'branch_id' => $sale->branch_id,
             'sale_id' => $sale->id, 'user_id' => $user?->id, 'type' => $type,
             'points' => $points, 'balance_after' => $customer->loyalty_points,
-            'reason' => $reason,
+            'reason' => $reason, 'meta' => $meta,
         ]);
     }
 }

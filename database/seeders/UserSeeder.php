@@ -95,6 +95,17 @@ class UserSeeder extends Seeder
                 'access' => User::defaultAccessFor(User::ROLE_WAITER),
                 'pos_layout' => 'mobile',
             ]);
+
+            // ── Delivery rider — carries Mabinay's online deliveries ──
+            User::updateOrCreate(['username' => 'rider'], [
+                'fname' => 'Mabinay',
+                'lname' => 'Rider',
+                'password' => Hash::make('rider123'),
+                'role' => User::ROLE_RIDER,
+                'branch_id' => $mabinay->id,
+                'access' => User::defaultAccessFor(User::ROLE_RIDER),
+                'pos_layout' => 'mobile',
+            ]);
         }
 
         $this->command->info('✓ Single Branch Users seeded ('.count($users).')');

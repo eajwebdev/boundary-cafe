@@ -25,12 +25,12 @@ class CustomerController extends Controller
     {
         $branchId = $this->branchId();
 
-        $inBranch = fn ($q) => $q->when($branchId, fn ($q) => $q->where(fn ($inner) => $inner->where('branch_id', $branchId)->orWhereNull('branch_id')));
+        $inBranch = fn ($q) => $q->visibleToBranch($branchId);
         $unpaidCredit = fn ($q) => $q->where('status', 'completed')->whereIn('payment_status', ['unpaid', 'partial'])->where('balance_due', '>', 0);
 
         $customers = Customer::query()
             ->select('customers.*')
-            ->selectRaw('password IS NOT NULL as has_online_account')
+            ->selectRaw('(password IS NOT NULL OR EXISTS (SELECT 1 FROM customer_social_accounts WHERE customer_social_accounts.customer_id = customers.id)) as has_online_account')
             ->withSum(['sales as total_purchases' => fn ($q) => $q->where('status', 'completed')], 'total')
             ->withSum(['sales as credit_balance' => $unpaidCredit], 'balance_due')
             ->withCount(['sales as transactions_count' => fn ($q) => $q->where('status', 'completed')])
@@ -67,7 +67,7 @@ class CustomerController extends Controller
             'stats' => [
                 'total' => (clone $all)->count(),
                 'active' => (clone $all)->where('is_active', true)->count(),
-                'online_accounts' => (clone $all)->whereNotNull('password')->count(),
+                'online_accounts' => (clone $all)->registeredOnline()->count(),
                 'loyalty_points' => (int) (clone $all)->sum('loyalty_points'),
                 'owing_count' => (clone $all)->whereHas('sales', $unpaidCredit)->count(),
                 'credit_outstanding' => round((float) Sale::query()
@@ -100,7 +100,7 @@ class CustomerController extends Controller
 
     public function destroy(Customer $customer): RedirectResponse
     {
-        $this->authorizeCustomer($customer);
+        $this->authorizeCustomer($customer, sharedAccountsAllowed: false);
 
         if ($customer->sales()->exists() || $customer->payments()->exists()) {
             $customer->update(['is_active' => false]);
@@ -166,7 +166,7 @@ class CustomerController extends Controller
                 'loyalty_points' => $customer->loyalty_points,
                 'lifetime_points_earned' => $customer->lifetime_points_earned,
                 'lifetime_points_redeemed' => $customer->lifetime_points_redeemed,
-                'has_online_account' => $customer->hasOnlineAccount(),
+                'has_online_account' => ! $customer->isWalkIn(),
                 'barangay' => $customer->barangay,
                 'last_login_at' => $customer->last_login_at?->toIso8601String(),
                 'online_orders_count' => $customer->onlineOrders()->count(),
@@ -194,14 +194,19 @@ class CustomerController extends Controller
         ]);
     }
 
-    private function authorizeCustomer(Customer $customer): void
+    /**
+     * Staff work with their own branch's customers. Registered storefront accounts are shop-wide, so any
+     * branch may view and edit them, but only their own branch (or an admin) may delete one.
+     */
+    private function authorizeCustomer(Customer $customer, bool $sharedAccountsAllowed = true): void
     {
         $user = Auth::user();
-        if ($user->isAdmin()) {
+        if ($user->isAdmin() || ! $customer->branch_id || $customer->branch_id === $user->branch_id) {
             return;
         }
-        if ($customer->branch_id && $customer->branch_id !== $user->branch_id) {
-            abort(403);
+        if ($sharedAccountsAllowed && ! $customer->isWalkIn()) {
+            return;
         }
+        abort(403);
     }
 }

@@ -1,8 +1,9 @@
 import { Link } from '@inertiajs/react';
-import { Bike, ChevronRight, ReceiptText, Store } from 'lucide-react';
+import { ChevronRight, ReceiptText } from 'lucide-react';
 
 import CustomerLayout from '@/layouts/CustomerLayout';
-import { manilaTime, pesoExact, STATUS_TONE } from '@/lib/customer';
+import type { Fulfillment } from '@/lib/customer';
+import { FULFILLMENT_ICON, manilaTime, pesoExact, STATUS_TONE } from '@/lib/customer';
 import { cn } from '@/lib/utils';
 
 interface OrderRow {
@@ -10,7 +11,7 @@ interface OrderRow {
     status: string;
     status_label: string;
     is_active: boolean;
-    fulfillment_type: 'delivery' | 'pickup';
+    fulfillment_type: Fulfillment;
     total: number;
     item_count: number;
     items_preview: string;
@@ -39,8 +40,11 @@ export default function CustomerOrders({ orders }: { orders: Paginated<OrderRow>
                             <ReceiptText className="h-8 w-8" />
                         </span>
                         <p className="mt-3 text-lg font-bold">No orders yet</p>
-                        <p className="text-sm text-shop-muted">Your delivery and pickup orders will appear here.</p>
-                        <Link href="/" className="mt-5 inline-flex h-12 items-center rounded-2xl bg-shop-accent px-6 font-semibold text-shop-on-accent">
+                        <p className="text-sm text-shop-muted">Your dine-in, takeout and delivery orders will appear here.</p>
+                        <Link
+                            href="/"
+                            className="mt-5 inline-flex h-12 items-center rounded-2xl bg-shop-accent px-6 font-semibold text-shop-on-accent"
+                        >
                             Start ordering
                         </Link>
                     </div>
@@ -57,7 +61,10 @@ export default function CustomerOrders({ orders }: { orders: Paginated<OrderRow>
                                     key={i}
                                     href={l.url}
                                     preserveScroll
-                                    className={cn('flex h-10 min-w-10 items-center justify-center rounded-lg px-3 text-sm', l.active ? 'bg-shop-ink font-semibold text-shop-bg' : 'border border-shop-line')}
+                                    className={cn(
+                                        'flex h-10 min-w-10 items-center justify-center rounded-lg px-3 text-sm',
+                                        l.active ? 'bg-shop-ink font-semibold text-shop-bg' : 'border border-shop-line',
+                                    )}
                                     dangerouslySetInnerHTML={{ __html: l.label }}
                                 />
                             ) : null,
@@ -76,18 +83,32 @@ function Group({ title, rows }: { title: string; rows: OrderRow[] }) {
             <ul className="space-y-2">
                 {rows.map((o) => (
                     <li key={o.order_number}>
-                        <Link href={`/account/orders/${o.order_number}`} className="bc-press flex items-center gap-3 rounded-[22px] bg-shop-surface p-4 ring-1 ring-shop-line hover:shadow-shop-md">
-                            <span className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-full', o.is_active ? 'bg-shop-accent-soft text-shop-accent-ink' : 'bg-shop-sunken text-shop-muted')}>
-                                {o.fulfillment_type === 'delivery' ? <Bike className="h-5 w-5" /> : <Store className="h-5 w-5" />}
+                        <Link
+                            href={`/account/orders/${o.order_number}`}
+                            className="bc-press hover:shadow-shop-md flex items-center gap-3 rounded-[22px] bg-shop-surface p-4 ring-1 ring-shop-line"
+                        >
+                            <span
+                                className={cn(
+                                    'flex h-11 w-11 shrink-0 items-center justify-center rounded-full',
+                                    o.is_active ? 'bg-shop-accent-soft text-shop-accent-ink' : 'bg-shop-sunken text-shop-muted',
+                                )}
+                            >
+                                {(() => {
+                                    const Icon = FULFILLMENT_ICON[o.fulfillment_type] ?? FULFILLMENT_ICON.delivery;
+                                    return <Icon className="h-5 w-5" />;
+                                })()}
                             </span>
                             <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                    <p className="font-mono text-sm font-semibold">{o.order_number}</p>
-                                    <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-bold', STATUS_TONE[o.status])}>{o.status_label}</span>
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className={cn('truncate rounded-full px-2 py-0.5 text-[11px] font-bold', STATUS_TONE[o.status])}>
+                                        {o.status_label}
+                                    </span>
+                                    <span className="shrink-0 text-sm font-bold tabular-nums">{pesoExact(o.total)}</span>
                                 </div>
-                                <p className="truncate text-sm text-shop-muted">{o.items_preview}</p>
-                                <p className="text-xs text-shop-muted">
-                                    {manilaTime(o.created_at, true)} · {o.item_count} item{o.item_count !== 1 ? 's' : ''} · {pesoExact(o.total)}
+                                <p className="mt-1 truncate text-[15px] font-semibold">{o.items_preview}</p>
+                                <p className="truncate text-xs text-shop-muted">
+                                    {manilaTime(o.created_at, true)} · {o.item_count} item{o.item_count !== 1 ? 's' : ''} ·{' '}
+                                    <span className="font-mono">{o.order_number}</span>
                                 </p>
                             </div>
                             <ChevronRight className="h-5 w-5 shrink-0 text-shop-muted" />

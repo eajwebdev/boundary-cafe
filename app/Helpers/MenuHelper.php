@@ -46,11 +46,14 @@ class MenuHelper
             '40' => 'Online Orders',
             '41' => 'Table Ordering',
             '42' => 'Dining Tables',
-            '43' => 'Delivery Zone',
+            '43' => 'Online Ordering',
             '44' => 'Loyalty Program',
             '45' => 'Employees',
             '46' => 'Attendance',
             '47' => 'Z-Reading',
+            '48' => 'Store Settings',
+            '49' => 'Rider Deliveries',
+            '50' => 'Profit Analytics',
         ];
     }
 
@@ -61,6 +64,15 @@ class MenuHelper
     public static function retired(): array
     {
         return ['4', '5', '26', '32', '35', '37', '38'];
+    }
+
+    /**
+     * Menus that come with a role instead of being ticked on the Users page:
+     * the Rider Dashboard (49) belongs to riders only.
+     */
+    public static function roleOnly(): array
+    {
+        return ['49'];
     }
 
     /**
@@ -92,6 +104,7 @@ class MenuHelper
                 '2' => 'POS / Cashier',
                 '3' => 'Sales History',
                 '40' => 'Online Orders',
+                '48' => 'Store Settings',
                 '41' => 'Table Ordering',
                 '29' => 'Promos & Discounts',
                 '39' => 'Customers',
@@ -121,6 +134,7 @@ class MenuHelper
             'Reports' => [
                 '18' => 'Daily Summary',
                 '19' => 'Sales Report',
+                '50' => 'Profit Analytics',
                 '20' => 'Inventory Report',
                 '21' => 'Expense Report',
                 '30' => 'Ingredient Usage Report',
@@ -134,7 +148,7 @@ class MenuHelper
                 '25' => 'Branches',
                 '27' => 'Expense Categories',
                 '42' => 'Dining Tables',
-                '43' => 'Delivery Zone',
+                '43' => 'Online Ordering',
                 '28' => 'System Settings',
             ],
         ];

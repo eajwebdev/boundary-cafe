@@ -16,8 +16,11 @@ use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\LoginAuthController;
 use App\Http\Controllers\LogsController;
+use App\Http\Controllers\LoyaltyClaimController;
 use App\Http\Controllers\LoyaltyController;
 use App\Http\Controllers\LoyaltyProgramController;
+use App\Http\Controllers\LoyaltyReportController;
+use App\Http\Controllers\LoyaltyRewardController;
 use App\Http\Controllers\OnlineOrderController;
 use App\Http\Controllers\PettyCashController;
 use App\Http\Controllers\PettyCashFundController;
@@ -27,9 +30,11 @@ use App\Http\Controllers\PromoController;
 use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\QuotationController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\Rider;
 use App\Http\Controllers\StockAdjustmentController;
 use App\Http\Controllers\StockCountController;
 use App\Http\Controllers\StockTransferController;
+use App\Http\Controllers\StoreSettingsController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\SystemSettingsController;
 use App\Http\Controllers\TableOrderController;
@@ -66,6 +71,12 @@ Route::prefix('account')->name('customer.')->group(function () {
     Route::get('/register', [Customer\AuthController::class, 'showRegister'])->name('register');
     Route::post('/register', [Customer\AuthController::class, 'register'])->middleware('throttle:6,1')->name('register.post');
 
+    // Continue with Google / Facebook
+    Route::get('/auth/complete', [Customer\SocialAuthController::class, 'showComplete'])->name('social.complete');
+    Route::post('/auth/complete', [Customer\SocialAuthController::class, 'complete'])->middleware('throttle:6,1')->name('social.complete.post');
+    Route::get('/auth/{provider}/redirect', [Customer\SocialAuthController::class, 'redirect'])->whereIn('provider', ['google', 'facebook'])->middleware('throttle:20,1')->name('social.redirect');
+    Route::get('/auth/{provider}/callback', [Customer\SocialAuthController::class, 'callback'])->whereIn('provider', ['google', 'facebook'])->middleware('throttle:20,1')->name('social.callback');
+
     // Public aliases for the quotation pages — no sign-in.
     Route::get('/quote', fn (Request $request) => redirect()->route('quotation', $request->query()))->name('quote');
     Route::get('/quote/one-time', fn (Request $request) => redirect()->route('quotation.one-time', $request->query()))->name('quote.one-time');
@@ -76,7 +87,16 @@ Route::prefix('account')->name('customer.')->group(function () {
         Route::get('/', [Customer\AccountController::class, 'show'])->name('account');
         Route::patch('/', [Customer\AccountController::class, 'update'])->name('account.update');
         Route::put('/password', [Customer\AccountController::class, 'updatePassword'])->middleware('throttle:6,1')->name('password.update');
+        Route::delete('/social/{provider}', [Customer\SocialAuthController::class, 'unlink'])->whereIn('provider', ['google', 'facebook'])->name('social.unlink');
         Route::get('/rewards', [Customer\AccountController::class, 'rewards'])->name('rewards');
+        Route::post('/rewards/popup-seen', [Customer\RewardClaimController::class, 'popupSeen'])->name('rewards.popup-seen');
+        Route::post('/rewards/claims', [Customer\RewardClaimController::class, 'store'])->middleware('throttle:10,1')->name('rewards.claims.store');
+        Route::get('/rewards/claims/{code}', [Customer\RewardClaimController::class, 'show'])->name('rewards.claims.show');
+        Route::get('/rewards/claims/{code}/status', [Customer\RewardClaimController::class, 'status'])->middleware('throttle:120,1')->name('rewards.claims.status');
+        Route::post('/rewards/claims/{code}/cancel', [Customer\RewardClaimController::class, 'cancel'])->middleware('throttle:10,1')->name('rewards.claims.cancel');
+
+        Route::get('/notifications', [Customer\NotificationController::class, 'index'])->name('notifications');
+        Route::post('/notifications/read', [Customer\NotificationController::class, 'markAllRead'])->name('notifications.read');
 
         Route::post('/addresses', [Customer\AddressController::class, 'store'])->middleware('throttle:30,1')->name('addresses.store');
         Route::patch('/addresses/{address}', [Customer\AddressController::class, 'update'])->name('addresses.update');
@@ -98,7 +118,7 @@ Route::middleware('auth:customer')->group(function () {
 });
 
 // ─── STAFF (web guard) ───────────────────────────────────────────────────────
-Route::middleware(['auth:web', 'order-taker'])->group(function () {
+Route::middleware(['auth:web', 'order-taker', 'rider-only'])->group(function () {
 
     Route::post('/logout', [LoginAuthController::class, 'postLogout'])->name('logout.post');
 
@@ -118,6 +138,7 @@ Route::middleware(['auth:web', 'order-taker'])->group(function () {
         Route::post('/session/open', [CashSessionController::class, 'open'])->name('session.open');
         Route::post('/session/{session}/close', [CashSessionController::class, 'close'])->name('session.close');
         Route::get('/barcode/lookup', 'lookupBarcode')->name('barcode.lookup');
+        Route::post('/rewards/scan', 'scanReward')->middleware('throttle:60,1')->name('rewards.scan');
 
         // Pending dine-in tickets sent by waiters + online pickups ready to collect
         Route::get('/pending-orders', [TableOrderController::class, 'pending'])->name('pending');
@@ -140,6 +161,18 @@ Route::middleware(['auth:web', 'order-taker'])->group(function () {
         Route::get('/feed', 'feed')->name('feed');
         Route::get('/pending-count', 'pendingCount')->name('pending-count');
         Route::post('/{onlineOrder}/transition', 'transition')->name('transition');
+        Route::post('/{onlineOrder}/rider', 'assignRider')->name('assign-rider');
+        Route::post('/riders/{rider}/remit', 'remitRiderCash')->name('remit-rider-cash');
+    });
+
+    // Rider Dashboard: own deliveries, live GPS and cash on hand — ID 49 (riders only)
+    Route::middleware('access:49')->prefix('rider')->name('rider.')->controller(Rider\DeliveryController::class)->group(function () {
+        Route::get('/', 'index')->name('dashboard');
+        Route::get('/feed', 'feed')->name('feed');
+        Route::post('/position', 'position')->middleware('throttle:60,1')->name('position');
+        Route::post('/deliveries/{onlineOrder}/claim', 'claim')->name('claim');
+        Route::post('/deliveries/{onlineOrder}/picked-up', 'pickUp')->name('picked-up');
+        Route::post('/deliveries/{onlineOrder}/delivered', 'deliver')->name('delivered');
     });
 
     // Table Ordering (waiter screen) — ID 41
@@ -184,10 +217,27 @@ Route::middleware(['auth:web', 'order-taker'])->group(function () {
         Route::patch('/barangays/{barangay}', 'toggleBarangay')->name('barangays.toggle');
     });
 
-    // Loyalty Program settings — ID 44
-    Route::middleware('access:44')->prefix('loyalty-program')->name('loyalty-program.')->controller(LoyaltyProgramController::class)->group(function () {
+    // Store Settings: close the store for the day — ID 48
+    Route::middleware('access:48')->prefix('store-settings')->name('store-settings.')->controller(StoreSettingsController::class)->group(function () {
         Route::get('/', 'index')->name('index');
-        Route::put('/', 'update')->name('update');
+        Route::post('/{branch}/close-today', 'closeToday')->name('close-today');
+        Route::delete('/{branch}/close-today', 'reopen')->name('reopen');
+    });
+
+    // Loyalty Program: settings, reward catalog, claims and reports — ID 44
+    Route::middleware('access:44')->prefix('loyalty-program')->name('loyalty-program.')->group(function () {
+        Route::get('/', [LoyaltyProgramController::class, 'index'])->name('index');
+        Route::put('/', [LoyaltyProgramController::class, 'update'])->name('update');
+
+        Route::get('/rewards', [LoyaltyRewardController::class, 'index'])->name('rewards.index');
+        Route::post('/rewards', [LoyaltyRewardController::class, 'store'])->name('rewards.store');
+        Route::patch('/rewards/{loyaltyReward}', [LoyaltyRewardController::class, 'update'])->name('rewards.update');
+        Route::delete('/rewards/{loyaltyReward}', [LoyaltyRewardController::class, 'destroy'])->name('rewards.destroy');
+
+        Route::get('/claims', [LoyaltyClaimController::class, 'index'])->name('claims.index');
+        Route::post('/claims/{claim}/cancel', [LoyaltyClaimController::class, 'cancel'])->name('claims.cancel');
+
+        Route::get('/reports', [LoyaltyReportController::class, 'index'])->name('reports');
     });
 
     // Products / Inventory — ID 6
@@ -269,6 +319,9 @@ Route::middleware(['auth:web', 'order-taker'])->group(function () {
         Route::middleware('access:21')->group(function () {
             Route::get('/expenses', 'expenseReport')->name('expenses');
             Route::get('/expenses/pdf', 'expenseReportPdf')->name('expenses.pdf');
+        });
+        Route::middleware('access:50')->group(function () {
+            Route::get('/profit', 'profitAnalytics')->name('profit');
         });
         Route::middleware('access:30')->group(function () {
             Route::get('/ingredient-usage', 'ingredientUsageReport')->name('ingredient-usage');

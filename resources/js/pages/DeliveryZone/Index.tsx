@@ -20,6 +20,7 @@ interface Props {
         branch_code: string;
         delivery_enabled: boolean;
         pickup_enabled: boolean;
+        dine_in_enabled: boolean;
         delivery_fee: number;
         free_delivery_min: number;
         min_order: number;
@@ -45,6 +46,7 @@ export default function DeliveryZone({ zone, barangays, settings, status, branch
         branch_code: settings.branch_code,
         delivery_enabled: settings.delivery_enabled,
         pickup_enabled: settings.pickup_enabled,
+        dine_in_enabled: settings.dine_in_enabled,
         delivery_fee: settings.delivery_fee,
         free_delivery_min: settings.free_delivery_min,
         min_order: settings.min_order,
@@ -67,7 +69,7 @@ export default function DeliveryZone({ zone, barangays, settings, status, branch
     const deliverable = barangays.filter((b) => b.is_deliverable).length;
 
     return (
-        <AdminLayout title="Delivery Zone">
+        <AdminLayout title="Online Ordering">
             <form
                 className="space-y-4"
                 onSubmit={(e) => {
@@ -76,8 +78,8 @@ export default function DeliveryZone({ zone, barangays, settings, status, branch
                 }}
             >
                 <PageHeader
-                    title="Delivery Zone"
-                    subtitle={`Online orders are taken only inside this zone and from deliverable barangays. Fulfilled by ${branch?.name ?? '—'}.`}
+                    title="Online Ordering"
+                    subtitle={`Store hours, minimum order, dine-in / takeout / delivery options and the delivery zone. Fulfilled by ${branch?.name ?? '—'}.`}
                 >
                     {form.isDirty && <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">Unsaved changes</span>}
                     <button
@@ -229,7 +231,8 @@ export default function DeliveryZone({ zone, barangays, settings, status, branch
                         <Panel icon={Store} title="Ordering">
                             <Toggle label="Accept online orders" checked={d.enabled} onChange={(v) => set('enabled', v)} />
                             <Toggle label="Offer delivery" checked={d.delivery_enabled} onChange={(v) => set('delivery_enabled', v)} />
-                            <Toggle label="Offer pickup" checked={d.pickup_enabled} onChange={(v) => set('pickup_enabled', v)} />
+                            <Toggle label="Offer takeout (pickup)" checked={d.pickup_enabled} onChange={(v) => set('pickup_enabled', v)} />
+                            <Toggle label="Offer dine-in (order from the table)" checked={d.dine_in_enabled} onChange={(v) => set('dine_in_enabled', v)} />
                             <Field label="Fulfilling branch">
                                 <select className={inputCls} value={d.branch_code} onChange={(e) => set('branch_code', e.target.value)}>
                                     {branches.map((b) => (

@@ -146,7 +146,7 @@ class CustomerOrderingTest extends TestCase
     public function test_addresses_outside_mabinay_are_rejected(): void
     {
         $customer = $this->customer();
-        $base = ['label' => 'Work', 'barangay' => 'Poblacion', 'street' => 'Somewhere'];
+        $base = ['label' => 'Work', 'barangay' => 'Poblacion', 'street' => 'Somewhere', 'landmark' => 'Beside the chapel'];
 
         // Cebu City — far outside the zone
         $this->actingAs($customer, 'customer')->post('/account/addresses', $base + ['lat' => 10.3157, 'lng' => 123.8854])
@@ -237,6 +237,7 @@ class CustomerOrderingTest extends TestCase
 
     public function test_completing_an_online_order_creates_one_sale_and_awards_points_once(): void
     {
+        SystemSetting::set('loyalty.allow_peso_discount', true);
         $customer = $this->customer();
         $before = $customer->loyalty_points;
         $order = $this->placeOrder($customer, ['loyalty_points' => 20]);
@@ -260,6 +261,7 @@ class CustomerOrderingTest extends TestCase
 
     public function test_cancelled_order_returns_held_points(): void
     {
+        SystemSetting::set('loyalty.allow_peso_discount', true);
         $customer = $this->customer();
         $before = $customer->loyalty_points;
         $order = $this->placeOrder($customer, ['loyalty_points' => 15]);

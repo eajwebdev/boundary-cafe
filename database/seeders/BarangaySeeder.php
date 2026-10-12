@@ -28,6 +28,7 @@ class BarangaySeeder extends Seeder
                 ['municipality' => 'Mabinay', 'name' => $name],
                 [
                     'province' => 'Negros Oriental',
+                    'zip_code' => '6207',
                     'is_deliverable' => true,
                     // Poblacion first — it is where most orders come from.
                     'sort_order' => $name === 'Poblacion' ? 0 : $i + 1,

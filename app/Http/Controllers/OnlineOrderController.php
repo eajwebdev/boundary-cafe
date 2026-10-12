@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\OnlineOrder;
+use App\Models\User;
 use App\Services\OnlineOrderService;
+use App\Services\RiderDeliveryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -17,7 +20,7 @@ use Inertia\Response;
  */
 class OnlineOrderController extends Controller
 {
-    public function __construct(private OnlineOrderService $online) {}
+    public function __construct(private OnlineOrderService $online, private RiderDeliveryService $deliveries) {}
 
     public function index(): Response
     {
@@ -71,10 +74,38 @@ class OnlineOrderController extends Controller
         return back()->with('success', "{$order->order_number}: ".OnlineOrder::statusLabel($order->status));
     }
 
+    /** Give a delivery to a rider of its branch, or take it back (rider_id null). */
+    public function assignRider(Request $request, OnlineOrder $onlineOrder): JsonResponse
+    {
+        $this->authorizeBranch($onlineOrder->branch_id);
+
+        $data = $request->validate(['rider_id' => ['nullable', 'integer', 'exists:users,id']]);
+        $rider = isset($data['rider_id']) ? User::findOrFail($data['rider_id']) : null;
+
+        $order = $this->deliveries->assign($onlineOrder, $rider);
+
+        return response()->json(['order' => $this->card($order->fresh(['items', 'customer', 'rider']))]);
+    }
+
+    /** The rider handed over the cash from their delivered cash-on-delivery orders. */
+    public function remitRiderCash(User $rider): JsonResponse
+    {
+        abort_unless($rider->isRider(), 404);
+        $this->authorizeBranch($rider->branch_id);
+
+        $remitted = $this->deliveries->remit($rider, Auth::user());
+
+        return response()->json([
+            'message' => $remitted['orders'] > 0
+                ? 'Received ₱'.number_format($remitted['amount'], 2)." from {$rider->fname} ({$remitted['orders']} deliveries)."
+                : "{$rider->fname} has no cash to hand over.",
+        ] + $remitted);
+    }
+
     private function boardData(): array
     {
         $branchId = $this->scopedBranchId();
-        $base = OnlineOrder::with(['items', 'customer:id,name,contact_number,loyalty_points', 'handler:id,fname,lname'])
+        $base = OnlineOrder::with(['items', 'customer:id,name,contact_number,loyalty_points', 'handler:id,fname,lname', 'rider:id,fname,lname'])
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId));
 
         $active = (clone $base)->active()->orderBy('created_at')->get();
@@ -89,8 +120,34 @@ class OnlineOrderController extends Controller
             'active' => $active->map(fn ($o) => $this->card($o))->values(),
             'finished' => $finishedToday->map(fn ($o) => $this->card($o))->values(),
             'counts' => collect(OnlineOrder::ACTIVE_STATUSES)->mapWithKeys(fn ($s) => [$s => $active->where('status', $s)->count()]),
+            'riders' => $this->ridersData($branchId, $active),
             'generated_at' => now()->toIso8601String(),
         ];
+    }
+
+    /**
+     * Riders the viewer can dispatch: their branch's, or every branch's for admins.
+     *
+     * @param  Collection<int, OnlineOrder>  $active
+     * @return list<array<string, mixed>>
+     */
+    private function ridersData(?int $branchId, Collection $active): array
+    {
+        return User::riders()
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->with('riderPosition')
+            ->orderBy('fname')
+            ->get()
+            ->map(fn (User $rider) => [
+                'id' => $rider->id,
+                'name' => $rider->full_name,
+                'branch_id' => $rider->branch_id,
+                'active_deliveries' => $active->where('rider_id', $rider->id)->count(),
+                'cash_on_hand' => $this->deliveries->cashOnHand($rider),
+                'position' => $rider->riderPosition?->toMapArray(),
+            ])
+            ->values()
+            ->all();
     }
 
     private function card(OnlineOrder $o): array
@@ -103,6 +160,8 @@ class OnlineOrderController extends Controller
             'status' => $o->status,
             'status_label' => OnlineOrder::statusLabel($o->status),
             'fulfillment_type' => $o->fulfillment_type,
+            'fulfillment_label' => OnlineOrder::fulfillmentLabel($o->fulfillment_type),
+            'table_number' => $o->table_number,
             'payment_method' => $o->payment_method,
             'customer_name' => $o->contact_name,
             'contact_number' => $o->contact_number,
@@ -123,6 +182,9 @@ class OnlineOrderController extends Controller
             'total' => (float) $o->total,
             'cancel_reason' => $o->cancel_reason,
             'handled_by' => $o->handler ? trim($o->handler->fname.' '.$o->handler->lname) : null,
+            'branch_id' => $o->branch_id,
+            'rider' => $o->rider ? ['id' => $o->rider->id, 'name' => trim($o->rider->fname.' '.$o->rider->lname)] : null,
+            'can_assign_rider' => $o->isDelivery() && in_array($o->status, RiderDeliveryService::ASSIGNABLE_STATUSES, true),
             'sale_id' => $o->sale_id,
             'created_at' => $o->created_at?->toIso8601String(),
             'updated_at' => $o->updated_at?->toIso8601String(),

@@ -68,9 +68,19 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
     const [step, setStep] = useState<'map' | 'details'>('map');
     const [pos, setPos] = useState(start);
     const [moving, setMoving] = useState(false);
-    const [geo, setGeo] = useState<{ label: string | null; barangay: string | null; loading: boolean }>({
+    const [geo, setGeo] = useState<{
+        label: string | null;
+        barangay: string | null;
+        municipality: string | null;
+        province: string | null;
+        zip_code: string | null;
+        loading: boolean;
+    }>({
         label: initial?.formatted_address ?? null,
         barangay: initial?.barangay ?? null,
+        municipality: initial?.municipality ?? null,
+        province: initial?.province ?? null,
+        zip_code: initial?.zip_code ?? null,
         loading: false,
     });
     const [locating, setLocating] = useState(false);
@@ -82,6 +92,7 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
         barangay: initial?.barangay ?? '',
         street: initial?.street ?? '',
         landmark: initial?.landmark ?? '',
+        zip_code: initial?.zip_code ?? '',
         notes_for_rider: initial?.notes_for_rider ?? '',
         is_default: initial?.is_default ?? false,
     });
@@ -100,13 +111,19 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
                 abortRef.current = ctrl;
                 setGeo((g) => ({ ...g, loading: true }));
                 try {
-                    const res = await jsonRequest<{ label: string | null; barangay: string | null }>(
-                        `/geocode/reverse?lat=${lat.toFixed(6)}&lng=${lng.toFixed(6)}`,
-                        { signal: ctrl.signal },
-                    );
-                    setGeo({ label: res.label, barangay: res.barangay, loading: false });
+                    const res = await jsonRequest<{
+                        label: string | null;
+                        barangay: string | null;
+                        municipality: string | null;
+                        province: string | null;
+                        zip_code: string | null;
+                    }>(`/geocode/reverse?lat=${lat.toFixed(6)}&lng=${lng.toFixed(6)}`, { signal: ctrl.signal });
+                    setGeo({ ...res, loading: false });
+                    // The pin decides the barangay and ZIP; the customer can still change them.
                     if (res.barangay && barangays.includes(res.barangay)) {
-                        setForm((f) => (f.barangay ? f : { ...f, barangay: res.barangay! }));
+                        setForm((f) => ({ ...f, barangay: res.barangay!, zip_code: res.zip_code ?? f.zip_code }));
+                    } else if (res.zip_code) {
+                        setForm((f) => (f.zip_code ? f : { ...f, zip_code: res.zip_code! }));
                     }
                 } catch (e) {
                     if ((e as Error).name !== 'AbortError') setGeo((g) => ({ ...g, loading: false }));
@@ -117,7 +134,11 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
     );
 
     useEffect(() => {
-        if (!initial) lookup(start.lat, start.lng);
+        if (!initial) {
+            lookup(start.lat, start.lng);
+            // New address: start from where the phone is.
+            locateMe();
+        }
         return () => {
             abortRef.current?.abort();
             if (timerRef.current) window.clearTimeout(timerRef.current);
@@ -125,9 +146,17 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const flyTo = (lat: number, lng: number, zoom = 17) => mapRef.current?.flyTo([lat, lng], zoom, { duration: 0.8 });
+    const flyTo = (lat: number, lng: number, zoom = 17) => {
+        if (mapRef.current) {
+            mapRef.current.flyTo([lat, lng], zoom, { duration: 0.8 });
+        } else {
+            // Map not mounted yet (first render): move the pin and look the place up directly.
+            setPos({ lat, lng });
+            lookup(lat, lng);
+        }
+    };
 
-    const useMyLocation = () => {
+    function locateMe() {
         setLocError(null);
         if (!('geolocation' in navigator)) {
             setLocError('Location is not available on this device. Drag the map to your place instead.');
@@ -149,7 +178,12 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
             },
             { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 },
         );
-    };
+    }
+
+    const municipality = geo.municipality || initial?.municipality || 'Mabinay';
+    const province = geo.province || initial?.province || 'Negros Oriental';
+    const locality = [form.barangay, municipality, province].filter(Boolean).join(', ') + (form.zip_code ? ` ${form.zip_code}` : '');
+    const landmarkOk = form.landmark.trim().length >= 3;
 
     const save = () => {
         setSaving(true);
@@ -266,7 +300,7 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
                         </div>
                         <button
                             type="button"
-                            onClick={useMyLocation}
+                            onClick={locateMe}
                             className="absolute bottom-4 left-1/2 z-500 flex h-11 -translate-x-1/2 items-center gap-2 rounded-full bg-shop-surface px-4 text-sm font-semibold whitespace-nowrap shadow-lg ring-1 ring-shop-line"
                         >
                             {locating ? <Loader2 className="h-4 w-4 animate-spin" /> : <LocateFixed className="h-4 w-4 text-shop-accent-ink" />}
@@ -289,7 +323,9 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
                                 <p className="truncate text-sm font-semibold">
                                     {geo.loading || moving
                                         ? 'Finding address…'
-                                        : geo.label || (geo.barangay ? `${geo.barangay}, Mabinay` : 'Pinned location')}
+                                        : geo.barangay
+                                          ? [geo.barangay, geo.municipality, geo.province].filter(Boolean).join(', ') + (geo.zip_code ? ` ${geo.zip_code}` : '')
+                                          : geo.label || 'Pinned location'}
                                 </p>
                                 <p className="text-xs text-shop-muted">
                                     {pos.lat.toFixed(5)}, {pos.lng.toFixed(5)}
@@ -350,6 +386,32 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
                             {errors.barangay && <span className="text-sm text-shop-danger">{errors.barangay}</span>}
                             {geo.barangay && !form.barangay && <span className="text-xs text-shop-muted">Map suggests: {geo.barangay}</span>}
                         </label>
+                        <div className="grid grid-cols-[1fr_1fr_88px] gap-2">
+                            <label className="block space-y-1.5">
+                                <span className="text-sm font-semibold">City / Town</span>
+                                <input className={cn(inputCls, 'bg-shop-sunken')} value={municipality} readOnly tabIndex={-1} />
+                            </label>
+                            <label className="block space-y-1.5">
+                                <span className="text-sm font-semibold">Province</span>
+                                <input className={cn(inputCls, 'bg-shop-sunken')} value={province} readOnly tabIndex={-1} />
+                            </label>
+                            <label className="block space-y-1.5">
+                                <span className="text-sm font-semibold">ZIP</span>
+                                <input
+                                    className={inputCls}
+                                    value={form.zip_code}
+                                    onChange={(e) => setForm({ ...form, zip_code: e.target.value.replace(/\D/g, '').slice(0, 4) })}
+                                    inputMode="numeric"
+                                    placeholder="6207"
+                                />
+                            </label>
+                        </div>
+                        {errors.zip_code && <p className="text-sm text-shop-danger">{errors.zip_code}</p>}
+                        {form.barangay && (
+                            <p className="flex items-start gap-2 rounded-2xl bg-shop-accent-soft/60 px-3.5 py-2.5 text-sm font-semibold text-shop-accent-ink">
+                                <MapPin className="mt-0.5 h-4 w-4 shrink-0" /> {locality}
+                            </p>
+                        )}
                         <label className="block space-y-1.5">
                             <span className="text-sm font-semibold">Street / Purok / Sitio</span>
                             <input
@@ -361,14 +423,22 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
                             />
                         </label>
                         <label className="block space-y-1.5">
-                            <span className="text-sm font-semibold">Landmark</span>
+                            <span className="text-sm font-semibold">
+                                Landmark <span className="text-shop-danger">*</span>
+                            </span>
                             <input
                                 className={inputCls}
                                 value={form.landmark}
                                 onChange={(e) => setForm({ ...form, landmark: e.target.value })}
                                 placeholder="e.g. Blue gate beside the chapel"
                                 maxLength={191}
+                                required
                             />
+                            {errors.landmark ? (
+                                <span className="text-sm text-shop-danger">{errors.landmark}</span>
+                            ) : (
+                                <span className="text-xs text-shop-muted">Something our rider can see: a store, chapel, school or gate colour.</span>
+                            )}
                         </label>
                         <label className="block space-y-1.5">
                             <span className="text-sm font-semibold">Note to rider (optional)</span>
@@ -390,7 +460,7 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
                             Make this my default address
                         </label>
                         {Object.entries(errors)
-                            .filter(([k]) => !['barangay', 'lat'].includes(k))
+                            .filter(([k]) => !['barangay', 'lat', 'landmark', 'zip_code'].includes(k))
                             .map(([k, v]) => (
                                 <p key={k} className="text-sm text-shop-danger">
                                     {v}
@@ -400,7 +470,7 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
                     <div className="sticky bottom-0 border-t border-shop-line bg-shop-surface px-4 pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))]">
                         <button
                             type="button"
-                            disabled={saving || !form.barangay}
+                            disabled={saving || !form.barangay || !landmarkOk}
                             onClick={save}
                             className="bc-press flex h-14 w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-shop-accent text-base font-semibold text-shop-on-accent disabled:opacity-60"
                         >

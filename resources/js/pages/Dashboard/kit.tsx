@@ -121,7 +121,46 @@ export function useChartTheme() {
     }, [dark, theme]);
 }
 
-export function Chart(props: { type: 'line' | 'area' | 'bar' | 'donut' | 'heatmap'; height: number; options: object; series: unknown[] }) {
+/**
+ * Fixed analytics colors, validated with the dataviz palette checker against this app's card
+ * surfaces (light #ffffff, dark #0d205c): every slot clears the CVD, normal-vision and contrast gates.
+ * `blue` is the single-series color; `up` / `down` are the diverging poles; `channels` is a 3-slot set.
+ */
+export const VIZ_PALETTE = {
+    light: {
+        blue: '#063ccb',
+        orange: '#ff5a0a',
+        up: '#063ccb',
+        down: '#e34948',
+        channels: { counter: '#ff5a0a', dine_in: '#063ccb', online: '#3d792d' },
+        ink: '#0b0b0b',
+        muted: '#52514e',
+        grid: '#e8e6df',
+        surface: '#ffffff',
+    },
+    dark: {
+        blue: '#5f8dff',
+        orange: '#e8660f',
+        up: '#5f8dff',
+        down: '#e66767',
+        channels: { counter: '#e8660f', dine_in: '#5f8dff', online: '#3f8f3a' },
+        ink: '#f0efec',
+        muted: '#c3c2b7',
+        grid: '#22356f',
+        surface: '#0d205c',
+    },
+};
+
+export function useVizPalette() {
+    return useIsDark() ? VIZ_PALETTE.dark : VIZ_PALETTE.light;
+}
+
+export function Chart(props: {
+    type: 'line' | 'area' | 'bar' | 'donut' | 'heatmap' | 'scatter';
+    height: number;
+    options: object;
+    series: unknown[];
+}) {
     return (
         <Suspense fallback={<Skeleton className="w-full" style={{ height: props.height }} />}>
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
@@ -158,12 +197,21 @@ export function Kpi({
 }) {
     const good = change == null ? null : invert ? change <= 0 : change >= 0;
     const inner = (
-        <div className={cn('flex h-full flex-col rounded-xl border border-border bg-card p-4 transition', href && 'hover:border-primary/40 hover:shadow-sm')}>
+        <div
+            className={cn(
+                'flex h-full flex-col rounded-xl border border-border bg-card p-4 transition',
+                href && 'hover:border-primary/40 hover:shadow-sm',
+            )}
+        >
             <div className="flex items-start justify-between gap-2">
                 <p className="text-xs leading-snug font-semibold text-muted-foreground">{label}</p>
                 {Icon && <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />}
             </div>
-            {loading ? <Skeleton className="mt-2 h-7 w-24" /> : <p className="mt-1.5 text-2xl leading-none font-extrabold tracking-tight tabular-nums">{value}</p>}
+            {loading ? (
+                <Skeleton className="mt-2 h-7 w-24" />
+            ) : (
+                <p className="mt-1.5 text-2xl leading-none font-extrabold tracking-tight tabular-nums">{value}</p>
+            )}
             {(change != null || hint) && !loading && (
                 <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
                     {change != null && (
@@ -191,7 +239,21 @@ export function Kpi({
     );
 }
 
-export function Panel({ title, subtitle, href, children, className, action }: { title: string; subtitle?: string; href?: string; children: React.ReactNode; className?: string; action?: React.ReactNode }) {
+export function Panel({
+    title,
+    subtitle,
+    href,
+    children,
+    className,
+    action,
+}: {
+    title: string;
+    subtitle?: string;
+    href?: string;
+    children: React.ReactNode;
+    className?: string;
+    action?: React.ReactNode;
+}) {
     return (
         <section className={cn('min-w-0 rounded-xl border border-border bg-card', className)}>
             <header className="flex items-start justify-between gap-2 px-4 pt-4">
@@ -202,7 +264,11 @@ export function Panel({ title, subtitle, href, children, className, action }: { 
                 <div className="flex shrink-0 items-center gap-1">
                     {action}
                     {href && (
-                        <Link href={href} className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground" title="Open">
+                        <Link
+                            href={href}
+                            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                            title="Open"
+                        >
                             <ExternalLink className="h-3.5 w-3.5" />
                         </Link>
                     )}
@@ -222,7 +288,13 @@ export function Empty({ text = 'No data for this period yet.', height = 160 }: {
     );
 }
 
-export function RankList({ rows, valueLabel }: { rows: { label: string; sub?: string | null; value: string; share?: number }[]; valueLabel?: string }) {
+export function RankList({
+    rows,
+    valueLabel,
+}: {
+    rows: { label: string; sub?: string | null; value: string; share?: number }[];
+    valueLabel?: string;
+}) {
     if (!rows.length) return <Empty />;
     return (
         <ul className="divide-y divide-border px-1">
@@ -263,13 +335,28 @@ export interface BranchOption {
     is_active: boolean;
 }
 
-export function BranchFilter({ branches, selected, onChange }: { branches: BranchOption[]; selected: number | null; onChange: (id: number | null) => void }) {
+export function BranchFilter({
+    branches,
+    selected,
+    onChange,
+}: {
+    branches: BranchOption[];
+    selected: number | null;
+    onChange: (id: number | null) => void;
+}) {
     const [open, setOpen] = useState(false);
     const current = selected ? branches.find((b) => b.id === selected) : null;
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className={cn('h-9 min-w-40 justify-between gap-2 text-sm font-normal', selected && 'border-primary/50 bg-primary/5 text-primary')}>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                        'h-9 min-w-40 justify-between gap-2 text-sm font-normal',
+                        selected && 'border-primary/50 bg-primary/5 text-primary',
+                    )}
+                >
                     <span className="flex min-w-0 items-center gap-1.5">
                         <Building2 className="h-3.5 w-3.5 shrink-0" />
                         <span className="truncate">{current?.name ?? 'All branches'}</span>
@@ -283,7 +370,10 @@ export function BranchFilter({ branches, selected, onChange }: { branches: Branc
                         onChange(null);
                         setOpen(false);
                     }}
-                    className={cn('flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-accent', selected === null && 'bg-primary/10 font-semibold text-primary')}
+                    className={cn(
+                        'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-accent',
+                        selected === null && 'bg-primary/10 font-semibold text-primary',
+                    )}
                 >
                     <LayoutGrid className="h-3.5 w-3.5 opacity-50" /> All branches
                 </button>
@@ -326,7 +416,11 @@ export function DateFilter({ applied, onApply }: { applied: DateRange | undefine
                 <Button variant="outline" size="sm" className="h-9 min-w-48 justify-start gap-2 text-sm font-normal">
                     <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     <span className="truncate">
-                        {applied?.from ? (applied.to ? `${format(applied.from, 'MMM d')} – ${format(applied.to, 'MMM d, yyyy')}` : format(applied.from, 'MMM d, yyyy')) : 'Select dates'}
+                        {applied?.from
+                            ? applied.to
+                                ? `${format(applied.from, 'MMM d')} – ${format(applied.to, 'MMM d, yyyy')}`
+                                : format(applied.from, 'MMM d, yyyy')
+                            : 'Select dates'}
                     </span>
                 </Button>
             </PopoverTrigger>

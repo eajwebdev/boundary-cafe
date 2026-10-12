@@ -26,7 +26,13 @@ class LoyaltyProgramControllerTest extends TestCase
     {
         return $overrides + [
             'enabled' => true,
-            'spend_per_point' => 50,
+            'spend_increment' => 50,
+            'points_per_increment' => 5,
+            'earn_channels' => ['counter', 'dine_in', 'online'],
+            'excluded_category_ids' => [],
+            'allow_peso_discount' => false,
+            'claim_expiry_minutes' => 120,
+            'points_expiry_months' => 0,
             'peso_per_point' => 1,
             'minimum_redeem' => 20,
             'maximum_redeem' => 500,
@@ -44,7 +50,7 @@ class LoyaltyProgramControllerTest extends TestCase
         $this->actingAs($this->admin())->put(route('loyalty-program.update'), $this->payload())
             ->assertRedirect()->assertSessionHasNoErrors();
 
-        $this->assertEquals(50, SystemSetting::get('loyalty.spend_per_point'));
+        $this->assertEquals(50, SystemSetting::get('loyalty.spend_increment'));
         $this->assertSame(['Member', 'Gold'], array_column(SystemSetting::get('loyalty.tiers'), 'name'));
     }
 

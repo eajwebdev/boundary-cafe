@@ -3,9 +3,13 @@
 namespace App\Http\Middleware;
 
 use App\Events\TableFloorChanged;
+use App\Models\Customer;
+use App\Models\CustomerSocialAccount;
 use App\Models\Promo;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Services\LoyaltyRewardService;
+use App\Services\LoyaltyService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -110,6 +114,7 @@ class HandleInertiaRequests extends Middleware
                     'is_manager' => $user->isManager(),
                     'is_cashier' => $user->isCashier(),
                     'is_waiter' => $user->isWaiter(),
+                    'is_rider' => $user->isRider(),
                     'is_admin' => $user->isAdmin(),
                     'can_approve' => $user->canApprove(),
                     'pos_layout' => $user->pos_layout ?? 'grid',
@@ -153,6 +158,7 @@ class HandleInertiaRequests extends Middleware
                 'default_due_days' => SystemSetting::defaultDueDays($branchId),
                 'show_product_images' => (bool) SystemSetting::get('pos.show_product_images', $branchId, true),
                 'senior_pwd_discount' => (float) SystemSetting::get('pos.senior_pwd_discount', $branchId, 20),
+                'loyalty_allow_peso_discount' => (bool) SystemSetting::get('loyalty.allow_peso_discount', $branchId, false),
 
                 // Tax
                 'vat_enabled' => SystemSetting::vatEnabled($branchId),
@@ -195,7 +201,15 @@ class HandleInertiaRequests extends Middleware
                 'barangay' => $c->barangay,
                 'customer_number' => $c->customer_number,
                 'loyalty_points' => (int) $c->loyalty_points,
+                'reserved_points' => (int) $c->reserved_points,
+                'unread_notifications' => $c->unreadNotifications()->count(),
             ] : null,
+
+            // ── "Continue with Google / Facebook" buttons (only providers with credentials) ──
+            'social_login' => CustomerSocialAccount::enabledProviders(),
+
+            // ── Daily rewards popup (first app open of the day) ──────
+            'rewards_popup' => fn () => $this->rewardsPopup(Auth::guard('customer')->user()),
 
             // ── Active promos (staff POS only) ─────────────────────
             // Available on every page via usePage().props.promos
@@ -218,6 +232,38 @@ class HandleInertiaRequests extends Middleware
             ],
 
         ]);
+    }
+
+    /**
+     * Rewards to show in the once-a-day popup, or null when it was already shown today,
+     * the programme is off, or there is nothing in the reward catalog.
+     *
+     * @return array{points: int, affordable: array<int, array<string, mixed>>, next: array<string, mixed>|null}|null
+     */
+    private function rewardsPopup(?Customer $customer): ?array
+    {
+        if (! $customer || ! $customer->loyalty_enabled || $customer->rewards_popup_seen_on?->isToday()) {
+            return null;
+        }
+
+        $loyalty = app(LoyaltyService::class);
+        if (! $loyalty->enabled()) {
+            return null;
+        }
+
+        $rewards = app(LoyaltyRewardService::class);
+        $catalog = $rewards->catalog()->map(fn ($reward) => $rewards->rewardToFrontend($reward));
+        if ($catalog->isEmpty()) {
+            return null;
+        }
+
+        $points = (int) $customer->loyalty_points;
+
+        return [
+            'points' => $points,
+            'affordable' => $catalog->filter(fn ($reward) => $reward['points_cost'] <= $points)->sortByDesc('points_cost')->take(6)->values()->all(),
+            'next' => $catalog->filter(fn ($reward) => $reward['points_cost'] > $points)->sortBy('points_cost')->first(),
+        ];
     }
 
     /**

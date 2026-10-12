@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\Promo;
 use App\Models\Sale;
 use App\Models\SystemSetting;
+use App\Services\LoyaltyRewardService;
 use App\Services\LoyaltyService;
 use App\Services\SaleService;
 use Illuminate\Http\JsonResponse;
@@ -152,7 +153,7 @@ class PosController extends Controller
 
         $customers = Customer::query()
             ->where('is_active', true)
-            ->where(fn ($q) => $q->where('branch_id', $branchId)->orWhereNull('branch_id'))
+            ->visibleToBranch($branchId)
             ->orderBy('name')
             ->get(['id', 'name', 'contact_number', 'email', 'customer_number', 'loyalty_points'])
             ->map(fn (Customer $customer) => [
@@ -249,12 +250,13 @@ class PosController extends Controller
         }
 
         $validated = $request->validate([
-            'items' => ['required', 'array', 'min:1'],
+            'items' => ['required_without:reward_code', 'array'],
             'items.*.id' => ['required', 'exists:products,id'],
             'items.*.qty' => ['required', 'numeric', 'min:0.001'],
             'items.*.variant_id' => ['nullable', 'exists:product_variants,id'],
-            'payment_method' => ['required', 'in:'.implode(',', SaleService::PAYMENT_METHODS)],
+            'payment_method' => ['required_with:items', 'nullable', 'in:'.implode(',', SaleService::PAYMENT_METHODS)],
             'payment_amount' => ['nullable', 'numeric', 'min:0'],
+            'reward_code' => ['nullable', 'string', 'max:20'],
             'customer_id' => ['nullable', 'exists:customers,id'],
             'customer_name' => ['nullable', 'string', 'max:80'],
             'discount_percent' => ['nullable', 'numeric', 'between:0,100'],
@@ -387,6 +389,9 @@ class PosController extends Controller
         if ($sale->created_at->isBefore(today()) && ! $user->isAdmin()) {
             return back()->withErrors(['error' => "Only today's sales can be edited."]);
         }
+        if ($sale->items()->where('is_reward', true)->exists()) {
+            return back()->withErrors(['error' => 'This sale includes a claimed reward and cannot be edited. Void it and ring it up again.']);
+        }
 
         $validated = $request->validate([
             'items' => ['required', 'array', 'min:1'],
@@ -468,6 +473,7 @@ class PosController extends Controller
             app(SaleService::class)->restoreStockForItems($sale->items, $branchId);
 
             app(LoyaltyService::class)->reverseSale($sale, $user);
+            app(LoyaltyRewardService::class)->reverseForSale($sale, $user);
 
             // A voided online order's sale is unlinked so the order history stays truthful.
             $sale->onlineOrder?->update(['payment_status' => 'refunded']);
@@ -476,6 +482,20 @@ class PosController extends Controller
         });
 
         return back()->with('success', 'Sale voided and stock restored.');
+    }
+
+    // ─── Reward QR scan ───────────────────────────────────────────────────────
+
+    /** Validate a scanned reward QR (or the code under it) and return what to add to the order. */
+    public function scanReward(Request $request, LoyaltyRewardService $rewards): JsonResponse
+    {
+        $data = $request->validate(['code' => ['required', 'string', 'max:120']]);
+        $branchId = Auth::user()->workingBranchId();
+        abort_unless($branchId, 403, 'No branch assigned.');
+
+        $claim = $rewards->findForRedemption($data['code'], $branchId);
+
+        return response()->json(['claim' => $rewards->claimToPos($claim, $branchId)]);
     }
 
     // ─── Barcode lookup ───────────────────────────────────────────────────────
@@ -590,11 +610,12 @@ class PosController extends Controller
             'channel' => $sale->channel ?? 'counter',
             'table_order_id' => $sale->table_order_id,
             'table_label' => $sale->tableOrder?->table?->label,
+            'reward_retail_value' => (float) $sale->reward_retail_value,
         ];
 
         $base['items'] = $brief
-            ? $sale->items->map(fn ($i) => ['product_name' => $i->product?->name ?? '(deleted)', 'variant_name' => $i->variant?->name, 'unit' => $i->product?->unit ?? 'pc', 'quantity' => (float) $i->quantity, 'price' => (float) $i->price, 'item_type' => $i->product?->product_type === 'service' ? 'service' : 'product'])->values()
-            : $sale->items->map(fn ($i) => ['id' => $i->id, 'product_id' => $i->product_id, 'product_name' => $i->product?->name ?? '(deleted)', 'variant_name' => $i->variant?->name, 'unit' => $i->product?->unit ?? 'pc', 'quantity' => (float) $i->quantity, 'price' => (float) $i->price, 'total' => (float) $i->total, 'item_type' => $i->product?->product_type === 'service' ? 'service' : 'product'])->values();
+            ? $sale->items->map(fn ($i) => ['product_name' => $i->product?->name ?? '(deleted)', 'variant_name' => $i->variant?->name, 'unit' => $i->product?->unit ?? 'pc', 'quantity' => (float) $i->quantity, 'price' => (float) $i->price, 'is_reward' => (bool) $i->is_reward, 'item_type' => $i->product?->product_type === 'service' ? 'service' : 'product'])->values()
+            : $sale->items->map(fn ($i) => ['id' => $i->id, 'product_id' => $i->product_id, 'product_name' => $i->product?->name ?? '(deleted)', 'variant_name' => $i->variant?->name, 'unit' => $i->product?->unit ?? 'pc', 'quantity' => (float) $i->quantity, 'price' => (float) $i->price, 'total' => (float) $i->total, 'is_reward' => (bool) $i->is_reward, 'reward_points' => (int) $i->reward_points, 'item_type' => $i->product?->product_type === 'service' ? 'service' : 'product'])->values();
 
         if ($brief) {
             $base['item_count'] = $sale->items->count();

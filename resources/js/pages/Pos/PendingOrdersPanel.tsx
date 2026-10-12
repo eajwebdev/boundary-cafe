@@ -44,6 +44,9 @@ export interface PendingPickup {
     status_label: string;
     customer_name: string;
     contact_number: string;
+    fulfillment_type?: string;
+    fulfillment_label?: string;
+    table_number?: string | null;
     total: number;
     item_count: number;
     items: string[];
@@ -161,7 +164,7 @@ export default function PendingOrdersPanel({ open, onClose, currency, pending, a
                     <ClipboardList className="h-5 w-5 text-primary" />
                     <div className="flex-1">
                         <h2 className="text-base font-extrabold">Pending orders</h2>
-                        <p className="text-xs text-muted-foreground">Dine-in tickets from servers · online pickups</p>
+                        <p className="text-xs text-muted-foreground">Dine-in tickets from servers · online takeout & dine-in orders</p>
                     </div>
                     <button type="button" onClick={refresh} className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-muted" aria-label="Refresh">
                         <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
@@ -258,17 +261,25 @@ export default function PendingOrdersPanel({ open, onClose, currency, pending, a
 
                     <section>
                         <h3 className="mb-2 flex items-center gap-2 text-xs font-bold tracking-wider text-muted-foreground uppercase">
-                            <ShoppingBag className="h-3.5 w-3.5" /> Online pickups ({data.online_pickups.length})
+                            <ShoppingBag className="h-3.5 w-3.5" /> Online takeout & dine-in ({data.online_pickups.length})
                         </h3>
                         {data.online_pickups.length === 0 ? (
-                            <p className="rounded-xl border border-dashed border-border py-6 text-center text-sm text-muted-foreground">No pickup orders right now.</p>
+                            <p className="rounded-xl border border-dashed border-border py-6 text-center text-sm text-muted-foreground">No online takeout or dine-in orders right now.</p>
                         ) : (
                             <ul className="space-y-2">
                                 {data.online_pickups.map((p) => (
                                     <li key={p.id} className="rounded-xl border border-border bg-card p-3">
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="min-w-0">
-                                                <p className="font-bold">{p.order_number}</p>
+                                                <p className="font-bold">
+                                                    {p.order_number}
+                                                    {p.fulfillment_label && (
+                                                        <span className="ml-1.5 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-black text-muted-foreground uppercase">
+                                                            {p.fulfillment_label}
+                                                            {p.table_number ? ` · Table ${p.table_number}` : ''}
+                                                        </span>
+                                                    )}
+                                                </p>
                                                 <p className="text-xs text-muted-foreground">
                                                     {p.customer_name} · {p.contact_number}
                                                 </p>

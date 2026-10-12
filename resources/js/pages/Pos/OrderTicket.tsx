@@ -3,10 +3,11 @@ import ProductThumbnail from '@/components/ProductThumbnail';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { PendingTicket } from './PendingOrdersPanel';
-import type { CartItem } from './posTypes';
+import type { CartItem, LinkedMember, RewardClaimInCart } from './posTypes';
 import { isWeightedKgItem } from './posTypes';
 import QtyInput from './QtyInput';
 import { fmtMoney, fmtQty } from './ReceiptTemplate';
+import RewardLines from './RewardLines';
 
 /**
  * The order ticket shown beside the menu in both register views (Fast and Visual): order type,
@@ -31,6 +32,10 @@ export default function OrderTicket({
     onDetachTicket,
     onOpenPending,
     onClose,
+    rewardClaim = null,
+    member = null,
+    onRemoveReward = () => {},
+    onUnlinkMember = () => {},
 }: {
     cart: CartItem[];
     subtotal: number;
@@ -52,7 +57,14 @@ export default function OrderTicket({
     onDetachTicket: () => void;
     onOpenPending: () => void;
     onClose?: () => void;
+    /** A scanned reward QR: its items go on the sale at ₱0. */
+    rewardClaim?: RewardClaimInCart | null;
+    /** Member identified by card or mobile number (earns points on the sale). */
+    member?: LinkedMember | null;
+    onRemoveReward?: () => void;
+    onUnlinkMember?: () => void;
 }) {
+    const hasOrder = cart.length > 0 || !!rewardClaim;
     const lastLineKey = cart.length > 0 && cart[cart.length - 1].name === lastAddedName ? cart[cart.length - 1].key : null;
 
     return (
@@ -86,7 +98,7 @@ export default function OrderTicket({
                                 {pendingCount} waiting
                             </button>
                         )}
-                        {cart.length > 0 && (
+                        {hasOrder && (
                             <button
                                 type="button"
                                 onClick={onClear}
@@ -137,9 +149,13 @@ export default function OrderTicket({
                 )}
             </div>
 
+            <RewardLines claim={rewardClaim} member={member} currency={currency} onRemoveReward={onRemoveReward} onUnlinkMember={onUnlinkMember} compact />
+
             {/* ── Lines: one compact row each ───────────────────────────── */}
             <div className="flex-1 overflow-y-auto">
-                {cart.length === 0 ? (
+                {cart.length === 0 && rewardClaim ? (
+                    <p className="p-6 text-center text-xs text-muted-foreground">Reward only — press Complete, or add paid items to the same order.</p>
+                ) : cart.length === 0 ? (
                     <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
                         <span className="flex h-14 w-14 items-center justify-center rounded-3xl bg-muted text-muted-foreground">
                             <ReceiptText className="h-6 w-6" />
@@ -243,7 +259,7 @@ export default function OrderTicket({
                     />
                     <div className="relative min-w-0 flex-1">
                         <p className="text-[10px] font-bold tracking-widest text-[var(--pos-display-accent)] uppercase">
-                            {cart.length > 0 ? 'Amount due' : 'Register ready'}
+                            {hasOrder ? 'Amount due' : 'Register ready'}
                         </p>
                         <p className="truncate font-mono text-2xl leading-tight font-black tracking-tight tabular-nums xl:text-[1.7rem]">
                             {fmtMoney(subtotal, currency)}
@@ -252,9 +268,9 @@ export default function OrderTicket({
                     <Button
                         className="relative h-12 shrink-0 gap-2 rounded-xl px-5 text-base font-black shadow-md disabled:opacity-40 pointer-coarse:h-14"
                         onClick={onCharge}
-                        disabled={cart.length === 0}
+                        disabled={!hasOrder}
                     >
-                        <Zap className="h-5 w-5" /> Charge
+                        <Zap className="h-5 w-5" /> {cart.length === 0 && rewardClaim ? 'Complete' : 'Charge'}
                         <kbd className="hidden rounded bg-primary-foreground/20 px-1.5 py-0.5 font-mono text-[10px] xl:inline pointer-coarse:hidden">F9</kbd>
                     </Button>
                 </div>

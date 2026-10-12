@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Barangay extends Model
 {
     protected $fillable = [
-        'name', 'municipality', 'province', 'lat', 'lng', 'is_deliverable', 'sort_order',
+        'name', 'municipality', 'province', 'zip_code', 'lat', 'lng', 'is_deliverable', 'sort_order',
     ];
 
     protected $casts = [

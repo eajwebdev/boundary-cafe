@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Customer;
 
 use App\Http\Controllers\Controller;
+use App\Models\Barangay;
 use App\Models\CustomerAddress;
 use App\Services\DeliveryZoneService;
 use Illuminate\Http\RedirectResponse;
@@ -88,13 +89,24 @@ class AddressController extends Controller
             'label' => ['required', 'string', Rule::in(['Home', 'Work', 'Other'])],
             'barangay' => ['required', 'string', Rule::exists('barangays', 'name')->where('is_deliverable', true)],
             'street' => ['nullable', 'string', 'max:191'],
-            'landmark' => ['nullable', 'string', 'max:191'],
+            'landmark' => ['required', 'string', 'min:3', 'max:191'],
+            'zip_code' => ['nullable', 'regex:/^\d{4}$/'],
             'notes_for_rider' => ['nullable', 'string', 'max:255'],
             'lat' => ['required', 'numeric', 'between:-90,90'],
             'lng' => ['required', 'numeric', 'between:-180,180'],
             'formatted_address' => ['nullable', 'string', 'max:255'],
             'is_default' => ['nullable', 'boolean'],
-        ], ['barangay.exists' => 'We only deliver to Mabinay barangays.']);
+        ], [
+            'barangay.exists' => 'We only deliver to Mabinay barangays.',
+            'landmark.required' => 'Add a landmark so our rider can find you, e.g. "Blue gate beside the chapel".',
+            'zip_code.regex' => 'ZIP codes have 4 digits, e.g. 6207.',
+        ]);
+
+        // City and province always come from the barangay list, so they stay consistent.
+        $barangay = Barangay::where('name', $data['barangay'])->first();
+        $data['municipality'] = $barangay?->municipality ?? 'Mabinay';
+        $data['province'] = $barangay?->province ?? 'Negros Oriental';
+        $data['zip_code'] = ($data['zip_code'] ?? null) ?: $barangay?->zip_code;
 
         if (! $this->zone->containsPoint((float) $data['lat'], (float) $data['lng'])) {
             throw ValidationException::withMessages(['lat' => 'Sorry, we only deliver within Mabinay. Move the pin inside the delivery area.']);

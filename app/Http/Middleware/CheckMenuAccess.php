@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\SystemSetting;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -13,21 +14,22 @@ class CheckMenuAccess
     {
         $user = Auth::guard('web')->user();
 
-        if (!$user) {
+        if (! $user) {
             // Not logged in → redirect to login
             return redirect()->route('login');
         }
 
         // Check if module is disabled system-wide (menu 28 System Settings is always accessible for admins)
-        if ($menuId !== '28' && !\App\Models\SystemSetting::isModuleEnabled($menuId)) {
+        if ($menuId !== '28' && ! SystemSetting::isModuleEnabled($menuId)) {
             $target = $this->homeFor($user);
             if ($request->url() === $target || $request->fullUrl() === $target) {
                 abort(403, 'This module is disabled in system settings.');
             }
+
             return redirect()->to($target)->with('error', 'This module is disabled in system settings.');
         }
 
-        if (!$user->hasAccess($menuId)) {
+        if (! $user->hasAccess($menuId)) {
             $target = $this->homeFor($user);
 
             // Guard against infinite redirect loop if current URL is the target URL
@@ -44,7 +46,7 @@ class CheckMenuAccess
     /** Where to send a user who cannot open the requested page. */
     private function homeFor($user): string
     {
-        foreach (['1' => 'dashboard', '2' => 'pos.index', '41' => 'table-orders.index', '40' => 'online-orders.index'] as $menuId => $routeName) {
+        foreach (['1' => 'dashboard', '2' => 'pos.index', '41' => 'table-orders.index', '40' => 'online-orders.index', '49' => 'rider.dashboard'] as $menuId => $routeName) {
             if ($user->hasAccess($menuId)) {
                 return route($routeName);
             }

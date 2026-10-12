@@ -1,13 +1,17 @@
 import { Link, router } from '@inertiajs/react';
 import { ArrowLeft, Bike, Check, ChefHat, CircleX, Clock3, Gift, Loader2, PackageCheck, Phone, ReceiptText, Store } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 
+import type { MapPoint } from '@/components/DeliveryMap';
 import MapThumb from '@/components/storefront/MapThumb';
 import { Pill, Price, RouteLine, ShopButton, STATUS_PILL } from '@/components/storefront/ui';
 import { useRewardsName } from '@/hooks/use-business-name';
 import CustomerLayout from '@/layouts/CustomerLayout';
-import { jsonRequest, manilaTime } from '@/lib/customer';
+import type { Fulfillment } from '@/lib/customer';
+import { jsonRequest, manilaTime, paymentLabel } from '@/lib/customer';
 import { cn } from '@/lib/utils';
+
+const DeliveryMap = lazy(() => import('@/components/DeliveryMap'));
 
 interface TrackedOrder {
     order_number: string;
@@ -15,7 +19,9 @@ interface TrackedOrder {
     status_label: string;
     is_active: boolean;
     can_cancel: boolean;
-    fulfillment_type: 'delivery' | 'pickup';
+    fulfillment_type: Fulfillment;
+    fulfillment_label: string;
+    table_number: string | null;
     payment_method: string;
     subtotal: number;
     promo_label: string | null;
@@ -41,6 +47,7 @@ interface TrackedOrder {
     updated_at: string;
     branch: { name: string | null; phone: string | null; address: string | null };
     steps: { key: string; label: string; at: string | null }[];
+    rider: { name: string; position: { lat: number; lng: number; recorded_at: string | null; is_live: boolean } | null } | null;
     items: { id: number; name: string; variant: string | null; quantity: number; price: number; total: number; note: string | null }[];
 }
 
@@ -75,7 +82,8 @@ export default function OrderTrack({ order: initial }: { order: TrackedOrder }) 
 
     useEffect(() => setOrder(initial), [initial]);
 
-    // ── Live updates: poll every 10s while active; pause when the tab is hidden ──
+    // ── Live updates: poll every 10s while active (5s while the rider is on the way); pause when the tab is hidden ──
+    const pollMs = order.status === 'out_for_delivery' ? 5000 : 10000;
     useEffect(() => {
         if (!order.is_active) return;
         let timer: number | undefined;
@@ -91,19 +99,22 @@ export default function OrderTrack({ order: initial }: { order: TrackedOrder }) 
                     /* keep last known state; retry next tick */
                 }
             }
-            timer = window.setTimeout(tick, 10000);
+            timer = window.setTimeout(tick, pollMs);
         };
-        timer = window.setTimeout(tick, 10000);
+        timer = window.setTimeout(tick, pollMs);
         const onVisible = () => document.visibilityState === 'visible' && tick();
         document.addEventListener('visibilitychange', onVisible);
         return () => {
             window.clearTimeout(timer);
             document.removeEventListener('visibilitychange', onVisible);
         };
-    }, [order.is_active, order.order_number]);
+    }, [order.is_active, order.order_number, pollMs]);
 
     const failed = order.status === 'cancelled' || order.status === 'rejected';
-    const currentIndex = Math.max(0, order.steps.findIndex((s) => s.key === order.status));
+    const currentIndex = Math.max(
+        0,
+        order.steps.findIndex((s) => s.key === order.status),
+    );
     const progress = order.steps.length > 1 ? currentIndex / (order.steps.length - 1) : 0;
     const eta = order.estimated_ready_at ? manilaTime(order.estimated_ready_at) : null;
 
@@ -125,25 +136,37 @@ export default function OrderTrack({ order: initial }: { order: TrackedOrder }) 
     return (
         <CustomerLayout title={`Order ${order.order_number}`}>
             <div className="mx-auto max-w-5xl px-4 pt-4 lg:px-6 lg:pt-8">
-                <Link href="/account/orders" className="inline-flex h-10 items-center gap-1.5 text-sm font-medium text-shop-muted hover:text-shop-ink">
+                <Link
+                    href="/account/orders"
+                    className="inline-flex h-10 items-center gap-1.5 text-sm font-medium text-shop-muted hover:text-shop-ink"
+                >
                     <ArrowLeft className="h-4 w-4" /> My orders
                 </Link>
 
                 <div className="mt-2 grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
                     <div className="space-y-5">
                         {/* Status hero */}
-                        <section className={cn('overflow-hidden rounded-[28px] p-5 sm:p-7', failed ? 'bg-shop-danger-soft' : 'bg-shop-surface shadow-shop-md ring-1 ring-shop-line')}>
+                        <section
+                            className={cn(
+                                'overflow-hidden rounded-[28px] p-5 sm:p-7',
+                                failed ? 'bg-shop-danger-soft' : 'shadow-shop-md bg-shop-surface ring-1 ring-shop-line',
+                            )}
+                        >
                             <div className="flex flex-wrap items-center gap-2">
                                 <Pill tone={STATUS_PILL[order.status] ?? 'neutral'}>{order.status_label}</Pill>
                                 <span className="font-mono text-xs text-shop-muted">{order.order_number}</span>
                             </div>
-                            <h1 className="font-display mt-3 text-[clamp(1.75rem,6vw,2.5rem)] leading-[1.05] font-bold text-balance" aria-live="polite">
+                            <h1
+                                className="mt-3 font-display text-[clamp(1.75rem,6vw,2.5rem)] leading-[1.05] font-bold text-balance"
+                                aria-live="polite"
+                            >
                                 {HEADLINE[order.status] ?? order.status_label}
                             </h1>
                             {!failed && order.is_active && eta && (
                                 <p className="mt-2 flex items-center gap-2 text-base">
                                     <Clock3 className="h-5 w-5 text-shop-accent-ink" />
-                                    {order.fulfillment_type === 'delivery' ? 'Arriving around' : 'Ready around'} <span className="font-display text-xl font-bold">{eta}</span>
+                                    {order.fulfillment_type === 'delivery' ? 'Arriving around' : 'Ready around'}{' '}
+                                    <span className="font-display text-xl font-bold">{eta}</span>
                                 </p>
                             )}
                             {failed && order.cancel_reason && <p className="mt-2 text-shop-danger">Reason: {order.cancel_reason}</p>}
@@ -153,7 +176,15 @@ export default function OrderTrack({ order: initial }: { order: TrackedOrder }) 
                                     <RouteLine progress={progress} animate className="h-8" />
                                     <div className="mt-1 flex justify-between text-[11px] font-medium tracking-[0.12em] text-shop-muted uppercase">
                                         <span>Café</span>
-                                        <span>{order.fulfillment_type === 'delivery' ? 'Your door' : 'Pickup counter'}</span>
+                                        <span>
+                                            {order.fulfillment_type === 'delivery'
+                                                ? 'Your door'
+                                                : order.fulfillment_type === 'dine_in'
+                                                  ? order.table_number
+                                                      ? `Table ${order.table_number}`
+                                                      : 'Your table'
+                                                  : 'Pickup counter'}
+                                        </span>
                                     </div>
                                 </div>
                             )}
@@ -164,7 +195,8 @@ export default function OrderTrack({ order: initial }: { order: TrackedOrder }) 
                                         <span className="bc-pulse absolute inset-0 rounded-full" />
                                         <span className="relative h-2 w-2 rounded-full bg-current" />
                                     </span>
-                                    Live · updated {new Date(updatedAt).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', second: '2-digit' })}
+                                    Live · updated{' '}
+                                    {new Date(updatedAt).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', second: '2-digit' })}
                                 </p>
                             )}
                         </section>
@@ -178,9 +210,19 @@ export default function OrderTrack({ order: initial }: { order: TrackedOrder }) 
                                         const current = i === currentIndex && order.is_active;
                                         const Icon = STEP_ICON[s.key] ?? Check;
                                         return (
-                                            <li key={s.key} className="relative flex gap-4 pb-6 last:pb-0" aria-current={current ? 'step' : undefined}>
+                                            <li
+                                                key={s.key}
+                                                className="relative flex gap-4 pb-6 last:pb-0"
+                                                aria-current={current ? 'step' : undefined}
+                                            >
                                                 {i < order.steps.length - 1 && (
-                                                    <span className={cn('absolute top-10 left-4.75 h-[calc(100%-2.5rem)] w-0.5', i < currentIndex ? 'bg-shop-accent' : 'bg-shop-line')} aria-hidden />
+                                                    <span
+                                                        className={cn(
+                                                            'absolute top-10 left-4.75 h-[calc(100%-2.5rem)] w-0.5',
+                                                            i < currentIndex ? 'bg-shop-accent' : 'bg-shop-line',
+                                                        )}
+                                                        aria-hidden
+                                                    />
                                                 )}
                                                 <span
                                                     className={cn(
@@ -202,6 +244,45 @@ export default function OrderTrack({ order: initial }: { order: TrackedOrder }) 
                             </section>
                         )}
 
+                        {/* Rider on the way */}
+                        {order.status === 'out_for_delivery' && order.rider?.position && order.lat && order.lng && (
+                            <section className="overflow-hidden rounded-[24px] bg-shop-surface ring-1 ring-shop-line" aria-label="Rider location">
+                                <Suspense
+                                    fallback={<div className="flex h-64 items-center justify-center text-sm text-shop-muted">Loading map…</div>}
+                                >
+                                    <DeliveryMap
+                                        points={
+                                            [
+                                                {
+                                                    id: 'rider',
+                                                    kind: 'rider',
+                                                    lat: order.rider.position.lat,
+                                                    lng: order.rider.position.lng,
+                                                    label: `${order.rider.name} (your rider)`,
+                                                    stale: !order.rider.position.is_live,
+                                                },
+                                                { id: 'drop', kind: 'drop', lat: order.lat, lng: order.lng, label: 'You' },
+                                            ] satisfies MapPoint[]
+                                        }
+                                        lines={[['rider', 'drop']]}
+                                        fitKey="rider-drop"
+                                        className="h-64 w-full"
+                                    />
+                                </Suspense>
+                                <p className="flex items-center gap-2 px-5 py-3 text-sm">
+                                    <Bike className="h-4 w-4 text-shop-accent" />
+                                    <span>
+                                        <b>{order.rider.name}</b> is bringing your order
+                                        {order.rider.position.is_live
+                                            ? ' · live'
+                                            : order.rider.position.recorded_at
+                                              ? ` · last seen ${manilaTime(order.rider.position.recorded_at)}`
+                                              : ''}
+                                    </span>
+                                </p>
+                            </section>
+                        )}
+
                         {/* Where */}
                         <section className="overflow-hidden rounded-[24px] bg-shop-surface ring-1 ring-shop-line">
                             {order.fulfillment_type === 'delivery' && order.lat && order.lng && (
@@ -219,13 +300,20 @@ export default function OrderTrack({ order: initial }: { order: TrackedOrder }) 
                                     <div className="flex gap-3">
                                         <Store className="mt-0.5 h-5 w-5 text-shop-accent-ink" />
                                         <div>
-                                            <p className="font-semibold">Pick up at {order.branch.name}</p>
+                                            <p className="font-semibold">
+                                                {order.fulfillment_type === 'dine_in'
+                                                    ? `Dine-in at ${order.branch.name}${order.table_number ? ` · Table ${order.table_number}` : ''}`
+                                                    : `Pick up at ${order.branch.name}`}
+                                            </p>
                                             <p className="text-sm text-shop-muted">{order.branch.address}</p>
                                         </div>
                                     </div>
                                 )}
                                 {order.branch.phone && (
-                                    <a href={`tel:${order.branch.phone}`} className="bc-press mt-4 flex h-12 items-center justify-center gap-2 rounded-2xl border border-shop-line font-semibold hover:bg-shop-sunken">
+                                    <a
+                                        href={`tel:${order.branch.phone}`}
+                                        className="bc-press mt-4 flex h-12 items-center justify-center gap-2 rounded-2xl border border-shop-line font-semibold hover:bg-shop-sunken"
+                                    >
                                         <Phone className="h-4 w-4" /> Call the café
                                     </a>
                                 )}
@@ -235,7 +323,10 @@ export default function OrderTrack({ order: initial }: { order: TrackedOrder }) 
 
                     {/* Receipt */}
                     <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
-                        <section className="bc-ticket rounded-[26px] bg-shop-surface p-5 shadow-shop-md ring-1 ring-shop-line" style={{ ['--ticket-cut' as string]: '22%' }}>
+                        <section
+                            className="bc-ticket shadow-shop-md rounded-[26px] bg-shop-surface p-5 ring-1 ring-shop-line"
+                            style={{ ['--ticket-cut' as string]: '22%' }}
+                        >
                             <div className="flex items-center justify-between">
                                 <h2 className="font-display text-lg font-bold">Receipt</h2>
                                 <span className="font-mono text-xs text-shop-muted">{manilaTime(order.created_at, true)}</span>
@@ -257,12 +348,34 @@ export default function OrderTrack({ order: initial }: { order: TrackedOrder }) 
                             </ul>
                             <dl className="mt-4 space-y-1.5 border-t border-dashed border-shop-line pt-4 text-sm">
                                 <Line label="Subtotal" value={<Price value={order.subtotal} />} />
-                                {order.promo_discount > 0 && <Line label={`Promo${order.promo_label ? ` · ${order.promo_label}` : ''}`} value={<>−<Price value={order.promo_discount} /></>} />}
+                                {order.promo_discount > 0 && (
+                                    <Line
+                                        label={`Promo${order.promo_label ? ` · ${order.promo_label}` : ''}`}
+                                        value={
+                                            <>
+                                                −<Price value={order.promo_discount} />
+                                            </>
+                                        }
+                                    />
+                                )}
                                 {order.vat_amount > 0 && <Line label="VAT" value={<Price value={order.vat_amount} />} />}
-                                {order.loyalty_discount > 0 && <Line label={`Points · ${order.loyalty_points_redeemed}`} value={<>−<Price value={order.loyalty_discount} /></>} />}
-                                {order.fulfillment_type === 'delivery' && <Line label="Delivery" value={order.delivery_fee > 0 ? <Price value={order.delivery_fee} /> : 'Free'} />}
+                                {order.loyalty_discount > 0 && (
+                                    <Line
+                                        label={`Points · ${order.loyalty_points_redeemed}`}
+                                        value={
+                                            <>
+                                                −<Price value={order.loyalty_discount} />
+                                            </>
+                                        }
+                                    />
+                                )}
+                                {order.fulfillment_type === 'delivery' && (
+                                    <Line label="Delivery" value={order.delivery_fee > 0 ? <Price value={order.delivery_fee} /> : 'Free'} />
+                                )}
                                 <div className="flex items-end justify-between pt-2">
-                                    <dt className="font-semibold">{order.payment_method === 'cod' ? 'Pay the rider' : 'Pay at pickup'}</dt>
+                                    <dt className="font-semibold">
+                                        {order.payment_method === 'cod' ? 'Pay the rider' : paymentLabel(order.payment_method)}
+                                    </dt>
                                     <dd className="font-display text-2xl font-bold">
                                         <Price value={order.total} />
                                     </dd>
@@ -280,7 +393,8 @@ export default function OrderTrack({ order: initial }: { order: TrackedOrder }) 
                                         </>
                                     ) : (
                                         <>
-                                            <span className="font-bold">{order.loyalty_points_to_earn} points</span> will land in your {rewardsName} when this order is completed.
+                                            <span className="font-bold">{order.loyalty_points_to_earn} points</span> will land in your {rewardsName}{' '}
+                                            when this order is completed.
                                         </>
                                     )}
                                 </p>
@@ -317,7 +431,10 @@ export default function OrderTrack({ order: initial }: { order: TrackedOrder }) 
                             ))}
 
                         {!order.is_active && (
-                            <Link href="/" className="bc-press flex h-14 items-center justify-center rounded-2xl bg-shop-accent font-semibold text-shop-on-accent shadow-shop-md">
+                            <Link
+                                href="/"
+                                className="bc-press shadow-shop-md flex h-14 items-center justify-center rounded-2xl bg-shop-accent font-semibold text-shop-on-accent"
+                            >
                                 Order again
                             </Link>
                         )}

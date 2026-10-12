@@ -15,7 +15,8 @@ import { useBranchLabel, useBusinessName, useRewardsName, useTagline } from '@/h
 import { useLogoUrl } from '@/hooks/use-logo';
 import CustomerLayout, { useCustomerAuth } from '@/layouts/CustomerLayout';
 import type { CustomerSession, MenuProduct, StoreStatus, StorefrontPromo } from '@/lib/customer';
-import { useCart } from '@/lib/customer';
+import type { Fulfillment as CustomerFulfillment } from '@/lib/customer';
+import { earnRule, FULFILLMENT_ICON, FULFILLMENT_LABEL, FULFILLMENTS, fulfillmentEnabled, pickFulfillment, useCart } from '@/lib/customer';
 import { cn } from '@/lib/utils';
 
 interface PageProps {
@@ -32,12 +33,13 @@ interface PageProps {
             delivery_minutes: number;
             delivery_enabled: boolean;
             pickup_enabled: boolean;
+            dine_in_enabled: boolean;
         };
     };
     categories: { id: number; name: string }[];
     products: MenuProduct[];
     storefrontPromos: StorefrontPromo[];
-    loyaltyRules: { enabled: boolean; spend_per_point: number; birthday_bonus: number };
+    loyaltyRules: { enabled: boolean; spend_increment: number; points_per_increment: number; birthday_bonus: number };
     activeOrder: { order_number: string; status: string; status_label: string; total: number } | null;
     customer: CustomerSession | null;
     barangays: string[];
@@ -49,7 +51,7 @@ const FULFILLMENT_KEY = 'bc-fulfillment';
 const STRIP_DISMISSED_KEY = 'bc-strip-dismissed';
 const WELCOME_DISMISSED_KEY = 'bc-welcome-dismissed';
 
-type Fulfillment = 'delivery' | 'pickup';
+type Fulfillment = CustomerFulfillment;
 type Sort = 'menu' | 'price-asc' | 'price-desc' | 'name';
 type Settings = PageProps['store']['settings'];
 
@@ -98,13 +100,13 @@ export default function Storefront() {
     const [query, setQuery] = useState('');
     const [cartOpen, setCartOpen] = useState(false);
     const [fulfillment, setFulfillment] = useState<Fulfillment>(() => {
+        let saved: string | null = null;
         try {
-            const saved = window.sessionStorage.getItem(FULFILLMENT_KEY);
-            if (saved === 'pickup' && store.settings.pickup_enabled) return 'pickup';
+            saved = window.sessionStorage.getItem(FULFILLMENT_KEY);
         } catch {
             /* ignore */
         }
-        return store.settings.delivery_enabled ? 'delivery' : 'pickup';
+        return pickFulfillment(store.settings, saved);
     });
 
     useEffect(() => {
@@ -263,7 +265,7 @@ function CartButton({ count, onClick }: { count: number; onClick: () => void }) 
     );
 }
 
-/** Delivery / pickup as underlined tabs. */
+/** Dine-in / takeout / delivery as underlined tabs. */
 function ServiceTabs({
     settings,
     fulfillment,
@@ -274,10 +276,10 @@ function ServiceTabs({
     onFulfillment: (f: Fulfillment) => void;
 }) {
     return (
-        <div className="flex items-stretch" role="radiogroup" aria-label="Delivery or pickup">
-            {(['delivery', 'pickup'] as const).map((f) => {
-                const enabled = f === 'delivery' ? settings.delivery_enabled : settings.pickup_enabled;
-                const Icon = f === 'delivery' ? Bike : Store;
+        <div className="flex items-stretch" role="radiogroup" aria-label="Dine-in, takeout or delivery">
+            {FULFILLMENTS.map((f) => {
+                const enabled = fulfillmentEnabled(settings, f);
+                const Icon = FULFILLMENT_ICON[f];
                 return (
                     <button
                         key={f}
@@ -287,12 +289,12 @@ function ServiceTabs({
                         disabled={!enabled}
                         onClick={() => onFulfillment(f)}
                         className={cn(
-                            'flex cursor-pointer items-center gap-2 border-b-[3px] px-4 text-[15px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+                            'flex cursor-pointer items-center gap-2 border-b-[3px] px-3 text-[15px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 sm:px-4',
                             fulfillment === f ? 'border-shop-ink text-shop-ink' : 'border-transparent text-shop-muted hover:text-shop-ink',
                         )}
                     >
                         <Icon className="h-4.5 w-4.5" />
-                        {f === 'delivery' ? 'Delivery' : 'Pickup'}
+                        {FULFILLMENT_LABEL[f]}
                     </button>
                 );
             })}
@@ -403,7 +405,10 @@ function StorefrontBody({ cart, query, onQuery, fulfillment, onFulfillment, cart
     const heroImages = useMemo(() => {
         const photographicProducts = products.filter((product) => product.image && !product.image.endsWith('.svg'));
         const main = products.find((product) => product.name === 'Boundary Burger')?.image ?? photographicProducts[0]?.image ?? null;
-        const accent = products.find((product) => product.name === 'Strawberry Sparkle')?.image ?? photographicProducts.find((product) => product.image !== main)?.image ?? main;
+        const accent =
+            products.find((product) => product.name === 'Strawberry Sparkle')?.image ??
+            photographicProducts.find((product) => product.image !== main)?.image ??
+            main;
 
         return { main, accent };
     }, [products]);
@@ -610,7 +615,13 @@ function StorefrontBody({ cart, query, onQuery, fulfillment, onFulfillment, cart
                     <StatusStrip isOpen={isOpen} status={store.status} activeOrder={activeOrder} />
                     {/* A desktop search swaps the discovery blocks for results */}
                     <div className={cn(searching && 'lg:hidden')}>
-                        <Hero customer={customer} store={store} fulfillment={fulfillment} images={heroImages} onJoin={() => requireAuth('register')} />
+                        <Hero
+                            customer={customer}
+                            store={store}
+                            fulfillment={fulfillment}
+                            images={heroImages}
+                            onJoin={() => requireAuth('register')}
+                        />
                         <CategoryTiles sections={navSections} onSelect={jumpTo} className="mt-8" />
                         <PromoRail promos={storefrontPromos} className="mt-8" />
                     </div>
@@ -680,7 +691,7 @@ function StorefrontBody({ cart, query, onQuery, fulfillment, onFulfillment, cart
                                                 </h2>
                                                 <span className="text-sm text-shop-muted tabular-nums">{s.items.length} items</span>
                                             </div>
-                                            <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
+                                            <div className="grid gap-2 sm:grid-cols-2 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
                                                 {s.items.map((p) => (
                                                     <ProductCard
                                                         key={p.id}
@@ -793,8 +804,11 @@ function StatusStrip({ isOpen, status, activeOrder }: { isOpen: boolean; status:
                 <div className="flex items-start gap-3 rounded-2xl bg-shop-warning-soft p-4 text-shop-warning" role="status">
                     <Store className="mt-0.5 h-5 w-5 shrink-0" />
                     <div>
-                        <p className="font-semibold">Closed for online orders</p>
-                        <p className="text-sm">{status.message ?? `We open at ${status.opens_at}.`} Browse now and order when we open.</p>
+                        <p className="font-semibold">{status.closed_today ? 'Closed today' : 'Closed for online orders'}</p>
+                        <p className="text-sm">
+                            {status.message ?? `We open at ${status.opens_at}.`} Browse now and order{' '}
+                            {status.closed_today ? 'tomorrow' : 'when we open'}.
+                        </p>
                     </div>
                 </div>
             </div>
@@ -920,7 +934,7 @@ function RewardsCard({
             {customer ? (
                 <>
                     <p className="font-display text-2xl leading-none font-bold tabular-nums">{customer.loyalty_points.toLocaleString()} points</p>
-                    <p className="mt-1.5 text-sm text-white/75">1 point for every ₱{rules.spend_per_point} you spend.</p>
+                    <p className="mt-1.5 text-sm text-white/75">{earnRule(rules)} you spend.</p>
                     <Link href="/account/rewards" className={cn(action, 'mt-3')}>
                         Open my card
                     </Link>
@@ -928,9 +942,7 @@ function RewardsCard({
             ) : (
                 <>
                     <p className="font-display text-base leading-snug font-semibold text-balance">
-                        {rules.enabled
-                            ? `Earn 1 point for every ₱${rules.spend_per_point}. Join ${rewardsName}.`
-                            : 'Create an account to order for delivery or pickup.'}
+                        {rules.enabled ? `Earn ${earnRule(rules)}. Join ${rewardsName}.` : 'Create an account to order for delivery or pickup.'}
                     </p>
                     <div className="mt-3 grid grid-cols-2 gap-2">
                         <button type="button" onClick={onJoin} className={action}>
@@ -1085,7 +1097,9 @@ function StoreCard({ store }: { store: PageProps['store'] }) {
                     <Clock3 className="h-4 w-4 text-shop-muted" /> {store.status.opens_at} – {store.status.closes_at}
                 </li>
                 <li className="flex items-center gap-2">
-                    <ShoppingBag className="h-4 w-4 text-shop-muted" /> Min. order ₱{store.settings.min_order} · COD or pay at pickup
+                    <ShoppingBag className="h-4 w-4 text-shop-muted" />
+                    {store.settings.min_order > 0 ? `Min. order ₱${store.settings.min_order.toLocaleString('en-PH')}` : 'No minimum order'} · COD or
+                    pay at the counter
                 </li>
                 {store.branch?.phone && (
                     <li className="flex items-center gap-2">
@@ -1108,9 +1122,7 @@ function RewardsTeaser({ customer, rules, onJoin }: { customer: CustomerSession 
                 <p className="flex items-center gap-2 text-sm font-semibold text-white/80">
                     <Gift className="h-4 w-4" /> {rewardsName}
                 </p>
-                <p className="mt-2 font-display text-2xl leading-tight font-bold">
-                    1 point for every ₱{rules.spend_per_point}. Delivery, pickup or dine-in.
-                </p>
+                <p className="mt-2 font-display text-2xl leading-tight font-bold">{earnRule(rules)}. Delivery, pickup or dine-in.</p>
                 <p className="mt-2 text-sm text-white/75">
                     Use points as cash at checkout
                     {rules.birthday_bonus > 0 ? `, plus ${rules.birthday_bonus} bonus points in your birthday month` : ''}.

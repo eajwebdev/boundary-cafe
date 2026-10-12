@@ -100,6 +100,7 @@ const MENU = {
     INVENTORY_REPORT: '20',
     EXPENSE_REPORT: '21',
     INGREDIENT_USAGE_REPORT: '30',
+    PROFIT_ANALYTICS: '50',
     ACTIVITY_LOGS: '22',
     USERS: '23',
     SUPPLIERS: '24',
@@ -120,6 +121,7 @@ const MENU = {
     EMPLOYEES: '45',
     ATTENDANCE: '46',
     Z_READING: '47',
+    STORE_SETTINGS: '48',
 } as const;
 
 /** Polls the number of new (pending) online orders for the sidebar badge. */
@@ -349,6 +351,7 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
                                         has(MENU.PROMOS) ||
                                         has(MENU.CUSTOMERS) ||
                                         has(MENU.ONLINE_ORDERS) ||
+                                        has(MENU.STORE_SETTINGS) ||
                                         has(MENU.TABLE_ORDERING) ||
                                         has(MENU.LOYALTY_PROGRAM)) && (
                                         <>
@@ -365,6 +368,9 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
                                                     active={isActive('/online-orders')}
                                                     badge={pendingOnline}
                                                 />
+                                            )}
+                                            {has(MENU.STORE_SETTINGS) && (
+                                                <NavItem href="/store-settings" icon={Store} label="Store Settings" active={isActive('/store-settings')} />
                                             )}
                                             {has(MENU.TABLE_ORDERING) && (
                                                 <NavItem href="/tables" icon={Utensils} label="Table Ordering" active={isActive('/tables')} />
@@ -477,6 +483,7 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
                                         has(MENU.INVENTORY_REPORT) ||
                                         has(MENU.EXPENSE_REPORT) ||
                                         has(MENU.INGREDIENT_USAGE_REPORT) ||
+                                        has(MENU.PROFIT_ANALYTICS) ||
                                         has(MENU.ACTIVITY_LOGS)) && (
                                         <>
                                             <SidebarSectionLabel label="Reports" />
@@ -487,6 +494,9 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
                                                 )}
                                                 {has(MENU.SALES_REPORT) && (
                                                     <SubLink href="/reports/sales" label="Sales Report" active={isActive('/reports/sales')} />
+                                                )}
+                                                {has(MENU.PROFIT_ANALYTICS) && (
+                                                    <SubLink href="/reports/profit" label="Profit Analytics" active={isActive('/reports/profit')} />
                                                 )}
                                                 {has(MENU.INVENTORY_REPORT) && (
                                                     <SubLink
@@ -566,7 +576,7 @@ export default function AdminLayout({ children, defaultSidebarOpen, sidebarColla
                                                 <NavItem
                                                     href="/delivery-zone"
                                                     icon={MapPinned}
-                                                    label="Delivery Zone"
+                                                    label="Online Ordering"
                                                     active={isActive('/delivery-zone')}
                                                 />
                                             )}

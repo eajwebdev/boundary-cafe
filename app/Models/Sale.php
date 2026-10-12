@@ -39,6 +39,7 @@ class Sale extends Model
         'loyalty_points_earned',
         'loyalty_points_redeemed',
         'loyalty_discount',
+        'reward_retail_value',
         'customer_name',
         'status',
         'credit_notes',
@@ -62,6 +63,7 @@ class Sale extends Model
         'loyalty_points_earned' => 'integer',
         'loyalty_points_redeemed' => 'integer',
         'loyalty_discount' => 'decimal:2',
+        'reward_retail_value' => 'decimal:2',
         'due_date' => 'date',
     ];
 
@@ -123,6 +125,12 @@ class Sale extends Model
     public function loyaltyTransactions(): HasMany
     {
         return $this->hasMany(LoyaltyTransaction::class);
+    }
+
+    /** The loyalty reward claim fulfilled by this sale, if any. */
+    public function rewardClaim(): HasOne
+    {
+        return $this->hasOne(LoyaltyRewardClaim::class);
     }
 
     // ── Helpers ────────────────────────────────────────────────────

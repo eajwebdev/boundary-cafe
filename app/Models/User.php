@@ -53,8 +53,13 @@ class User extends Authenticatable
 
     const ROLE_WAITER = 'waiter';
 
+    const ROLE_RIDER = 'rider';
+
     /** Order takers (waiters) only ever reach Table Ordering, whatever access is ticked. */
     const ORDER_TAKER_MENUS = ['41'];
+
+    /** Riders only ever reach their Rider Dashboard, whatever access is ticked. */
+    const RIDER_MENUS = ['49'];
 
     public static function roles(): array
     {
@@ -64,6 +69,7 @@ class User extends Authenticatable
             self::ROLE_MANAGER => 'Manager',
             self::ROLE_CASHIER => 'Cashier',
             self::ROLE_WAITER => 'Waiter / Server',
+            self::ROLE_RIDER => 'Delivery Rider',
         ];
     }
 
@@ -73,7 +79,8 @@ class User extends Authenticatable
         return match ($role) {
             self::ROLE_CASHIER => ['2', '3', '14', '15', '16', '39', '40', '41'],
             self::ROLE_WAITER => self::ORDER_TAKER_MENUS,
-            self::ROLE_MANAGER => array_values(array_diff(MenuHelper::ids(), ['23', '25', '28'])),
+            self::ROLE_RIDER => self::RIDER_MENUS,
+            self::ROLE_MANAGER => array_values(array_diff(array_map('strval', MenuHelper::ids()), ['23', '25', '28', ...MenuHelper::roleOnly()])),
             default => [],
         };
     }
@@ -87,6 +94,12 @@ class User extends Authenticatable
     public function employee(): HasOne
     {
         return $this->hasOne(Employee::class);
+    }
+
+    /** A rider's latest GPS fix. */
+    public function riderPosition(): HasOne
+    {
+        return $this->hasOne(RiderPosition::class);
     }
 
     // ── POS Layout constants ───────────────────────────────────────
@@ -138,6 +151,11 @@ class User extends Authenticatable
     public function isWaiter(): bool
     {
         return $this->role === self::ROLE_WAITER;
+    }
+
+    public function isRider(): bool
+    {
+        return $this->role === self::ROLE_RIDER;
     }
 
     /**
@@ -226,6 +244,10 @@ class User extends Authenticatable
 
         if ($this->isWaiter()) {
             return array_values(array_intersect(self::ORDER_TAKER_MENUS, $enabledModuleIds));
+        }
+
+        if ($this->isRider()) {
+            return array_values(array_intersect(self::RIDER_MENUS, $enabledModuleIds));
         }
 
         if ($this->isCashier() || $this->isManager()) {
@@ -425,6 +447,11 @@ class User extends Authenticatable
     public function scopeCashiers($query)
     {
         return $query->where('role', self::ROLE_CASHIER);
+    }
+
+    public function scopeRiders($query)
+    {
+        return $query->where('role', self::ROLE_RIDER);
     }
 
     public function scopeWaiters($query)

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Branch;
 use App\Models\CashSession;
 use App\Models\Customer;
+use App\Models\LoyaltyRewardClaim;
 use App\Models\OnlineOrder;
 use App\Models\Product;
 use App\Models\Promo;
@@ -27,14 +28,17 @@ class SaleService
 {
     public const PAYMENT_METHODS = ['cash', 'gcash', 'card', 'others'];
 
-    public function __construct(private LoyaltyService $loyalty) {}
+    /** Recorded on a sale that only fulfils a loyalty reward (nothing to pay). */
+    public const REWARD_PAYMENT_METHOD = 'reward';
+
+    public function __construct(private LoyaltyService $loyalty, private LoyaltyRewardService $rewards) {}
 
     /**
      * Charge a cart at the POS (optionally settling a pending table order).
      *
      * $data keys: items[{id, qty, variant_id}], payment_method, payment_amount,
      * customer_id, customer_name, discount_percent, discount_type ('senior_pwd' | 'manual'), promo_id,
-     * loyalty_points, table_order_id.
+     * loyalty_points, table_order_id, reward_code (a scanned reward claim — its items go on the sale at ₱0).
      *
      * @return array{sale: Sale, result: array}
      */
@@ -43,8 +47,15 @@ class SaleService
         return DB::transaction(function () use ($user, $branchId, $session, $data) {
             $tableOrder = $this->lockPendingTableOrder($data['table_order_id'] ?? null, $branchId);
             $allowNeg = SystemSetting::allowNegativeStock($branchId);
+            $claim = ! empty($data['reward_code']) ? $this->rewards->lockForCheckout($data['reward_code'], $branchId) : null;
 
-            [$saleItems, $subtotal, $taxableSubtotal] = $this->buildLines($data['items'], $branchId, $allowNeg);
+            $paidItems = $data['items'] ?? [];
+            if ($paidItems === [] && ! $claim) {
+                throw new RuntimeException('The cart is empty.');
+            }
+            [$saleItems, $subtotal, $taxableSubtotal] = $paidItems === []
+                ? [[], 0.0, 0.0]
+                : $this->buildLines($paidItems, $branchId, $allowNeg);
 
             // Manual percentage discount (POS only), capped by settings
             $maxDisc = (float) SystemSetting::get('pos.max_discount_percent', $branchId, 100);
@@ -52,6 +63,10 @@ class SaleService
             $discAmt = round($subtotal * ($discPct / 100), 2);
 
             $customerId = $data['customer_id'] ?? $tableOrder?->customer_id;
+            if ($claim && $customerId && (int) $customerId !== (int) $claim->customer_id) {
+                throw new RuntimeException("Reward {$claim->code} belongs to another customer. Remove it or change the customer.");
+            }
+            $customerId = $claim?->customer_id ?? $customerId;
             $customer = $customerId
                 ? Customer::where('id', $customerId)->where('is_active', true)->lockForUpdate()->firstOrFail()
                 : null;
@@ -76,16 +91,29 @@ class SaleService
             [$vatAmt, $vatRate] = $this->vatFor($afterDisc, $subtotal, $taxableSubtotal, $branchId);
             $serviceChargeAmt = $this->serviceChargeFor($afterDisc, $branchId);
 
-            $loyalty = $customer
-                ? $this->loyalty->quote($customer, $afterDisc + $vatAmt + $serviceChargeAmt, (int) ($data['loyalty_points'] ?? 0), $branchId)
+            $channel = $tableOrder ? 'dine_in' : 'counter';
+            $loyalty = $customer && $saleItems !== []
+                ? $this->loyalty->quote(
+                    $customer,
+                    $afterDisc + $vatAmt + $serviceChargeAmt,
+                    (int) ($data['loyalty_points'] ?? 0),
+                    $branchId,
+                    $channel,
+                    $this->loyalty->earnableShare($saleItems, $branchId),
+                )
                 : ['points_to_redeem' => 0, 'discount' => 0.0, 'points_to_earn' => 0];
 
+            // Reward items: ₱0 lines, stock deducted, retail value and cost kept for reports.
+            [$rewardItems, $rewardRetail, $rewardCost] = $claim
+                ? $this->buildRewardLines($claim, $branchId, $allowNeg)
+                : [[], 0.0, 0.0];
+
             $totalDue = max(0, round($afterDisc + $vatAmt + $serviceChargeAmt - $loyalty['discount'], 2));
-            $method = $data['payment_method'];
-            if (! in_array($method, self::PAYMENT_METHODS, true)) {
+            $method = $saleItems === [] ? self::REWARD_PAYMENT_METHOD : ($data['payment_method'] ?? null);
+            if ($method !== self::REWARD_PAYMENT_METHOD && ! in_array($method, self::PAYMENT_METHODS, true)) {
                 throw new RuntimeException('Unsupported payment method.');
             }
-            $tendered = (float) ($data['payment_amount'] ?? $totalDue);
+            $tendered = $method === self::REWARD_PAYMENT_METHOD ? 0.0 : (float) ($data['payment_amount'] ?? $totalDue);
             if ($method === 'cash' && $tendered < $totalDue) {
                 throw new RuntimeException('Cash tendered is less than the total due.');
             }
@@ -97,13 +125,14 @@ class SaleService
                 $promoAmt > 0 ? "Promo {$promoLabel}: −₱".number_format($promoAmt, 2) : null,
                 $vatAmt > 0 ? "VAT {$vatRate}%: ₱".number_format($vatAmt, 2) : null,
                 $serviceChargeAmt > 0 ? 'Service charge: ₱'.number_format($serviceChargeAmt, 2) : null,
+                $claim ? "Reward {$claim->code}: {$claim->summary()} ({$claim->points} pts, worth ₱".number_format($rewardRetail, 2).')' : null,
             ]));
 
             $sale = Sale::create([
                 'receipt_number' => $this->generateReceiptNumber($branchId),
                 'user_id' => $user->id,
                 'branch_id' => $branchId,
-                'channel' => $tableOrder ? 'dine_in' : 'counter',
+                'channel' => $channel,
                 'cash_session_id' => $session?->id,
                 'table_order_id' => $tableOrder?->id,
                 'customer_id' => $customer?->id,
@@ -123,20 +152,26 @@ class SaleService
                 'loyalty_points_earned' => $loyalty['points_to_earn'],
                 'loyalty_points_redeemed' => $loyalty['points_to_redeem'],
                 'loyalty_discount' => $loyalty['discount'],
+                'reward_retail_value' => $rewardRetail,
                 'customer_name' => $customer?->name ?? ($data['customer_name'] ?? $tableOrder?->customer_name),
                 'status' => 'completed',
                 'total' => $totalDue,
                 'notes' => $notes ?: null,
             ]);
 
-            foreach ($saleItems as $line) {
+            foreach ([...$saleItems, ...$rewardItems] as $line) {
                 $sale->items()->create($line);
             }
 
-            if ($customer) {
-                $this->loyalty->applyToSale($sale, $customer, $user, $loyalty['points_to_redeem'], $loyalty['points_to_earn']);
-                $customer->refresh();
+            if ($claim) {
+                $this->rewards->markRedeemed($claim, $sale, $user, $rewardRetail, $rewardCost);
             }
+
+            // A reward-only visit is not a purchase: nothing to earn, no birthday bonus.
+            if ($customer && $saleItems !== []) {
+                $this->loyalty->applyToSale($sale, $customer, $user, $loyalty['points_to_redeem'], $loyalty['points_to_earn']);
+            }
+            $customer?->refresh();
 
             if ($tableOrder) {
                 $tableOrder->items()->whereNotIn('status', ['cancelled'])->update(['status' => 'served']);
@@ -169,6 +204,10 @@ class SaleService
                     'loyalty_points_redeemed' => $loyalty['points_to_redeem'],
                     'loyalty_discount' => $loyalty['discount'],
                     'loyalty_balance' => $customer?->loyalty_points,
+                    'payment_method' => $method,
+                    'reward_code' => $claim?->code,
+                    'reward_points' => $claim?->points ?? 0,
+                    'reward_retail_value' => $rewardRetail,
                     'table_label' => $tableOrder?->table?->label,
                 ],
             ];
@@ -348,6 +387,54 @@ class SaleService
         }
 
         return [$lines, round($subtotal, 2), round($taxable, 2)];
+    }
+
+    /**
+     * Sale lines for a reward claim: price ₱0, stock deducted like any sale, and the menu
+     * price and cost kept so reports can value what was given away.
+     *
+     * @return array{0: array<int, array<string, mixed>>, 1: float, 2: float} [sale item rows, retail value, cost value]
+     */
+    public function buildRewardLines(LoyaltyRewardClaim $claim, int $branchId, bool $allowNeg): array
+    {
+        $lines = [];
+        $retail = 0.0;
+        $cost = 0.0;
+
+        foreach ($claim->items as $item) {
+            if (! $item->product_id) {
+                throw new RuntimeException("\"{$item->product_name}\" is no longer on the menu.");
+            }
+            $product = $this->lockProduct($item->product_id, $branchId);
+            $this->deductProductStock($product, (float) $item->quantity, $branchId, $allowNeg, $item->product_variant_id);
+
+            $unitPrice = $product->stocks->firstWhere('branch_id', $branchId)
+                ? $this->unitPrice($product, $branchId, $item->product_variant_id)
+                : 0.0;
+            $unitCost = $this->unitCost($product, $branchId);
+            $retail += $unitPrice * $item->quantity;
+            $cost += $unitCost * $item->quantity;
+
+            $lines[] = [
+                'product_id' => $product->id,
+                'product_variant_id' => $item->product_variant_id,
+                'quantity' => $item->quantity,
+                'price' => 0,
+                'total' => 0,
+                'is_reward' => true,
+                'reward_points' => $item->points_total,
+                'retail_price' => $unitPrice,
+                'unit_cost' => $unitCost,
+            ];
+        }
+
+        return [$lines, round($retail, 2), round($cost, 2)];
+    }
+
+    /** Capital at the branch; for a made-to-order item, the cost of its recipe. */
+    private function unitCost(Product $product, int $branchId): float
+    {
+        return app(ProductCostService::class)->unitCost($product, $branchId);
     }
 
     /**

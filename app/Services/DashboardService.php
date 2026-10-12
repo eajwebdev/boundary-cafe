@@ -18,6 +18,7 @@ use App\Models\SaleItem;
 use App\Models\StockAdjustment;
 use App\Models\SystemSetting;
 use App\Models\TableOrder;
+use App\Services\Reports\ProfitAnalytics;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -245,9 +246,14 @@ class DashboardService
     public function menu(): array
     {
         $rows = $this->itemsQuery()
-            ->selectRaw('products.id, products.name, products.category_id, SUM(sale_items.quantity) as qty, SUM(sale_items.total) as revenue')
+            ->selectRaw('products.id, products.name, products.category_id, SUM(sale_items.quantity) as qty, SUM(sale_items.total) as revenue, COUNT(DISTINCT sales.id) as orders')
             ->groupBy('products.id', 'products.name', 'products.category_id')
             ->get();
+        $prevRows = $this->itemsQuery($this->prevFrom, $this->prevTo)
+            ->selectRaw('products.id, products.name, SUM(sale_items.quantity) as qty, SUM(sale_items.total) as revenue')
+            ->groupBy('products.id', 'products.name')
+            ->get()
+            ->keyBy('id');
 
         $categories = Category::pluck('name', 'id');
         $catMix = $rows->groupBy('category_id')->map(fn ($g, $cid) => [
@@ -268,19 +274,221 @@ class DashboardService
             ->map(fn ($p) => ['id' => $p->id, 'name' => $p->name, 'category' => $categories[$p->category_id] ?? null])
             ->values();
 
+        // Profit comes from the Profit Analytics report so the two screens always agree.
+        $profit = app(ProfitAnalytics::class)->build($this->branchId, $this->from->toDateString(), $this->to->toDateString());
+        $orders = (int) $this->itemsQuery()->distinct()->count('sales.id');
+        $itemsSold = (float) $rows->sum('qty');
+        $itemSales = round((float) $rows->sum('revenue'), 2);
+        $topSix = $rows->sortByDesc('qty')->take(6)->values();
+
         return [
             'kpis' => [
-                'items_sold' => (float) $rows->sum('qty'),
+                'items_sold' => $itemsSold,
+                'items_sold_change' => $this->pct($itemsSold, (float) $prevRows->sum('qty')),
+                'item_sales' => $itemSales,
+                'item_sales_change' => $this->pct($itemSales, (float) $prevRows->sum('revenue')),
+                'gross_profit' => $profit['totals']['profit'],
+                'margin' => $profit['totals']['margin'],
+                'items_per_order' => $orders > 0 ? round($itemsSold / $orders, 1) : 0,
                 'distinct_items' => $rows->count(),
                 'top_item' => optional($rows->sortByDesc('qty')->first())->name,
+                'top_profit_item' => $profit['products'][0]['name'] ?? null,
                 'never_sold' => $neverSold->count(),
             ],
             'top_by_qty' => $rows->sortByDesc('qty')->take(10)->map($map)->values(),
             'top_by_revenue' => $rows->sortByDesc('revenue')->take(10)->map($map)->values(),
+            'top_by_profit' => collect($profit['products'])->take(10)->map(fn (array $p) => [
+                'id' => $p['id'], 'name' => $p['name'], 'category' => $p['category'], 'profit' => $p['profit'], 'margin' => $p['margin'], 'qty' => $p['units'],
+            ])->values(),
+            'category_margin' => collect($profit['categories'])->map(fn (array $c) => [
+                'category' => $c['name'], 'margin' => $c['margin'], 'profit' => $c['profit'], 'revenue' => $c['revenue'],
+            ])->values(),
+            'movers' => $this->movers($rows, $prevRows),
+            'item_trends' => $this->itemTrends($topSix, $prevRows),
+            'category_hours' => $this->categoryHours($categories),
+            'category_channels' => $this->categoryChannels($categories),
+            'order_sizes' => $this->orderSizes(),
+            'pairs' => $this->boughtTogether($rows),
             'bottom' => $rows->sortBy('qty')->take(10)->map($map)->values(),
             'category_mix' => $catMix,
             'never_sold' => $neverSold,
         ];
+    }
+
+    /**
+     * Items whose sales rose or fell the most against the previous period of the same length.
+     *
+     * @return array{up: list<array<string, mixed>>, down: list<array<string, mixed>>}
+     */
+    private function movers($rows, $prevRows): array
+    {
+        $names = $rows->pluck('name', 'id')->union($prevRows->pluck('name', 'id'));
+        $current = $rows->pluck('qty', 'id');
+        $changes = $names->map(fn ($name, $id) => [
+            'name' => $name,
+            'qty' => (float) ($current[$id] ?? 0),
+            'previous' => (float) ($prevRows[$id]->qty ?? 0),
+            'change' => (float) ($current[$id] ?? 0) - (float) ($prevRows[$id]->qty ?? 0),
+        ])->filter(fn (array $m) => $m['change'] != 0)->values();
+
+        return [
+            'up' => $changes->where('change', '>', 0)->sortByDesc('change')->take(6)->values()->all(),
+            'down' => $changes->where('change', '<', 0)->sortBy('change')->take(6)->values()->all(),
+        ];
+    }
+
+    /**
+     * Daily units for the best sellers, zero-filled, with the change against the previous period.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function itemTrends($topItems, $prevRows): array
+    {
+        if ($topItems->isEmpty()) {
+            return [];
+        }
+
+        $daily = $this->itemsQuery()
+            ->whereIn('products.id', $topItems->pluck('id'))
+            ->selectRaw('products.id, DATE(sales.created_at) as day, SUM(sale_items.quantity) as qty')
+            ->groupByRaw('products.id, DATE(sales.created_at)')
+            ->get()
+            ->groupBy('id');
+
+        $days = [];
+        for ($d = $this->from->copy(); $d->lte($this->to); $d->addDay()) {
+            $days[] = $d->toDateString();
+        }
+
+        return $topItems->map(function ($item) use ($daily, $days, $prevRows) {
+            $byDay = ($daily[$item->id] ?? collect())->pluck('qty', 'day');
+
+            return [
+                'id' => $item->id,
+                'name' => $item->name,
+                'qty' => (float) $item->qty,
+                'change' => $this->pct((float) $item->qty, (float) ($prevRows[$item->id]->qty ?? 0)),
+                'days' => $days,
+                'series' => array_map(fn (string $day) => (float) ($byDay[$day] ?? 0), $days),
+            ];
+        })->values()->all();
+    }
+
+    /**
+     * Units sold per category per hour of the day: when each part of the menu sells.
+     *
+     * @return list<array{category: string, hours: array<int, float>}>
+     */
+    private function categoryHours($categories): array
+    {
+        $hour = $this->hourExpr('sales.created_at');
+
+        return $this->itemsQuery()
+            ->selectRaw("products.category_id, {$hour} as hr, SUM(sale_items.quantity) as qty")
+            ->groupByRaw("products.category_id, {$hour}")
+            ->get()
+            ->groupBy('category_id')
+            ->map(function ($cells, $categoryId) use ($categories) {
+                $hours = array_fill(0, 24, 0.0);
+                foreach ($cells as $cell) {
+                    $hours[(int) $cell->hr] = (float) $cell->qty;
+                }
+
+                return ['category' => $categories[$categoryId] ?? 'Uncategorised', 'hours' => $hours, 'total' => array_sum($hours)];
+            })
+            ->sortByDesc('total')
+            ->take(10)
+            ->map(fn (array $row) => ['category' => $row['category'], 'hours' => $row['hours']])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Item revenue per category, split by where it was sold (counter, tables, online).
+     *
+     * @return list<array{category: string, counter: float, dine_in: float, online: float}>
+     */
+    private function categoryChannels($categories): array
+    {
+        return $this->itemsQuery()
+            ->selectRaw("products.category_id, COALESCE(sales.channel, 'counter') as channel, SUM(sale_items.total) as revenue")
+            ->groupByRaw("products.category_id, COALESCE(sales.channel, 'counter')")
+            ->get()
+            ->groupBy('category_id')
+            ->map(function ($cells, $categoryId) use ($categories) {
+                $byChannel = $cells->pluck('revenue', 'channel');
+
+                return [
+                    'category' => $categories[$categoryId] ?? 'Uncategorised',
+                    'counter' => round((float) ($byChannel['counter'] ?? 0), 2),
+                    'dine_in' => round((float) ($byChannel['dine_in'] ?? 0), 2),
+                    'online' => round((float) ($byChannel['online'] ?? 0), 2),
+                ];
+            })
+            ->sortByDesc(fn (array $row) => $row['counter'] + $row['dine_in'] + $row['online'])
+            ->take(10)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * How many items each order had: 1, 2, 3, 4, 5 and 6 or more.
+     *
+     * @return list<array{size: string, orders: int}>
+     */
+    private function orderSizes(): array
+    {
+        $perOrder = $this->itemsQuery()->selectRaw('sales.id, SUM(sale_items.quantity) as qty')->groupBy('sales.id');
+        $counts = DB::query()->fromSub($perOrder, 'o')
+            ->selectRaw('CASE WHEN qty >= 6 THEN 6 WHEN qty < 1 THEN 1 ELSE ROUND(qty) END as size, COUNT(*) as orders')
+            ->groupBy('size')
+            ->pluck('orders', 'size');
+
+        return collect(range(1, 6))->map(fn (int $size) => [
+            'size' => $size === 6 ? '6+' : (string) $size,
+            'orders' => (int) ($counts[$size] ?? $counts[(string) $size] ?? $counts["{$size}.0"] ?? 0),
+        ])->all();
+    }
+
+    /**
+     * Items most often ordered together: combo ideas. "Attach rate" is the share of orders with the
+     * first item that also had the second.
+     *
+     * @return list<array{a: string, b: string, orders: int, attach_rate: float}>
+     */
+    private function boughtTogether($rows): array
+    {
+        $pairs = DB::table('sale_items as a')
+            ->join('sale_items as b', function ($join) {
+                $join->on('a.sale_id', '=', 'b.sale_id')->whereColumn('a.product_id', '<', 'b.product_id');
+            })
+            ->join('sales', 'sales.id', '=', 'a.sale_id')
+            ->where('sales.status', 'completed')
+            ->where('a.is_bundle_component', false)
+            ->where('b.is_bundle_component', false)
+            ->when($this->branchId, fn ($q) => $q->where('sales.branch_id', $this->branchId))
+            ->whereBetween('sales.created_at', [$this->from, $this->to])
+            ->selectRaw('a.product_id as a_id, b.product_id as b_id, COUNT(DISTINCT a.sale_id) as orders')
+            ->groupBy('a.product_id', 'b.product_id')
+            ->orderByDesc('orders')
+            ->limit(8)
+            ->get();
+
+        $names = $rows->pluck('name', 'id');
+        $ordersWith = $rows->pluck('orders', 'id');
+
+        return $pairs->map(function ($pair) use ($names, $ordersWith) {
+            // Lead with the item that appears in fewer orders, so the rate reads "of orders with X, N% also had Y".
+            [$lead, $other] = ($ordersWith[$pair->a_id] ?? 0) <= ($ordersWith[$pair->b_id] ?? 0) ? [$pair->a_id, $pair->b_id] : [$pair->b_id, $pair->a_id];
+            $leadOrders = (int) ($ordersWith[$lead] ?? 0);
+
+            return [
+                'a' => $names[$lead] ?? 'Item',
+                'b' => $names[$other] ?? 'Item',
+                'orders' => (int) $pair->orders,
+                'attach_rate' => $leadOrders > 0 ? round($pair->orders / $leadOrders * 100, 1) : 0.0,
+            ];
+        })->values()->all();
     }
 
     // ── INVENTORY ─────────────────────────────────────────────────────────
@@ -576,7 +784,7 @@ class DashboardService
         return round((float) $this->completedSales($this->from, $this->to)->sum('vat_amount'), 2);
     }
 
-    private function itemsQuery()
+    private function itemsQuery(?Carbon $from = null, ?Carbon $to = null)
     {
         return SaleItem::query()
             ->join('sales', 'sale_items.sale_id', '=', 'sales.id')
@@ -584,7 +792,7 @@ class DashboardService
             ->where('sales.status', 'completed')
             ->where('sale_items.is_bundle_component', false)
             ->when($this->branchId, fn ($q) => $q->where('sales.branch_id', $this->branchId))
-            ->whereBetween('sales.created_at', [$this->from, $this->to]);
+            ->whereBetween('sales.created_at', [$from ?? $this->from, $to ?? $this->to]);
     }
 
     private function hourExpr(string $col): string

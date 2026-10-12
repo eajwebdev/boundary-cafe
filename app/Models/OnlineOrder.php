@@ -25,6 +25,16 @@ class OnlineOrder extends Model
 
     public const STATUS_REJECTED = 'rejected';
 
+    public const FULFILLMENT_DELIVERY = 'delivery';
+
+    /** Shown to customers as "Takeout". */
+    public const FULFILLMENT_PICKUP = 'pickup';
+
+    /** Ordered from the customer's phone while inside the café. */
+    public const FULFILLMENT_DINE_IN = 'dine_in';
+
+    public const FULFILLMENTS = [self::FULFILLMENT_DINE_IN, self::FULFILLMENT_PICKUP, self::FULFILLMENT_DELIVERY];
+
     public const ACTIVE_STATUSES = [
         self::STATUS_PENDING, self::STATUS_ACCEPTED, self::STATUS_PREPARING,
         self::STATUS_READY, self::STATUS_OUT_FOR_DELIVERY,
@@ -47,13 +57,14 @@ class OnlineOrder extends Model
     ];
 
     protected $fillable = [
-        'order_number', 'customer_id', 'branch_id', 'fulfillment_type', 'status', 'payment_method',
+        'order_number', 'customer_id', 'branch_id', 'fulfillment_type', 'table_number', 'status', 'payment_method',
         'payment_status', 'subtotal', 'promo_id', 'promo_label', 'promo_discount', 'vat_amount',
         'loyalty_points_redeemed', 'loyalty_discount', 'loyalty_points_to_earn', 'delivery_fee', 'total',
-        'contact_name', 'contact_number', 'barangay', 'street', 'landmark', 'notes_for_rider',
+        'contact_name', 'contact_number', 'barangay', 'municipality', 'province', 'zip_code', 'street', 'landmark', 'notes_for_rider',
         'lat', 'lng', 'customer_note', 'estimated_minutes', 'estimated_ready_at',
         'accepted_at', 'preparing_at', 'ready_at', 'out_for_delivery_at', 'completed_at',
         'cancelled_at', 'cancel_reason', 'cancelled_by', 'handled_by', 'sale_id',
+        'rider_id', 'rider_assigned_at', 'cash_remitted_at', 'cash_remitted_to',
     ];
 
     protected $casts = [
@@ -75,6 +86,8 @@ class OnlineOrder extends Model
         'out_for_delivery_at' => 'datetime',
         'completed_at' => 'datetime',
         'cancelled_at' => 'datetime',
+        'rider_assigned_at' => 'datetime',
+        'cash_remitted_at' => 'datetime',
     ];
 
     protected $attributes = [
@@ -116,13 +129,11 @@ class OnlineOrder extends Model
             return $this->status === self::STATUS_PENDING ? [self::STATUS_CANCELLED] : [];
         }
 
-        $isPickup = $this->fulfillment_type === 'pickup';
-
         return match ($this->status) {
             self::STATUS_PENDING => [self::STATUS_ACCEPTED, self::STATUS_REJECTED, self::STATUS_CANCELLED],
             self::STATUS_ACCEPTED => [self::STATUS_PREPARING, self::STATUS_CANCELLED],
             self::STATUS_PREPARING => [self::STATUS_READY],
-            self::STATUS_READY => $isPickup ? [self::STATUS_COMPLETED] : [self::STATUS_OUT_FOR_DELIVERY],
+            self::STATUS_READY => $this->isDelivery() ? [self::STATUS_OUT_FOR_DELIVERY] : [self::STATUS_COMPLETED],
             self::STATUS_OUT_FOR_DELIVERY => [self::STATUS_COMPLETED],
             default => [],
         };
@@ -147,14 +158,37 @@ class OnlineOrder extends Model
             self::STATUS_PENDING => 'Order placed',
             self::STATUS_ACCEPTED => 'Confirmed by the cafe',
             self::STATUS_PREPARING => 'Preparing your food',
-            self::STATUS_READY => $this->fulfillment_type === 'pickup' ? 'Ready for pickup' : 'Packed and ready',
+            self::STATUS_READY => match ($this->fulfillment_type) {
+                self::FULFILLMENT_DINE_IN => 'Ready — on its way to your table',
+                self::FULFILLMENT_PICKUP => 'Ready for pickup',
+                default => 'Packed and ready',
+            },
         ];
-        if ($this->fulfillment_type !== 'pickup') {
+        if ($this->isDelivery()) {
             $steps[self::STATUS_OUT_FOR_DELIVERY] = 'Rider on the way';
         }
-        $steps[self::STATUS_COMPLETED] = $this->fulfillment_type === 'pickup' ? 'Picked up' : 'Delivered';
+        $steps[self::STATUS_COMPLETED] = match ($this->fulfillment_type) {
+            self::FULFILLMENT_DINE_IN => 'Served',
+            self::FULFILLMENT_PICKUP => 'Picked up',
+            default => 'Delivered',
+        };
 
         return $steps;
+    }
+
+    public function isDelivery(): bool
+    {
+        return $this->fulfillment_type === self::FULFILLMENT_DELIVERY;
+    }
+
+    /** "Dine-in", "Takeout" or "Delivery". */
+    public static function fulfillmentLabel(?string $type): string
+    {
+        return match ($type) {
+            self::FULFILLMENT_DINE_IN => 'Dine-in',
+            self::FULFILLMENT_PICKUP => 'Takeout',
+            default => 'Delivery',
+        };
     }
 
     public function isActive(): bool
@@ -204,6 +238,12 @@ class OnlineOrder extends Model
         return $this->belongsTo(User::class, 'handled_by');
     }
 
+    /** The rider carrying this delivery. */
+    public function rider(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'rider_id');
+    }
+
     public function sale(): BelongsTo
     {
         return $this->belongsTo(Sale::class);
@@ -226,6 +266,15 @@ class OnlineOrder extends Model
         return $query->whereIn('status', self::ACTIVE_STATUSES);
     }
 
+    /** Delivered cash-on-delivery orders whose cash the rider still holds. */
+    public function scopeCashWithRider($query, int $riderId)
+    {
+        return $query->where('rider_id', $riderId)
+            ->where('status', self::STATUS_COMPLETED)
+            ->where('payment_method', 'cod')
+            ->whereNull('cash_remitted_at');
+    }
+
     public function scopeForBranch($query, int $branchId)
     {
         return $query->where('branch_id', $branchId);
@@ -235,16 +284,19 @@ class OnlineOrder extends Model
 
     public function addressSummary(): ?string
     {
-        if ($this->fulfillment_type === 'pickup') {
+        if (! $this->isDelivery()) {
             return null;
         }
 
-        return collect([$this->street, $this->barangay, 'Mabinay'])->filter()->implode(', ');
+        return collect([
+            $this->street,
+            CustomerAddress::formatLocality($this->barangay, $this->municipality, $this->province, $this->zip_code),
+        ])->filter()->implode(', ');
     }
 
     public function toTrackingArray(): array
     {
-        $this->loadMissing(['items', 'statusLogs', 'branch']);
+        $this->loadMissing(['items', 'statusLogs', 'branch', 'rider.riderPosition']);
 
         $reached = $this->statusLogs->pluck('created_at', 'to_status');
         $steps = collect($this->trackingSteps())->map(fn ($label, $key) => [
@@ -262,6 +314,8 @@ class OnlineOrder extends Model
             'is_active' => $this->isActive(),
             'can_cancel' => $this->canTransitionTo(self::STATUS_CANCELLED, 'customer'),
             'fulfillment_type' => $this->fulfillment_type,
+            'fulfillment_label' => self::fulfillmentLabel($this->fulfillment_type),
+            'table_number' => $this->table_number,
             'payment_method' => $this->payment_method,
             'subtotal' => (float) $this->subtotal,
             'promo_label' => $this->promo_label,
@@ -291,6 +345,11 @@ class OnlineOrder extends Model
                 'address' => $this->branch?->address,
             ],
             'steps' => $steps,
+            'rider' => $this->rider ? [
+                'name' => $this->rider->fname,
+                // The live position is shared only while the rider is on the way to this customer.
+                'position' => $this->status === self::STATUS_OUT_FOR_DELIVERY ? $this->rider->riderPosition?->toMapArray() : null,
+            ] : null,
             'items' => $this->items->map(fn (OnlineOrderItem $i) => [
                 'id' => $i->id,
                 'name' => $i->product_name,

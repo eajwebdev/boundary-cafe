@@ -1,4 +1,43 @@
+import { Bike, ShoppingBag, UtensilsCrossed } from 'lucide-react';
+import type { ElementType } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+
+// ─── Fulfilment: Dine-in (ordering from inside the café), Takeout, Delivery ───
+
+export type Fulfillment = 'dine_in' | 'pickup' | 'delivery';
+
+export const FULFILLMENTS: Fulfillment[] = ['dine_in', 'pickup', 'delivery'];
+
+export const FULFILLMENT_LABEL: Record<Fulfillment, string> = { dine_in: 'Dine-in', pickup: 'Takeout', delivery: 'Delivery' };
+
+export const FULFILLMENT_ICON: Record<Fulfillment, ElementType> = { dine_in: UtensilsCrossed, pickup: ShoppingBag, delivery: Bike };
+
+export interface FulfillmentSettings {
+    delivery_enabled: boolean;
+    pickup_enabled: boolean;
+    dine_in_enabled?: boolean;
+}
+
+export function fulfillmentEnabled(settings: FulfillmentSettings, f: Fulfillment): boolean {
+    if (f === 'delivery') return settings.delivery_enabled;
+    if (f === 'pickup') return settings.pickup_enabled;
+    return settings.dine_in_enabled ?? false;
+}
+
+/** The preferred option if it is offered, otherwise the first one that is (delivery, takeout, dine-in). */
+export function pickFulfillment(settings: FulfillmentSettings, preferred?: string | null): Fulfillment {
+    if (preferred && (FULFILLMENTS as string[]).includes(preferred) && fulfillmentEnabled(settings, preferred as Fulfillment)) {
+        return preferred as Fulfillment;
+    }
+    return (['delivery', 'pickup', 'dine_in'] as Fulfillment[]).find((f) => fulfillmentEnabled(settings, f)) ?? 'delivery';
+}
+
+/** How the order is paid for each option. */
+export function paymentLabel(method: string): string {
+    if (method === 'cod') return 'Cash on delivery';
+    if (method === 'pay_at_counter') return 'Pay at the counter';
+    return 'Pay at pickup';
+}
 
 // ─── Shared types for the customer ordering app ───────────────────────────────
 
@@ -11,6 +50,30 @@ export interface CustomerSession {
     barangay: string | null;
     customer_number: string | null;
     loyalty_points: number;
+    reserved_points?: number;
+    unread_notifications?: number;
+}
+
+/** A reward in the points catalog (LoyaltyRewardService::rewardToFrontend). */
+export interface RewardItem {
+    id: number;
+    product_id: number;
+    variant_id: number | null;
+    name: string;
+    category: string | null;
+    image: string | null;
+    points_cost: number;
+    max_per_claim: number | null;
+    retail_price: number;
+    branch_ids: number[] | null;
+    is_active: boolean;
+}
+
+/** What the once-a-day rewards popup shows (HandleInertiaRequests::rewardsPopup). */
+export interface RewardsPopupData {
+    points: number;
+    affordable: RewardItem[];
+    next: RewardItem | null;
 }
 
 export interface MenuVariant {
@@ -63,6 +126,11 @@ export interface SavedAddress {
     id: number;
     label: string;
     barangay: string;
+    municipality: string | null;
+    province: string | null;
+    zip_code: string | null;
+    /** "Dahile, Mabinay, Negros Oriental 6207" */
+    locality: string;
     street: string | null;
     landmark: string | null;
     notes_for_rider: string | null;
@@ -86,6 +154,8 @@ export interface StoreStatus {
     opens_at: string;
     closes_at: string;
     message: string | null;
+    /** Staff closed the store for the whole day from Store Settings. */
+    closed_today: boolean;
 }
 
 // ─── Formatting ───────────────────────────────────────────────────────────────
@@ -93,6 +163,12 @@ export interface StoreStatus {
 export function peso(n: number | string | null | undefined): string {
     const v = Number(n ?? 0);
     return '₱' + v.toLocaleString('en-PH', { minimumFractionDigits: v % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 });
+}
+
+/** "5 points for every ₱100" */
+export function earnRule(rules: { spend_increment: number; points_per_increment: number }): string {
+    const points = rules.points_per_increment;
+    return `${points} point${points === 1 ? '' : 's'} for every ${peso(rules.spend_increment)}`;
 }
 
 export function pesoExact(n: number | string | null | undefined): string {

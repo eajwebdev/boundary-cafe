@@ -3,10 +3,11 @@ import ProductThumbnail from '@/components/ProductThumbnail';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { PendingTicket } from './PendingOrdersPanel';
-import type { CartItem } from './posTypes';
+import type { CartItem, LinkedMember, RewardClaimInCart } from './posTypes';
 import { isWeightedKgItem } from './posTypes';
 import QtyInput from './QtyInput';
 import { fmtMoney, fmtQty } from './ReceiptTemplate';
+import RewardLines from './RewardLines';
 
 /**
  * Fast register: the order itself fills the screen (big amount due, large line table, Tender).
@@ -27,6 +28,10 @@ export default function FastRegister({
     pendingCount = 0,
     lastScanned,
     error,
+    rewardClaim = null,
+    member = null,
+    onRemoveReward = () => {},
+    onUnlinkMember = () => {},
 }: {
     cart: CartItem[];
     currency: string;
@@ -45,7 +50,14 @@ export default function FastRegister({
     lastScanned: { name: string; qty: number; unit: string; price: number; total: number; targetAmount?: number } | null;
     /** e.g. a barcode that matched nothing. */
     error: string | null;
+    /** A scanned reward QR: its items go on the sale at ₱0. */
+    rewardClaim?: RewardClaimInCart | null;
+    /** Member identified by card or mobile number (earns points on the sale). */
+    member?: LinkedMember | null;
+    onRemoveReward?: () => void;
+    onUnlinkMember?: () => void;
 }) {
+    const hasOrder = cart.length > 0 || !!rewardClaim;
     const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
     const totalQty = cart.reduce((s, i) => s + i.qty, 0);
     const stepBtn =
@@ -61,9 +73,9 @@ export default function FastRegister({
                 />
                 <div className="relative min-w-0">
                     <div className="flex items-center gap-2">
-                        <span className={cn('h-2 w-2 rounded-full bg-[var(--pos-display-accent)]', cart.length > 0 && 'animate-pulse')} />
+                        <span className={cn('h-2 w-2 rounded-full bg-[var(--pos-display-accent)]', hasOrder && 'animate-pulse')} />
                         <span className="font-mono text-[11px] font-bold tracking-widest text-[var(--pos-display-accent)] uppercase">
-                            {cart.length > 0 ? 'Amount due' : 'Register ready'}
+                            {hasOrder ? 'Amount due' : 'Register ready'}
                         </span>
                     </div>
                     <div className="mt-0.5 truncate font-mono text-3xl font-black tracking-tight text-white tabular-nums sm:text-4xl lg:text-5xl">
@@ -81,10 +93,10 @@ export default function FastRegister({
 
                     <Button
                         onClick={onCharge}
-                        disabled={cart.length === 0}
+                        disabled={!hasOrder}
                         className="h-12 gap-2 rounded-xl px-5 text-sm font-black tracking-wide whitespace-nowrap shadow-lg disabled:opacity-40 pointer-coarse:h-14 lg:px-6"
                     >
-                        <Zap className="h-4 w-4" /> Tender
+                        <Zap className="h-4 w-4" /> {cart.length === 0 && rewardClaim ? 'Complete' : 'Tender'}
                         <kbd className="hidden rounded bg-primary-foreground/20 px-1.5 py-0.5 font-mono text-[10px] lg:inline pointer-coarse:hidden">F9</kbd>
                     </Button>
                 </div>
@@ -135,9 +147,15 @@ export default function FastRegister({
                 </div>
             )}
 
+            <RewardLines claim={rewardClaim} member={member} currency={currency} onRemoveReward={onRemoveReward} onUnlinkMember={onUnlinkMember} />
+
             {/* ── Order lines ──────────────────────────────────────────────── */}
             <div className="flex-1 overflow-auto">
-                {cart.length === 0 ? (
+                {cart.length === 0 && rewardClaim ? (
+                    <p className="p-6 text-center text-sm text-muted-foreground">
+                        Reward only — press <b>Complete</b> to hand it over, or add paid items to the same order.
+                    </p>
+                ) : cart.length === 0 ? (
                     <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center text-muted-foreground">
                         <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                             <Scale className="h-8 w-8" />
@@ -279,7 +297,7 @@ export default function FastRegister({
             {/* ── Footer: clear, pending, subtotal, charge ──────────────────── */}
             <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border bg-muted/30 p-2.5 lg:gap-3 lg:p-3">
                 <div className="flex items-center gap-2">
-                    {cart.length > 0 && (
+                    {hasOrder && (
                         <button
                             onClick={onClear}
                             className="flex h-10 items-center gap-1.5 rounded-xl border border-destructive/30 bg-background px-3 text-xs font-bold text-destructive transition-colors hover:bg-destructive/10 pointer-coarse:h-11"
@@ -308,8 +326,8 @@ export default function FastRegister({
                         <span className="font-mono text-lg font-black text-foreground tabular-nums lg:text-xl">{fmtMoney(subtotal, currency)}</span>
                     </div>
 
-                    <Button onClick={onCharge} disabled={cart.length === 0} className="h-10 gap-2 rounded-xl px-4 text-sm font-black shadow-sm pointer-coarse:h-11 lg:px-5">
-                        <Zap className="h-4 w-4" /> Charge
+                    <Button onClick={onCharge} disabled={!hasOrder} className="h-10 gap-2 rounded-xl px-4 text-sm font-black shadow-sm pointer-coarse:h-11 lg:px-5">
+                        <Zap className="h-4 w-4" /> {cart.length === 0 && rewardClaim ? 'Complete' : 'Charge'}
                         <kbd className="hidden rounded bg-primary-foreground/20 px-1.5 py-0.5 font-mono text-[10px] xl:inline pointer-coarse:hidden">F9</kbd>
                     </Button>
                 </div>

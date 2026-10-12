@@ -50,6 +50,9 @@ class CheckoutController extends Controller
             'address_id' => ['nullable', 'integer'],
             'customer_note' => ['nullable', 'string', 'max:500'],
             'contact_number' => ['nullable', 'string', 'max:20'],
+            'use_account_contact' => ['nullable', 'boolean'],
+            'contact_name' => ['nullable', 'string', 'max:120'],
+            'table_number' => ['nullable', 'string', 'max:20'],
         ]);
 
         $order = $this->online->place(Auth::guard('customer')->user(), $data);
@@ -68,7 +71,7 @@ class CheckoutController extends Controller
             'items.*.variant_id' => ['nullable', 'integer'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:50'],
             'items.*.note' => ['nullable', 'string', 'max:255'],
-            'fulfillment_type' => ['required', 'in:delivery,pickup'],
+            'fulfillment_type' => ['required', 'in:delivery,pickup,dine_in'],
             'promo_code' => ['nullable', 'string', 'max:50'],
             'loyalty_points' => ['nullable', 'integer', 'min:0', 'max:100000'],
         ]);

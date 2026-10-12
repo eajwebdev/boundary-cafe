@@ -14,9 +14,11 @@ use App\Models\Promo;
 use App\Models\SystemSetting;
 use App\Models\User;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 /**
  * Customer online ordering: menu catalog, checkout quotes, order placement
@@ -49,12 +51,48 @@ class OnlineOrderService
             'enabled' => (bool) SystemSetting::get('online.enabled', $branchId, true),
             'delivery_enabled' => (bool) SystemSetting::get('online.delivery_enabled', $branchId, true),
             'pickup_enabled' => (bool) SystemSetting::get('online.pickup_enabled', $branchId, true),
+            'dine_in_enabled' => (bool) SystemSetting::get('online.dine_in_enabled', $branchId, true),
             'delivery_fee' => round((float) SystemSetting::get('online.delivery_fee', $branchId, 49), 2),
             'free_delivery_min' => round((float) SystemSetting::get('online.free_delivery_min', $branchId, 999), 2),
             'min_order' => round((float) SystemSetting::get('online.min_order', $branchId, 150), 2),
             'prep_minutes' => (int) SystemSetting::get('online.prep_minutes', $branchId, 25),
             'delivery_minutes' => (int) SystemSetting::get('online.delivery_minutes', $branchId, 20),
         ];
+    }
+
+    /**
+     * The closure staff declared for the branch's current day (Asia/Manila), or null when it trades normally.
+     * A closure only covers the day it was made, so the store reopens on its own the next morning.
+     *
+     * @return array{closed_on: string, note: ?string, closed_by: ?string}|null
+     */
+    public function closureToday(Branch $branch, ?CarbonInterface $at = null): ?array
+    {
+        $today = ($at ?? now())->copy()->timezone('Asia/Manila')->toDateString();
+
+        if ((string) SystemSetting::get('online.closed_on', $branch->id, '') !== $today) {
+            return null;
+        }
+
+        return [
+            'closed_on' => $today,
+            'note' => ((string) SystemSetting::get('online.closed_note', $branch->id, '')) ?: null,
+            'closed_by' => ((string) SystemSetting::get('online.closed_by', $branch->id, '')) ?: null,
+        ];
+    }
+
+    /** Declare the branch closed for the rest of today: the storefront stops taking orders until tomorrow. */
+    public function closeForToday(Branch $branch, User $user, ?string $note = null): void
+    {
+        SystemSetting::set('online.closed_on', now()->timezone('Asia/Manila')->toDateString(), $branch->id);
+        SystemSetting::set('online.closed_note', trim((string) $note), $branch->id);
+        SystemSetting::set('online.closed_by', $user->full_name, $branch->id);
+    }
+
+    /** Lift today's closure so the store follows its normal hours again. */
+    public function reopenToday(Branch $branch): void
+    {
+        SystemSetting::set('online.closed_on', '', $branch->id);
     }
 
     /** Whether the store is currently accepting online orders, based on store hours (Asia/Manila). */
@@ -64,17 +102,19 @@ class OnlineOrderService
         $raw = SystemSetting::get('online.store_hours', $branch?->id, null);
         $hours = is_array($raw) ? $raw : (json_decode((string) $raw, true) ?: []);
         $open = $hours['open'] ?? '08:00';
-        $close = $hours['close'] ?? '21:00';
+        $close = $hours['close'] ?? '17:00';
         $days = array_map('intval', $hours['days'] ?? [0, 1, 2, 3, 4, 5, 6]);
 
         $now = ($at ?? now())->copy()->timezone('Asia/Manila');
         $openAt = $now->copy()->setTimeFromTimeString($open);
         $closeAt = $now->copy()->setTimeFromTimeString($close);
         $isOpenDay = in_array($now->dayOfWeek, $days, true);
-        $isOpen = $settings['enabled'] && $branch !== null && $isOpenDay && $now->between($openAt, $closeAt);
+        $closure = $branch ? $this->closureToday($branch, $now) : null;
+        $isOpen = $settings['enabled'] && $branch !== null && $closure === null && $isOpenDay && $now->between($openAt, $closeAt);
 
         $message = match (true) {
             ! $settings['enabled'] || $branch === null => 'Online ordering is paused right now.',
+            $closure !== null => $closure['note'] ? "We are closed today: {$closure['note']}" : 'We are closed today.',
             ! $isOpenDay => 'We are closed today for online orders.',
             $now->lt($openAt) => 'We open for online orders at '.$openAt->format('g:i A').'.',
             $now->gt($closeAt) => 'Online orders are closed for today. We open at '.$openAt->format('g:i A').'.',
@@ -87,6 +127,7 @@ class OnlineOrderService
             'closes_at' => $closeAt->format('g:i A'),
             'days' => $days,
             'message' => $message,
+            'closed_today' => $closure !== null,
         ];
     }
 
@@ -228,12 +269,15 @@ class OnlineOrderService
         }
 
         $settings = $this->settings($branch);
-        $fulfillment = ($input['fulfillment_type'] ?? 'delivery') === 'pickup' ? 'pickup' : 'delivery';
-        if ($fulfillment === 'delivery' && ! $settings['delivery_enabled']) {
-            $errors[] = 'Delivery is not available right now. Please choose pickup.';
+        $fulfillment = $this->fulfillment($input);
+        if ($fulfillment === OnlineOrder::FULFILLMENT_DELIVERY && ! $settings['delivery_enabled']) {
+            $errors[] = 'Delivery is not available right now. Please choose takeout or dine-in.';
         }
-        if ($fulfillment === 'pickup' && ! $settings['pickup_enabled']) {
-            $errors[] = 'Pickup is not available right now. Please choose delivery.';
+        if ($fulfillment === OnlineOrder::FULFILLMENT_PICKUP && ! $settings['pickup_enabled']) {
+            $errors[] = 'Takeout is not available right now. Please choose another option.';
+        }
+        if ($fulfillment === OnlineOrder::FULFILLMENT_DINE_IN && ! $settings['dine_in_enabled']) {
+            $errors[] = 'Dine-in ordering is not available right now. Please order at the counter.';
         }
 
         // ── Lines ──
@@ -305,11 +349,12 @@ class OnlineOrderService
         // ── Loyalty ──
         $loyaltyError = null;
         $requestedPoints = max(0, (int) ($input['loyalty_points'] ?? 0));
+        $earnableShare = $this->loyalty->earnableShare($lines, $branch->id);
         try {
-            $loyalty = $this->loyalty->quote($customer, $afterPromo + $vat, $requestedPoints, $branch->id);
+            $loyalty = $this->loyalty->quote($customer, $afterPromo + $vat, $requestedPoints, $branch->id, 'online', $earnableShare);
         } catch (ValidationException $e) {
             $loyaltyError = collect($e->errors())->flatten()->first();
-            $loyalty = $this->loyalty->quote($customer, $afterPromo + $vat, 0, $branch->id);
+            $loyalty = $this->loyalty->quote($customer, $afterPromo + $vat, 0, $branch->id, 'online', $earnableShare);
         }
 
         // ── Delivery fee & minimum ──
@@ -339,6 +384,7 @@ class OnlineOrderService
             'vat' => $vat,
             'loyalty' => [
                 'enabled' => $rules['enabled'] && $customer->loyalty_enabled,
+                'redeem_enabled' => $rules['enabled'] && $customer->loyalty_enabled && $rules['allow_peso_discount'],
                 'balance' => (int) $customer->loyalty_points,
                 'minimum' => $rules['minimum_redeem'],
                 'maximum' => $rules['maximum_redeem'],
@@ -360,7 +406,9 @@ class OnlineOrderService
     /**
      * Place an order. Everything is re-priced and re-validated inside a transaction.
      *
-     * $input: quote input + address_id (delivery), customer_note, contact_number?
+     * $input: quote input + address_id (delivery), customer_note, contact_number?,
+     *         use_account_contact (delivery; false → contact_name + contact_number are the recipient),
+     *         table_number (dine-in, optional)
      */
     public function place(Customer $customer, array $input): OnlineOrder
     {
@@ -370,9 +418,10 @@ class OnlineOrderService
             throw ValidationException::withMessages(['store' => $status['message'] ?? 'We are not accepting online orders right now.']);
         }
 
-        $fulfillment = ($input['fulfillment_type'] ?? 'delivery') === 'pickup' ? 'pickup' : 'delivery';
+        $fulfillment = $this->fulfillment($input);
+        [$contactName, $contactNumber] = $this->contactFor($customer, $fulfillment, $input);
         $address = null;
-        if ($fulfillment === 'delivery') {
+        if ($fulfillment === OnlineOrder::FULFILLMENT_DELIVERY) {
             $address = CustomerAddress::where('customer_id', $customer->id)->find($input['address_id'] ?? 0);
             if (! $address) {
                 throw ValidationException::withMessages(['address_id' => 'Please choose a delivery address.']);
@@ -383,7 +432,7 @@ class OnlineOrderService
             }
         }
 
-        return DB::transaction(function () use ($customer, $input, $branch, $fulfillment, $address) {
+        return DB::transaction(function () use ($customer, $input, $branch, $fulfillment, $address, $contactName, $contactNumber) {
             $customer = Customer::whereKey($customer->id)->lockForUpdate()->firstOrFail();
             if (! $customer->is_active) {
                 throw ValidationException::withMessages(['account' => 'Your account is inactive. Please contact the cafe.']);
@@ -405,8 +454,15 @@ class OnlineOrderService
                 'customer_id' => $customer->id,
                 'branch_id' => $branch->id,
                 'fulfillment_type' => $fulfillment,
+                'table_number' => $fulfillment === OnlineOrder::FULFILLMENT_DINE_IN && ! empty($input['table_number'])
+                    ? mb_substr(trim((string) $input['table_number']), 0, 20)
+                    : null,
                 'status' => OnlineOrder::STATUS_PENDING,
-                'payment_method' => $fulfillment === 'pickup' ? 'pay_at_pickup' : 'cod',
+                'payment_method' => match ($fulfillment) {
+                    OnlineOrder::FULFILLMENT_DELIVERY => 'cod',
+                    OnlineOrder::FULFILLMENT_DINE_IN => 'pay_at_counter',
+                    default => 'pay_at_pickup',
+                },
                 'payment_status' => 'unpaid',
                 'subtotal' => $quote['subtotal'],
                 'promo_id' => $quote['promo']['id'] ?? null,
@@ -418,16 +474,19 @@ class OnlineOrderService
                 'loyalty_points_to_earn' => $quote['loyalty']['points_to_earn'],
                 'delivery_fee' => $quote['delivery_fee'],
                 'total' => $quote['total'],
-                'contact_name' => $customer->name,
-                'contact_number' => Customer::normalisePhone($input['contact_number'] ?? null) ?? $customer->contact_number ?? '',
+                'contact_name' => $contactName,
+                'contact_number' => $contactNumber,
                 'barangay' => $address?->barangay,
+                'municipality' => $address?->municipality,
+                'province' => $address?->province,
+                'zip_code' => $address?->zip_code,
                 'street' => $address?->street,
                 'landmark' => $address?->landmark,
                 'notes_for_rider' => $address?->notes_for_rider,
                 'lat' => $address?->lat,
                 'lng' => $address?->lng,
                 'customer_note' => isset($input['customer_note']) ? mb_substr(trim((string) $input['customer_note']), 0, 500) ?: null : null,
-                'estimated_minutes' => $settings['prep_minutes'] + ($fulfillment === 'delivery' ? $settings['delivery_minutes'] : 0),
+                'estimated_minutes' => $settings['prep_minutes'] + ($fulfillment === OnlineOrder::FULFILLMENT_DELIVERY ? $settings['delivery_minutes'] : 0),
             ]);
 
             foreach ($quote['lines'] as $line) {
@@ -498,7 +557,12 @@ class OnlineOrderService
                 }
                 $session = CashSession::where('branch_id', $order->branch_id)
                     ->where('user_id', $user->id)->open()->latest('opened_at')->first();
-                $this->sales->recordOnlineOrder($order, $user, $session);
+                try {
+                    $this->sales->recordOnlineOrder($order, $user, $session);
+                } catch (RuntimeException $e) {
+                    // e.g. an ingredient ran out after the order was placed: tell staff instead of failing with a 500.
+                    throw ValidationException::withMessages(['status' => "Cannot complete {$order->order_number}: {$e->getMessage()}"]);
+                }
                 $order->refresh();
             }
 
@@ -515,6 +579,46 @@ class OnlineOrderService
     }
 
     // ── Internals ─────────────────────────────────────────────────────────
+
+    /** dine_in | pickup (takeout) | delivery — anything unknown is treated as delivery. */
+    private function fulfillment(array $input): string
+    {
+        $type = $input['fulfillment_type'] ?? OnlineOrder::FULFILLMENT_DELIVERY;
+
+        return in_array($type, OnlineOrder::FULFILLMENTS, true) ? $type : OnlineOrder::FULFILLMENT_DELIVERY;
+    }
+
+    /**
+     * Who the café contacts about the order. For delivery the customer can send it to someone
+     * else (use_account_contact = false) — then a recipient name and PH mobile are required.
+     *
+     * @return array{0: string, 1: string} [name, mobile as 09XXXXXXXXX]
+     */
+    private function contactFor(Customer $customer, string $fulfillment, array $input): array
+    {
+        $useAccount = ! array_key_exists('use_account_contact', $input) || filter_var($input['use_account_contact'], FILTER_VALIDATE_BOOLEAN);
+
+        if ($fulfillment === OnlineOrder::FULFILLMENT_DELIVERY && ! $useAccount) {
+            $name = trim((string) ($input['contact_name'] ?? ''));
+            $number = Customer::normalisePhone($input['contact_number'] ?? null);
+            $errors = [];
+            if (mb_strlen($name) < 2) {
+                $errors['contact_name'] = 'Enter the name of the person receiving the order.';
+            }
+            if (! $number || ! preg_match('/^09\d{9}$/', $number)) {
+                $errors['contact_number'] = 'Enter a valid PH mobile number for the contact person, e.g. 0917 123 4567.';
+            }
+            if ($errors) {
+                throw ValidationException::withMessages($errors);
+            }
+
+            return [mb_substr($name, 0, 120), $number];
+        }
+
+        $number = Customer::normalisePhone($input['contact_number'] ?? null);
+
+        return [$customer->name, ($number && preg_match('/^09\d{9}$/', $number) ? $number : null) ?? $customer->contact_number ?? ''];
+    }
 
     /** @return array{0: ?Promo, 1: float, 2: ?string} */
     private function resolvePromo(Customer $customer, ?string $code, array $lines, float $subtotal): array
@@ -583,7 +687,7 @@ class OnlineOrderService
     {
         return [
             'fulfillment_type' => 'delivery', 'lines' => [], 'subtotal' => 0, 'promo' => null, 'promo_error' => null,
-            'vat' => 0, 'loyalty' => ['enabled' => false, 'balance' => 0, 'minimum' => 0, 'maximum' => 0, 'peso_per_point' => 1,
+            'vat' => 0, 'loyalty' => ['enabled' => false, 'redeem_enabled' => false, 'balance' => 0, 'minimum' => 0, 'maximum' => 0, 'peso_per_point' => 1,
                 'points_to_redeem' => 0, 'discount' => 0, 'points_to_earn' => 0, 'error' => null],
             'delivery_fee' => 0, 'free_delivery_min' => 0, 'min_order' => 0, 'total' => 0,
             'errors' => $errors, 'can_checkout' => false,

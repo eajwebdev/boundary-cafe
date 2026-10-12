@@ -39,7 +39,7 @@ class DeliveryZoneController extends Controller
                 'zone_use_polygon' => (bool) SystemSetting::get('online.zone_use_polygon', null, false),
                 'store_hours' => [
                     'open' => $hours['open'] ?? '08:00',
-                    'close' => $hours['close'] ?? '21:00',
+                    'close' => $hours['close'] ?? '17:00',
                     'days' => array_map('intval', $hours['days'] ?? [0, 1, 2, 3, 4, 5, 6]),
                 ],
             ],
@@ -56,6 +56,7 @@ class DeliveryZoneController extends Controller
             'branch_code' => ['required', 'string', 'exists:branches,code'],
             'delivery_enabled' => ['required', 'boolean'],
             'pickup_enabled' => ['required', 'boolean'],
+            'dine_in_enabled' => ['sometimes', 'boolean'],
             'delivery_fee' => ['required', 'numeric', 'min:0', 'max:1000'],
             'free_delivery_min' => ['required', 'numeric', 'min:0', 'max:100000'],
             'min_order' => ['required', 'numeric', 'min:0', 'max:100000'],
@@ -78,6 +79,9 @@ class DeliveryZoneController extends Controller
             return back()->withErrors(['polygon' => 'Draw at least 3 points on the map to use a boundary polygon.']);
         }
 
+        if (array_key_exists('dine_in_enabled', $data)) {
+            SystemSetting::set('online.dine_in_enabled', $data['dine_in_enabled']);
+        }
         foreach (['enabled', 'branch_code', 'delivery_enabled', 'pickup_enabled', 'delivery_fee', 'free_delivery_min', 'min_order', 'prep_minutes', 'delivery_minutes', 'zone_use_polygon'] as $key) {
             SystemSetting::set("online.{$key}", $data[$key]);
         }

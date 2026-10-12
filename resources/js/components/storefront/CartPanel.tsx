@@ -1,8 +1,9 @@
-import { Bike, Clock3, ShoppingBag, Store } from 'lucide-react';
+import { Clock3, ShoppingBag } from 'lucide-react';
 
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { useLogoUrl } from '@/hooks/use-logo';
-import type { CartLine } from '@/lib/customer';
+import type { CartLine, Fulfillment } from '@/lib/customer';
+import { FULFILLMENT_ICON, FULFILLMENT_LABEL, FULFILLMENTS, fulfillmentEnabled } from '@/lib/customer';
 import { cn } from '@/lib/utils';
 
 import { Price, ProductImage, QtyControl, RouteLine, ShopButton, useMediaQuery } from './ui';
@@ -13,6 +14,7 @@ export interface CartSettings {
     free_delivery_min: number;
     delivery_enabled: boolean;
     pickup_enabled: boolean;
+    dine_in_enabled?: boolean;
     prep_minutes: number;
     delivery_minutes: number;
 }
@@ -24,8 +26,8 @@ interface Props {
     onQuantity: (key: string, qty: number) => void;
     onClear: () => void;
     settings: CartSettings;
-    fulfillment: 'delivery' | 'pickup';
-    onFulfillment: (f: 'delivery' | 'pickup') => void;
+    fulfillment: Fulfillment;
+    onFulfillment: (f: Fulfillment) => void;
     isOpen: boolean;
     closedReason?: string | null;
     onCheckout: () => void;
@@ -74,10 +76,10 @@ export function CartPanel({
                     )}
                 </div>
                 {/* Fulfilment */}
-                <div className="mt-3 grid grid-cols-2 gap-1 rounded-2xl bg-shop-sunken p-1" role="radiogroup" aria-label="Delivery or pickup">
-                    {(['delivery', 'pickup'] as const).map((f) => {
-                        const enabled = f === 'delivery' ? settings.delivery_enabled : settings.pickup_enabled;
-                        const Icon = f === 'delivery' ? Bike : Store;
+                <div className="mt-3 grid grid-cols-3 gap-1 rounded-2xl bg-shop-sunken p-1" role="radiogroup" aria-label="Dine-in, takeout or delivery">
+                    {FULFILLMENTS.map((f) => {
+                        const enabled = fulfillmentEnabled(settings, f);
+                        const Icon = FULFILLMENT_ICON[f];
                         return (
                             <button
                                 key={f}
@@ -92,7 +94,7 @@ export function CartPanel({
                                 )}
                             >
                                 <Icon className="h-4 w-4" />
-                                {f === 'delivery' ? 'Delivery' : 'Pickup'}
+                                {FULFILLMENT_LABEL[f]}
                             </button>
                         );
                     })}

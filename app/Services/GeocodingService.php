@@ -17,10 +17,16 @@ class GeocodingService
 {
     private const ENDPOINT = 'https://nominatim.openstreetmap.org/reverse';
 
-    /** @return array{label: ?string, barangay: ?string, municipality: ?string}|null */
+    /**
+     * Address parts for a point. Barangay, municipality, province and ZIP come from our own
+     * barangay list when the barangay is recognised (e.g. Dahile → Mabinay, Negros Oriental 6207),
+     * otherwise from what OpenStreetMap knows.
+     *
+     * @return array{label: ?string, barangay: ?string, municipality: ?string, province: ?string, zip_code: ?string}|null
+     */
     public function reverse(float $lat, float $lng): ?array
     {
-        $key = sprintf('geocode:%.4f,%.4f', $lat, $lng);
+        $key = sprintf('geocode:v2:%.4f,%.4f', $lat, $lng);
 
         $cached = Cache::get($key);
         if ($cached !== null) {
@@ -49,10 +55,15 @@ class GeocodingService
             $area = $addr['village'] ?? $addr['suburb'] ?? $addr['hamlet'] ?? $addr['quarter'] ?? $addr['neighbourhood'] ?? null;
             $town = $addr['town'] ?? $addr['municipality'] ?? $addr['city'] ?? $addr['county'] ?? null;
 
+            $barangay = $this->matchBarangay([$area, $addr['hamlet'] ?? null, $addr['neighbourhood'] ?? null, $data['name'] ?? null]);
+            $known = $barangay ? Barangay::where('name', $barangay)->first() : null;
+
             $result = [
                 'label' => collect([$street, $area, $town])->filter()->unique()->implode(', ') ?: ($data['display_name'] ?? null),
-                'barangay' => $this->matchBarangay([$area, $addr['hamlet'] ?? null, $addr['neighbourhood'] ?? null, $data['name'] ?? null]),
-                'municipality' => $town,
+                'barangay' => $barangay,
+                'municipality' => $known?->municipality ?? $town,
+                'province' => $known?->province ?? $addr['province'] ?? $addr['county'] ?? $addr['state'] ?? null,
+                'zip_code' => $known?->zip_code ?? $addr['postcode'] ?? null,
             ];
 
             Cache::put($key, $result, now()->addDays(7));

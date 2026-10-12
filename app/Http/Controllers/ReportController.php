@@ -10,6 +10,7 @@ use App\Services\Reports\DailyReport;
 use App\Services\Reports\ExpenseReport;
 use App\Services\Reports\IngredientUsageReport;
 use App\Services\Reports\InventoryReport;
+use App\Services\Reports\ProfitAnalytics;
 use App\Services\Reports\ReportLabels;
 use App\Services\Reports\SalesReport;
 use App\Services\Reports\StockLossReport;
@@ -74,6 +75,18 @@ class ReportController extends Controller
             'payment_method' => $method,
             'report' => $report->build($branchId, $from, $to),
             'register' => $register,
+        ]);
+    }
+
+    /** Top sellers, most profitable products and branches, margins and the menu-engineering matrix. */
+    public function profitAnalytics(Request $request, ProfitAnalytics $analytics): Response
+    {
+        $branchId = $this->resolvedBranchId($request);
+        [$from, $to] = $this->period($request, today()->subDays(29));
+
+        return Inertia::render('Reports/ProfitAnalytics', [
+            ...$this->context($branchId, $from, $to),
+            'report' => $analytics->build($branchId, $from, $to),
         ]);
     }
 

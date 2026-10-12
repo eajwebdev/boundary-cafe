@@ -1,5 +1,22 @@
 import { Link, router, usePage } from '@inertiajs/react';
-import { AlertCircle, ArrowLeft, Bike, Check, ChevronRight, Gift, Loader2, MapPin, Plus, RefreshCw, ShoppingBag, Store, Tag, Wallet, X } from 'lucide-react';
+import {
+    AlertCircle,
+    ArrowLeft,
+    Check,
+    ChevronRight,
+    Gift,
+    Loader2,
+    MapPin,
+    MessageSquareText,
+    Plus,
+    RefreshCw,
+    ShoppingBag,
+    Store,
+    Tag,
+    UtensilsCrossed,
+    Wallet,
+    X,
+} from 'lucide-react';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 
 import { formatPhone, inputCls } from '@/components/storefront/AuthForms';
@@ -8,20 +25,40 @@ import { Price, RouteLine, ShopButton, Skeleton } from '@/components/storefront/
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { useBranchLabel, useRewardsName } from '@/hooks/use-business-name';
 import CustomerLayout from '@/layouts/CustomerLayout';
-import type { CustomerSession, DeliveryZone, SavedAddress, StoreStatus} from '@/lib/customer';
-import { jsonRequest, useCart } from '@/lib/customer';
+import type { CustomerSession, DeliveryZone, Fulfillment, SavedAddress, StoreStatus } from '@/lib/customer';
+import { FULFILLMENT_ICON, FULFILLMENT_LABEL, FULFILLMENTS, fulfillmentEnabled, jsonRequest, pickFulfillment, useCart } from '@/lib/customer';
 import { cn } from '@/lib/utils';
 
 const AddressPicker = lazy(() => import('@/components/storefront/AddressPicker'));
 
 interface Quote {
-    fulfillment_type: 'delivery' | 'pickup';
-    lines: { product_id: number; product_variant_id: number | null; name: string; variant: string | null; price: number; quantity: number; total: number; note: string | null }[];
+    fulfillment_type: Fulfillment;
+    lines: {
+        product_id: number;
+        product_variant_id: number | null;
+        name: string;
+        variant: string | null;
+        price: number;
+        quantity: number;
+        total: number;
+        note: string | null;
+    }[];
     subtotal: number;
     promo: { id: number; label: string; code: string | null; discount: number } | null;
     promo_error: string | null;
     vat: number;
-    loyalty: { enabled: boolean; balance: number; minimum: number; maximum: number; peso_per_point: number; points_to_redeem: number; discount: number; points_to_earn: number; error: string | null };
+    loyalty: {
+        enabled: boolean;
+        redeem_enabled: boolean;
+        balance: number;
+        minimum: number;
+        maximum: number;
+        peso_per_point: number;
+        points_to_redeem: number;
+        discount: number;
+        points_to_earn: number;
+        error: string | null;
+    };
     delivery_fee: number;
     free_delivery_min: number;
     min_order: number;
@@ -36,7 +73,15 @@ interface PageProps {
     barangays: string[];
     store: {
         status: StoreStatus;
-        settings: { delivery_enabled: boolean; pickup_enabled: boolean; delivery_fee: number; prep_minutes: number; delivery_minutes: number; min_order: number };
+        settings: {
+            delivery_enabled: boolean;
+            pickup_enabled: boolean;
+            dine_in_enabled: boolean;
+            delivery_fee: number;
+            prep_minutes: number;
+            delivery_minutes: number;
+            min_order: number;
+        };
         branch: { name: string; location: string; address: string | null } | null;
     };
     contact: { name: string; contact_number: string | null };
@@ -61,13 +106,14 @@ function CheckoutBody() {
     const branchLabel = useBranchLabel(store.branch?.location);
     const rewardsName = useRewardsName();
 
-    const initialFulfillment = (() => {
-        const q = new URLSearchParams(window.location.search).get('fulfillment');
-        if (q === 'pickup' && store.settings.pickup_enabled) return 'pickup' as const;
-        return store.settings.delivery_enabled ? ('delivery' as const) : ('pickup' as const);
-    })();
+    const initialFulfillment = pickFulfillment(store.settings, new URLSearchParams(window.location.search).get('fulfillment'));
 
-    const [fulfillment, setFulfillment] = useState<'delivery' | 'pickup'>(initialFulfillment);
+    const [fulfillment, setFulfillment] = useState<Fulfillment>(initialFulfillment);
+    // Delivery contact: the account's name and number, or someone else who receives the order.
+    const [useAccountContact, setUseAccountContact] = useState(true);
+    const [contactName, setContactName] = useState('');
+    const [contactNumber, setContactNumber] = useState('');
+    const [tableNumber, setTableNumber] = useState('');
     const [addressId, setAddressId] = useState<number | null>(addresses.find((a) => a.is_default)?.id ?? addresses[0]?.id ?? null);
     const [addressListOpen, setAddressListOpen] = useState(false);
     const [pickerOpen, setPickerOpen] = useState(false);
@@ -76,6 +122,8 @@ function CheckoutBody() {
     const [usePoints, setUsePoints] = useState(false);
     const [points, setPoints] = useState(0);
     const [note, setNote] = useState('');
+    const [promoOpen, setPromoOpen] = useState(false);
+    const [noteOpen, setNoteOpen] = useState(false);
     const [mobile, setMobile] = useState(formatPhone(contact.contact_number ?? ''));
     const [quote, setQuote] = useState<Quote | null>(null);
     const [quoting, setQuoting] = useState(false);
@@ -93,7 +141,10 @@ function CheckoutBody() {
     }, [addresses]);
 
     const address = addresses.find((a) => a.id === addressId) ?? null;
-    const items = useMemo(() => cart.lines.map((l) => ({ product_id: l.product_id, variant_id: l.variant_id, quantity: l.quantity, note: l.note || null })), [cart.lines]);
+    const items = useMemo(
+        () => cart.lines.map((l) => ({ product_id: l.product_id, variant_id: l.variant_id, quantity: l.quantity, note: l.note || null })),
+        [cart.lines],
+    );
     const requestedPoints = usePoints ? points : 0;
 
     // ── Live server quote (debounced) ──
@@ -117,7 +168,8 @@ function CheckoutBody() {
                     }),
                 );
             } catch (e) {
-                if ((e as Error).name !== 'AbortError') setQuoteError(navigator.onLine ? (e as Error).message || 'We could not price your order.' : 'You seem to be offline.');
+                if ((e as Error).name !== 'AbortError')
+                    setQuoteError(navigator.onLine ? (e as Error).message || 'We could not price your order.' : 'You seem to be offline.');
             } finally {
                 if (!ctrl.signal.aborted) setQuoting(false);
             }
@@ -126,9 +178,16 @@ function CheckoutBody() {
     }, [items, fulfillment, promoCode, requestedPoints, retry]);
 
     const loyaltyMax = quote
-        ? Math.max(0, Math.min(quote.loyalty.balance, quote.loyalty.maximum || quote.loyalty.balance, Math.floor((quote.subtotal - (quote.promo?.discount ?? 0)) / quote.loyalty.peso_per_point)))
+        ? Math.max(
+              0,
+              Math.min(
+                  quote.loyalty.balance,
+                  quote.loyalty.maximum || quote.loyalty.balance,
+                  Math.floor((quote.subtotal - (quote.promo?.discount ?? 0)) / quote.loyalty.peso_per_point),
+              ),
+          )
         : 0;
-    const canUsePoints = !!quote?.loyalty.enabled && loyaltyMax >= (quote?.loyalty.minimum ?? 1);
+    const canUsePoints = !!quote?.loyalty.redeem_enabled && loyaltyMax >= (quote?.loyalty.minimum ?? 1);
 
     useEffect(() => {
         if (quote && usePoints && points === 0) setPoints(loyaltyMax);
@@ -136,8 +195,21 @@ function CheckoutBody() {
     }, [usePoints, quote?.loyalty.balance]);
 
     const needsAddress = fulfillment === 'delivery' && !address;
-    const canPlace = !!quote && quote.can_checkout && !quoting && !placing && store.status.is_open && !needsAddress && !quote.loyalty.error;
-    const ctaLabel = needsAddress ? 'Add a delivery address' : !store.status.is_open ? 'Closed for online orders' : quote && !quote.can_checkout ? 'Check your order' : 'Place order';
+    const otherContact = fulfillment === 'delivery' && !useAccountContact;
+    const contactIncomplete = otherContact && (contactName.trim().length < 2 || contactNumber.replace(/\D/g, '').length < 10);
+    const canPlace =
+        !!quote && quote.can_checkout && !quoting && !placing && store.status.is_open && !needsAddress && !contactIncomplete && !quote.loyalty.error;
+    const ctaLabel = needsAddress
+        ? 'Add a delivery address'
+        : !store.status.is_open
+          ? store.status.closed_today
+              ? 'Closed today'
+              : 'Closed for online orders'
+          : contactIncomplete
+            ? 'Add the contact person'
+            : quote && !quote.can_checkout
+              ? 'Check your order'
+              : 'Place order';
 
     const placeOrder = () => {
         if (needsAddress) {
@@ -156,7 +228,10 @@ function CheckoutBody() {
                 promo_code: promoCode || null,
                 loyalty_points: requestedPoints,
                 customer_note: note || null,
-                contact_number: mobile || null,
+                use_account_contact: !otherContact,
+                contact_name: otherContact ? contactName.trim() : null,
+                contact_number: otherContact ? contactNumber : mobile || null,
+                table_number: fulfillment === 'dine_in' ? tableNumber.trim() || null : null,
             },
             {
                 onSuccess: (page) => {
@@ -174,9 +249,12 @@ function CheckoutBody() {
                 <span className="flex h-16 w-16 items-center justify-center rounded-full bg-shop-accent-soft text-shop-accent-ink">
                     <ShoppingBag className="h-7 w-7" />
                 </span>
-                <h1 className="font-display mt-4 text-2xl font-bold">Your order is empty</h1>
+                <h1 className="mt-4 font-display text-2xl font-bold">Your order is empty</h1>
                 <p className="mt-1 text-shop-muted">Add something from the menu first.</p>
-                <Link href="/" className="bc-press mt-6 inline-flex h-12 items-center rounded-2xl bg-shop-accent px-6 font-semibold text-shop-on-accent">
+                <Link
+                    href="/"
+                    className="bc-press mt-6 inline-flex h-12 items-center rounded-2xl bg-shop-accent px-6 font-semibold text-shop-on-accent"
+                >
                     Browse the menu
                 </Link>
             </div>
@@ -185,14 +263,18 @@ function CheckoutBody() {
 
     const cartErrors = [...(quote?.errors ?? []), ...(serverErrors.cart ? [serverErrors.cart] : [])];
     const generalErrors = Object.entries(serverErrors)
-        .filter(([k]) => !['address_id', 'promo_code', 'loyalty_points', 'cart'].includes(k))
+        .filter(([k]) => !['address_id', 'promo_code', 'loyalty_points', 'cart', 'contact_name', 'contact_number'].includes(k))
         .map(([, v]) => v);
     const hasPoints = !!quote?.loyalty.enabled;
 
     return (
         <div className="px-4 pt-4 pb-[calc(7.5rem+env(safe-area-inset-bottom))] lg:px-6 lg:pt-8 lg:pb-16">
             <div className="mb-5 flex items-center gap-3">
-                <Link href="/" className="bc-press flex h-11 w-11 items-center justify-center rounded-full bg-shop-surface ring-1 ring-shop-line" aria-label="Back to menu">
+                <Link
+                    href="/"
+                    className="bc-press flex h-11 w-11 items-center justify-center rounded-full bg-shop-surface ring-1 ring-shop-line"
+                    aria-label="Back to menu"
+                >
                     <ArrowLeft className="h-5 w-5" />
                 </Link>
                 <div>
@@ -211,10 +293,10 @@ function CheckoutBody() {
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-10">
                 <ol className="min-w-0 space-y-4">
                     <Step n={1} title="How do you want it?">
-                        <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Delivery or pickup">
-                            {(['delivery', 'pickup'] as const).map((f) => {
-                                const enabled = f === 'delivery' ? store.settings.delivery_enabled : store.settings.pickup_enabled;
-                                const Icon = f === 'delivery' ? Bike : Store;
+                        <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Dine-in, takeout or delivery">
+                            {FULFILLMENTS.map((f) => {
+                                const enabled = fulfillmentEnabled(store.settings, f);
+                                const Icon = FULFILLMENT_ICON[f];
                                 const on = fulfillment === f;
                                 const s = store.settings;
                                 return (
@@ -226,16 +308,20 @@ function CheckoutBody() {
                                         disabled={!enabled}
                                         onClick={() => setFulfillment(f)}
                                         className={cn(
-                                            'bc-press flex cursor-pointer flex-col items-start gap-2 rounded-2xl border p-4 text-left disabled:cursor-not-allowed disabled:opacity-40',
-                                            on ? 'border-shop-accent bg-shop-accent-soft/50 ring-2 ring-shop-accent/20' : 'border-shop-line hover:bg-shop-sunken',
+                                            'bc-press flex cursor-pointer flex-col items-start gap-2 rounded-2xl border p-3 text-left disabled:cursor-not-allowed disabled:opacity-40 sm:p-4',
+                                            on
+                                                ? 'border-shop-accent bg-shop-accent-soft/50 ring-2 ring-shop-accent/20'
+                                                : 'border-shop-line hover:bg-shop-sunken',
                                         )}
                                     >
                                         <Icon className={cn('h-6 w-6', on ? 'text-shop-accent-ink' : 'text-shop-muted')} />
-                                        <span className="font-semibold">{f === 'delivery' ? 'Delivery' : 'Pickup'}</span>
+                                        <span className="font-semibold">{FULFILLMENT_LABEL[f]}</span>
                                         <span className="text-xs text-shop-muted">
                                             {f === 'delivery'
                                                 ? `${s.prep_minutes + s.delivery_minutes}–${s.prep_minutes + s.delivery_minutes + 15} min · ₱${s.delivery_fee}`
-                                                : `Ready in ~${s.prep_minutes} min · free`}
+                                                : f === 'dine_in'
+                                                  ? `I'm in the café · ~${s.prep_minutes} min`
+                                                  : `Ready in ~${s.prep_minutes} min · free`}
                                         </span>
                                     </button>
                                 );
@@ -243,7 +329,11 @@ function CheckoutBody() {
                         </div>
                     </Step>
 
-                    <Step n={2} title={fulfillment === 'delivery' ? 'Deliver to' : 'Pick up at'} error={serverErrors.address_id}>
+                    <Step
+                        n={2}
+                        title={fulfillment === 'delivery' ? 'Deliver to' : fulfillment === 'dine_in' ? 'Dining at' : 'Pick up at'}
+                        error={serverErrors.address_id}
+                    >
                         {fulfillment === 'delivery' ? (
                             address ? (
                                 <button
@@ -251,12 +341,18 @@ function CheckoutBody() {
                                     onClick={() => setAddressListOpen(true)}
                                     className="bc-press flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-shop-line p-2 pr-3 text-left hover:bg-shop-sunken"
                                 >
-                                    <MapThumb lat={address.lat} lng={address.lng} className="h-20 w-24 shrink-0 rounded-xl" label={`Map of ${address.summary}`} />
+                                    <MapThumb
+                                        lat={address.lat}
+                                        lng={address.lng}
+                                        className="h-20 w-24 shrink-0 rounded-xl"
+                                        label={`Map of ${address.summary}`}
+                                    />
                                     <div className="min-w-0 flex-1">
                                         <p className="font-semibold">
                                             {address.label} <span className="font-normal text-shop-muted">· {address.barangay}</span>
                                         </p>
-                                        <p className="truncate text-sm text-shop-muted">{address.summary}</p>
+                                        {address.street && <p className="truncate text-sm text-shop-muted">{address.street}</p>}
+                                        <p className="truncate text-sm text-shop-muted">{address.locality}</p>
                                         {address.landmark && <p className="truncate text-xs text-shop-muted">Landmark: {address.landmark}</p>}
                                     </div>
                                     <span className="text-sm font-semibold text-shop-accent-ink">Change</span>
@@ -272,27 +368,109 @@ function CheckoutBody() {
                                 </button>
                             )
                         ) : (
-                            <div className="flex items-start gap-3 rounded-2xl bg-shop-sunken p-4">
-                                <Store className="mt-0.5 h-5 w-5 text-shop-accent-ink" />
-                                <div>
-                                    <p className="font-semibold">{branchLabel}</p>
-                                    <p className="text-sm text-shop-muted">{store.branch?.address ?? 'Mabinay, Negros Oriental'}</p>
+                            <div className="space-y-3">
+                                <div className="flex items-start gap-3 rounded-2xl bg-shop-sunken p-4">
+                                    {fulfillment === 'dine_in' ? (
+                                        <UtensilsCrossed className="mt-0.5 h-5 w-5 text-shop-accent-ink" />
+                                    ) : (
+                                        <Store className="mt-0.5 h-5 w-5 text-shop-accent-ink" />
+                                    )}
+                                    <div>
+                                        <p className="font-semibold">{branchLabel}</p>
+                                        <p className="text-sm text-shop-muted">{store.branch?.address ?? 'Mabinay, Negros Oriental'}</p>
+                                        {fulfillment === 'dine_in' && (
+                                            <p className="mt-1 text-sm text-shop-muted">
+                                                We&apos;ll bring your order to your table — no need to line up.
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
+                                {fulfillment === 'dine_in' && (
+                                    <label className="block">
+                                        <span className="mb-1 block text-sm font-semibold">
+                                            Table number{' '}
+                                            <span className="font-normal text-shop-muted">(optional — or we&apos;ll call your name)</span>
+                                        </span>
+                                        <input
+                                            value={tableNumber}
+                                            onChange={(e) => setTableNumber(e.target.value.slice(0, 20))}
+                                            placeholder="e.g. 5"
+                                            inputMode="text"
+                                            className={cn(inputCls, 'max-w-40')}
+                                        />
+                                    </label>
+                                )}
                             </div>
                         )}
                     </Step>
 
-                    <Step n={3} title="Contact">
-                        <div className="grid gap-3 sm:grid-cols-2">
-                            <div className="rounded-2xl bg-shop-sunken px-4 py-3">
-                                <p className="text-xs text-shop-muted">Name</p>
-                                <p className="font-semibold">{contact.name}</p>
-                            </div>
-                            <label className="block">
-                                <span className="mb-1 block text-xs text-shop-muted">Mobile for this order</span>
-                                <input value={mobile} onChange={(e) => setMobile(formatPhone(e.target.value))} inputMode="tel" autoComplete="tel" className={inputCls} />
+                    <Step
+                        n={3}
+                        title={fulfillment === 'delivery' ? 'Contact person' : 'Contact'}
+                        error={serverErrors.contact_name ?? serverErrors.contact_number}
+                    >
+                        {fulfillment === 'delivery' && (
+                            <label className="mb-3 flex cursor-pointer items-start gap-3 rounded-2xl border border-shop-line p-3.5 hover:bg-shop-sunken">
+                                <input
+                                    type="checkbox"
+                                    className="mt-0.5 h-5 w-5 shrink-0 accent-shop-accent"
+                                    checked={useAccountContact}
+                                    onChange={(e) => setUseAccountContact(e.target.checked)}
+                                />
+                                <span>
+                                    <span className="block font-semibold">Use my name and number for this order</span>
+                                    <span className="block text-sm text-shop-muted">
+                                        {contact.name}
+                                        {contact.contact_number ? ` · ${formatPhone(contact.contact_number)}` : ''}
+                                    </span>
+                                </span>
                             </label>
-                        </div>
+                        )}
+                        {otherContact ? (
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <label className="block">
+                                    <span className="mb-1 block text-sm font-semibold">Contact person&apos;s name</span>
+                                    <input
+                                        value={contactName}
+                                        onChange={(e) => setContactName(e.target.value.slice(0, 120))}
+                                        placeholder="Who will receive the order?"
+                                        autoComplete="name"
+                                        className={inputCls}
+                                    />
+                                </label>
+                                <label className="block">
+                                    <span className="mb-1 block text-sm font-semibold">Contact number</span>
+                                    <input
+                                        value={contactNumber}
+                                        onChange={(e) => setContactNumber(formatPhone(e.target.value))}
+                                        placeholder="0917 123 4567"
+                                        inputMode="tel"
+                                        autoComplete="tel"
+                                        className={inputCls}
+                                    />
+                                </label>
+                                <p className="text-xs text-shop-muted sm:col-span-2">
+                                    Our rider will call or text this number when the order arrives.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <div className="rounded-2xl bg-shop-sunken px-4 py-3">
+                                    <p className="text-xs text-shop-muted">Name</p>
+                                    <p className="font-semibold">{contact.name}</p>
+                                </div>
+                                <label className="block">
+                                    <span className="mb-1 block text-xs text-shop-muted">Mobile for this order</span>
+                                    <input
+                                        value={mobile}
+                                        onChange={(e) => setMobile(formatPhone(e.target.value))}
+                                        inputMode="tel"
+                                        autoComplete="tel"
+                                        className={inputCls}
+                                    />
+                                </label>
+                            </div>
+                        )}
                     </Step>
 
                     <Step
@@ -329,72 +507,46 @@ function CheckoutBody() {
                         ))}
                     </Step>
 
-                    <Step n={5} title="Promo code" icon={Tag} error={promoCode ? (serverErrors.promo_code ?? quote?.promo_error ?? undefined) : undefined}>
-                        {quote?.promo && (
-                            <div className="mb-3 flex items-center justify-between rounded-2xl bg-shop-success-soft px-4 py-3 text-sm text-shop-success">
-                                <span className="flex items-center gap-2 font-semibold">
-                                    <Check className="h-4 w-4" /> {quote.promo.label} · −<Price value={quote.promo.discount} />
-                                </span>
-                                {promoCode && (
-                                    <button
-                                        type="button"
-                                        className="cursor-pointer"
-                                        onClick={() => {
-                                            setPromoCode('');
-                                            setPromoInput('');
-                                        }}
-                                        aria-label="Remove promo code"
-                                    >
-                                        <X className="h-4 w-4" />
-                                    </button>
-                                )}
-                            </div>
-                        )}
-                        <form
-                            className="flex gap-2"
-                            onSubmit={(e) => {
-                                e.preventDefault();
-                                setPromoCode(promoInput.trim().toUpperCase());
-                            }}
-                        >
-                            <input
-                                value={promoInput}
-                                onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
-                                placeholder="e.g. WELCOME50"
-                                aria-label="Promo code"
-                                className={cn(inputCls, 'min-w-0 flex-1 font-mono uppercase')}
-                            />
-                            <ShopButton type="submit" variant="secondary" disabled={!promoInput.trim()}>
-                                Apply
-                            </ShopButton>
-                        </form>
-                    </Step>
-
                     {hasPoints && quote && (
-                        <Step n={6} title={rewardsName} icon={Gift} error={serverErrors.loyalty_points ?? quote.loyalty.error ?? undefined}>
-                            <div className="flex items-center justify-between gap-3">
-                                <span>
-                                    <span className="block font-semibold">Pay with points</span>
-                                    <span className="text-sm text-shop-muted">
-                                        {quote.loyalty.balance.toLocaleString()} pts available · 1 pt = ₱{quote.loyalty.peso_per_point}
+                        <Step n={5} title={rewardsName} icon={Gift} error={serverErrors.loyalty_points ?? quote.loyalty.error ?? undefined}>
+                            {quote.loyalty.redeem_enabled ? (
+                                <div className="flex items-center justify-between gap-3">
+                                    <span>
+                                        <span className="block font-semibold">Pay with points</span>
+                                        <span className="text-sm text-shop-muted">
+                                            {quote.loyalty.balance.toLocaleString()} pts available · 1 pt = ₱{quote.loyalty.peso_per_point}
+                                        </span>
                                     </span>
-                                </span>
-                                <Switch
-                                    checked={usePoints}
-                                    disabled={!canUsePoints}
-                                    onChange={(v) => {
-                                        setUsePoints(v);
-                                        if (!v) setPoints(0);
-                                    }}
-                                    label="Pay with points"
-                                />
-                            </div>
-                            {!canUsePoints && <p className="mt-2 text-xs text-shop-muted">You can redeem once you have at least {quote.loyalty.minimum} points.</p>}
+                                    <Switch
+                                        checked={usePoints}
+                                        disabled={!canUsePoints}
+                                        onChange={(v) => {
+                                            setUsePoints(v);
+                                            if (!v) setPoints(0);
+                                        }}
+                                        label="Pay with points"
+                                    />
+                                </div>
+                            ) : (
+                                <p className="text-sm text-shop-muted">
+                                    You have <span className="font-semibold text-shop-ink">{quote.loyalty.balance.toLocaleString()} pts</span>. Use
+                                    them on free rewards in-store —{' '}
+                                    <a href="/account/rewards" className="font-semibold text-shop-accent-ink underline-offset-2 hover:underline">
+                                        see rewards
+                                    </a>
+                                    .
+                                </p>
+                            )}
+                            {quote.loyalty.redeem_enabled && !canUsePoints && (
+                                <p className="mt-2 text-xs text-shop-muted">You can redeem once you have at least {quote.loyalty.minimum} points.</p>
+                            )}
                             {usePoints && canUsePoints && (
                                 <div className="mt-4 rounded-2xl bg-shop-sunken p-4">
                                     <div className="flex items-baseline justify-between">
                                         <span className="text-sm text-shop-muted">Using</span>
-                                        <span className="font-display text-xl font-bold tabular-nums">{quote.loyalty.points_to_redeem.toLocaleString()} pts</span>
+                                        <span className="font-display text-xl font-bold tabular-nums">
+                                            {quote.loyalty.points_to_redeem.toLocaleString()} pts
+                                        </span>
                                     </div>
                                     <input
                                         type="range"
@@ -422,23 +574,93 @@ function CheckoutBody() {
                         </Step>
                     )}
 
-                    <Step n={hasPoints ? 7 : 6} title="Note to the café" optional>
-                        <textarea
-                            value={note}
-                            onChange={(e) => setNote(e.target.value.slice(0, 500))}
-                            placeholder="Extra ketchup, ring the doorbell twice…"
-                            rows={3}
-                            aria-label="Note to the café"
-                            className={cn(inputCls, 'h-auto resize-none py-3')}
-                        />
+                    <Step
+                        n={hasPoints ? 6 : 5}
+                        title="Promo code & note"
+                        optional
+                        error={promoCode ? (serverErrors.promo_code ?? quote?.promo_error ?? undefined) : undefined}
+                    >
+                        {quote?.promo && (
+                            <div className="mb-3 flex items-center justify-between rounded-2xl bg-shop-success-soft px-4 py-3 text-sm text-shop-success">
+                                <span className="flex items-center gap-2 font-semibold">
+                                    <Check className="h-4 w-4" /> {quote.promo.label} · −<Price value={quote.promo.discount} />
+                                </span>
+                                {promoCode && (
+                                    <button
+                                        type="button"
+                                        className="cursor-pointer"
+                                        onClick={() => {
+                                            setPromoCode('');
+                                            setPromoInput('');
+                                        }}
+                                        aria-label="Remove promo code"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                        {promoOpen ? (
+                            <form
+                                className="flex gap-2"
+                                onSubmit={(e) => {
+                                    e.preventDefault();
+                                    setPromoCode(promoInput.trim().toUpperCase());
+                                }}
+                            >
+                                <input
+                                    value={promoInput}
+                                    onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                                    placeholder="e.g. WELCOME50"
+                                    aria-label="Promo code"
+                                    className={cn(inputCls, 'min-w-0 flex-1 font-mono uppercase')}
+                                />
+                                <ShopButton type="submit" variant="secondary" disabled={!promoInput.trim()}>
+                                    Apply
+                                </ShopButton>
+                            </form>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => setPromoOpen(true)}
+                                className="flex h-12 w-full items-center gap-3 rounded-2xl border border-dashed border-shop-line px-4 text-left text-sm font-semibold hover:bg-shop-sunken"
+                            >
+                                <Tag className="h-4 w-4 text-shop-muted" /> Have a promo code?
+                            </button>
+                        )}
+                        {noteOpen ? (
+                            <textarea
+                                value={note}
+                                onChange={(e) => setNote(e.target.value.slice(0, 500))}
+                                placeholder="Extra ketchup, ring the doorbell twice…"
+                                rows={3}
+                                autoFocus={!note}
+                                aria-label="Note to the café"
+                                className={cn(inputCls, 'mt-2 h-auto resize-none py-3')}
+                            />
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => setNoteOpen(true)}
+                                className="mt-2 flex h-12 w-full items-center gap-3 rounded-2xl border border-dashed border-shop-line px-4 text-left text-sm font-semibold hover:bg-shop-sunken"
+                            >
+                                <MessageSquareText className="h-4 w-4 text-shop-muted" /> Add a note for the café
+                            </button>
+                        )}
                     </Step>
 
-                    <Step n={hasPoints ? 8 : 7} title="Payment" icon={Wallet}>
+                    <Step n={hasPoints ? 7 : 6} title="Payment" icon={Wallet}>
                         <div className="flex items-center gap-3 rounded-2xl border border-shop-accent bg-shop-accent-soft/40 px-4 py-3.5">
                             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-shop-accent">
                                 <span className="h-2 w-2 rounded-full bg-shop-on-accent" />
                             </span>
-                            <span className="font-semibold">{fulfillment === 'delivery' ? 'Cash on delivery' : 'Pay at pickup (cash, GCash or card)'}</span>
+                            <span className="font-semibold">
+                                {fulfillment === 'delivery'
+                                    ? 'Cash on delivery'
+                                    : fulfillment === 'dine_in'
+                                      ? 'Pay at the counter (cash, GCash or card)'
+                                      : 'Pay at pickup (cash, GCash or card)'}
+                            </span>
                         </div>
                         <p className="mt-2 text-xs text-shop-muted">Online payment with GCash is coming soon.</p>
                     </Step>
@@ -447,15 +669,29 @@ function CheckoutBody() {
                 <aside className="min-w-0 lg:sticky lg:top-24 lg:self-start" aria-label="Order summary">
                     <Summary quote={quote} quoting={quoting} fulfillment={fulfillment} />
                     {quoteError && (
-                        <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl bg-shop-danger-soft px-4 py-3 text-sm text-shop-danger" role="alert">
+                        <div
+                            className="mt-3 flex items-center justify-between gap-2 rounded-2xl bg-shop-danger-soft px-4 py-3 text-sm text-shop-danger"
+                            role="alert"
+                        >
                             {quoteError}
-                            <button type="button" onClick={() => setRetry((r) => r + 1)} className="flex cursor-pointer items-center gap-1 font-semibold">
+                            <button
+                                type="button"
+                                onClick={() => setRetry((r) => r + 1)}
+                                className="flex cursor-pointer items-center gap-1 font-semibold"
+                            >
                                 <RefreshCw className="h-4 w-4" /> Retry
                             </button>
                         </div>
                     )}
                     <div className="mt-4 hidden lg:block">
-                        <ShopButton size="lg" block onClick={placeOrder} disabled={!needsAddress && !canPlace} loading={placing} className="justify-between">
+                        <ShopButton
+                            size="lg"
+                            block
+                            onClick={placeOrder}
+                            disabled={!needsAddress && !canPlace}
+                            loading={placing}
+                            className="justify-between"
+                        >
                             <span>{ctaLabel}</span>
                             {quote && <Price value={quote.total} />}
                         </ShopButton>
@@ -479,7 +715,10 @@ function CheckoutBody() {
 
             {/* Saved addresses */}
             <Sheet open={addressListOpen} onOpenChange={setAddressListOpen}>
-                <SheetContent side="bottom" className="bc-shop max-h-[85dvh] overflow-y-auto rounded-t-[28px] border-shop-line bg-shop-surface px-4 pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:mx-auto sm:max-w-lg">
+                <SheetContent
+                    side="bottom"
+                    className="bc-shop max-h-[85dvh] overflow-y-auto rounded-t-[28px] border-shop-line bg-shop-surface px-4 pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:mx-auto sm:max-w-lg"
+                >
                     <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-shop-line" aria-hidden />
                     <SheetTitle className="font-display text-2xl font-bold">Deliver to</SheetTitle>
                     <SheetDescription className="mb-4 text-shop-muted">Choose one of your saved Mabinay addresses.</SheetDescription>
@@ -501,7 +740,9 @@ function CheckoutBody() {
                                 <div className="min-w-0 flex-1">
                                     <p className="font-semibold">
                                         {a.label}
-                                        {a.is_default && <span className="ml-2 rounded-full bg-shop-sunken px-2 py-0.5 text-xs font-medium">Default</span>}
+                                        {a.is_default && (
+                                            <span className="ml-2 rounded-full bg-shop-sunken px-2 py-0.5 text-xs font-medium">Default</span>
+                                        )}
                                     </p>
                                     <p className="truncate text-sm text-shop-muted">{a.summary}</p>
                                 </div>
@@ -527,7 +768,11 @@ function CheckoutBody() {
 
             {/* Map picker */}
             <Sheet open={pickerOpen} onOpenChange={setPickerOpen}>
-                <SheetContent side="bottom" showCloseButton={false} className="bc-shop h-dvh gap-0 border-shop-line bg-shop-surface p-0 sm:mx-auto sm:h-[90dvh] sm:max-w-2xl sm:rounded-t-[28px]">
+                <SheetContent
+                    side="bottom"
+                    showCloseButton={false}
+                    className="bc-shop h-dvh gap-0 border-shop-line bg-shop-surface p-0 sm:mx-auto sm:h-[90dvh] sm:max-w-2xl sm:rounded-t-[28px]"
+                >
                     <SheetTitle className="sr-only">Pin your delivery location</SheetTitle>
                     <SheetDescription className="sr-only">Move the map so the pin sits on your house.</SheetDescription>
                     {pickerOpen && (
@@ -538,7 +783,12 @@ function CheckoutBody() {
                                 </div>
                             }
                         >
-                            <AddressPicker zone={zone} barangays={barangays} onClose={() => setPickerOpen(false)} onSaved={() => setPickerOpen(false)} />
+                            <AddressPicker
+                                zone={zone}
+                                barangays={barangays}
+                                onClose={() => setPickerOpen(false)}
+                                onSaved={() => setPickerOpen(false)}
+                            />
                         </Suspense>
                     )}
                 </SheetContent>
@@ -547,9 +797,12 @@ function CheckoutBody() {
     );
 }
 
-function Summary({ quote, quoting, fulfillment }: { quote: Quote | null; quoting: boolean; fulfillment: 'delivery' | 'pickup' }) {
+function Summary({ quote, quoting, fulfillment }: { quote: Quote | null; quoting: boolean; fulfillment: Fulfillment }) {
     return (
-        <div className="bc-ticket rounded-[26px] bg-shop-surface p-5 shadow-shop-md ring-1 ring-shop-line" style={{ ['--ticket-cut' as string]: '30%' }}>
+        <div
+            className="bc-ticket shadow-shop-md rounded-[26px] bg-shop-surface p-5 ring-1 ring-shop-line"
+            style={{ ['--ticket-cut' as string]: '30%' }}
+        >
             <div className="flex items-center justify-between">
                 <h2 className="font-display text-xl font-bold">Summary</h2>
                 {quoting && <Loader2 className="h-4 w-4 animate-spin text-shop-muted" aria-label="Updating" />}
@@ -581,7 +834,10 @@ function Summary({ quote, quoting, fulfillment }: { quote: Quote | null; quoting
                         />
                     )}
                     {fulfillment === 'delivery' && (
-                        <Row label="Delivery fee" value={quote.delivery_fee > 0 ? <Price value={quote.delivery_fee} /> : <span className="text-shop-success">Free</span>} />
+                        <Row
+                            label="Delivery fee"
+                            value={quote.delivery_fee > 0 ? <Price value={quote.delivery_fee} /> : <span className="text-shop-success">Free</span>}
+                        />
                     )}
                     <div className="mt-2 flex items-end justify-between border-t border-shop-line pt-3">
                         <dt className="font-semibold">Total</dt>
@@ -589,9 +845,14 @@ function Summary({ quote, quoting, fulfillment }: { quote: Quote | null; quoting
                             <Price value={quote.total} />
                         </dd>
                     </div>
-                    {fulfillment === 'delivery' && quote.free_delivery_min > 0 && quote.delivery_fee > 0 && quote.subtotal < quote.free_delivery_min && (
-                        <p className="pt-1 text-xs text-shop-muted">Add ₱{(quote.free_delivery_min - quote.subtotal).toLocaleString()} more for free delivery.</p>
-                    )}
+                    {fulfillment === 'delivery' &&
+                        quote.free_delivery_min > 0 &&
+                        quote.delivery_fee > 0 &&
+                        quote.subtotal < quote.free_delivery_min && (
+                            <p className="pt-1 text-xs text-shop-muted">
+                                Add ₱{(quote.free_delivery_min - quote.subtotal).toLocaleString()} more for free delivery.
+                            </p>
+                        )}
                 </dl>
             ) : (
                 <div className="space-y-3">
@@ -624,8 +885,10 @@ function Step({
     return (
         <li className={cn('rounded-[24px] bg-shop-surface p-4 ring-1 sm:p-5', error ? 'ring-shop-danger/50' : 'ring-shop-line')}>
             <div className="mb-3.5 flex items-center gap-3">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-shop-ink text-xs font-bold text-shop-bg tabular-nums">{n}</span>
-                <h2 className="font-display flex flex-1 items-center gap-2 text-lg font-semibold">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-shop-ink text-xs font-bold text-shop-bg tabular-nums">
+                    {n}
+                </span>
+                <h2 className="flex flex-1 items-center gap-2 font-display text-lg font-semibold">
                     {title}
                     {Icon && <Icon className="h-4 w-4 text-shop-muted" />}
                     {optional && <span className="text-sm font-normal text-shop-muted">(optional)</span>}
@@ -649,7 +912,13 @@ function InlineError({ children }: { children: React.ReactNode }) {
 
 function Notice({ tone, children }: { tone: 'warning' | 'danger'; children: React.ReactNode }) {
     return (
-        <div className={cn('mb-4 flex items-start gap-2 rounded-2xl px-4 py-3 text-sm', tone === 'warning' ? 'bg-shop-warning-soft text-shop-warning' : 'bg-shop-danger-soft text-shop-danger')} role="alert">
+        <div
+            className={cn(
+                'mb-4 flex items-start gap-2 rounded-2xl px-4 py-3 text-sm',
+                tone === 'warning' ? 'bg-shop-warning-soft text-shop-warning' : 'bg-shop-danger-soft text-shop-danger',
+            )}
+            role="alert"
+        >
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{children}</span>
         </div>
@@ -679,7 +948,12 @@ function Switch({ checked, onChange, disabled, label }: { checked: boolean; onCh
                 checked ? 'bg-shop-accent' : 'bg-shop-line',
             )}
         >
-            <span className={cn('absolute top-0.5 h-6 w-6 rounded-full bg-white shadow-sm transition-transform duration-300 ease-shop', checked ? 'translate-x-5.5' : 'translate-x-0.5')} />
+            <span
+                className={cn(
+                    'absolute top-0.5 h-6 w-6 rounded-full bg-white shadow-sm transition-transform duration-300 ease-shop',
+                    checked ? 'translate-x-5.5' : 'translate-x-0.5',
+                )}
+            />
         </button>
     );
 }

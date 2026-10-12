@@ -67,6 +67,7 @@ const methodLabel: Record<string, string> = {
     others: 'Others',
     credit: 'Customer Credit',
     mixed: 'Partial Payment',
+    reward: 'Reward points',
 };
 
 const businessFooter: Record<string, string> = {

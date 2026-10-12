@@ -20,6 +20,7 @@ import {
     Rows3,
     LayoutGrid,
     Clock,
+    Gift,
 } from 'lucide-react';
 import { ClipboardList as PendingIcon } from 'lucide-react';
 import { lazy, Suspense, useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -32,10 +33,11 @@ import { cn } from '@/lib/utils';
 import { routes } from '@/routes';
 import FastRegister from './FastRegister';
 import CategoryRail from './layouts/CategoryRail';
+import LoyaltyScanner, { isLoyaltyCode } from './LoyaltyScanner';
 import OrderTicket from './OrderTicket';
 import type { PendingTicket } from './PendingOrdersPanel';
 import PendingOrdersPanel, { usePendingOrders } from './PendingOrdersPanel';
-import type { Product, CartItem, Category, ActivePromo, CustomerOption } from './posTypes';
+import type { Product, CartItem, Category, ActivePromo, CustomerOption, LinkedMember, RewardClaimInCart } from './posTypes';
 import { isWeightedKgItem } from './posTypes';
 import ReceiptTemplate, { fmtMoney, fmtQty } from './ReceiptTemplate';
 import type { ReceiptData } from './ReceiptTemplate';
@@ -69,6 +71,7 @@ interface PageProps {
         default_due_days: number;
         service_charge_enabled: boolean;
         service_charge_rate: number;
+        loyalty_allow_peso_discount?: boolean;
     } | null;
     app: { currency: string; name?: string };
     products: Product[];
@@ -101,6 +104,10 @@ interface PosResult {
     promo_name?: string | null;
     service_charge_amount: number;
     table_label?: string | null;
+    payment_method?: string;
+    loyalty_points_earned?: number;
+    loyalty_balance?: number | null;
+    reward_code?: string | null;
 }
 const LAYOUTS: LayoutMode[] = ['grid', 'tablet', 'cafe', 'mobile'];
 
@@ -470,6 +477,7 @@ function PaymentModal({
     serverError,
     initialMethod = 'cash',
     preselectedCustomerId = null,
+    rewardClaim = null,
 }: {
     subtotal: number;
     settings: PageProps['settings'];
@@ -496,7 +504,11 @@ function PaymentModal({
     serverError?: string | null;
     initialMethod?: PayMethod;
     preselectedCustomerId?: number | null;
+    /** A scanned reward rides along at ₱0; its customer is fixed for the sale. */
+    rewardClaim?: RewardClaimInCart | null;
 }) {
+    const customerLocked = !!rewardClaim;
+    const allowPointsDiscount = !!settings?.loyalty_allow_peso_discount;
     const defaultMethod =
         initialMethod || ((METHODS.some((m) => m.value === settings?.default_payment) ? settings?.default_payment : 'cash') as PayMethod);
     const [method, setMethod] = useState<PayMethod>(defaultMethod);
@@ -548,7 +560,7 @@ function PaymentModal({
     const selectedCustomer = customers.find((c) => String(c.id) === customerId) ?? null;
     const pointsRequested = Math.max(0, Math.floor(Number(loyaltyPoints) || 0));
     const pointsRedeemed =
-        selectedCustomer && pointsRequested >= 10
+        allowPointsDiscount && selectedCustomer && pointsRequested >= 10
             ? Math.min(pointsRequested, selectedCustomer.loyalty_points, Math.floor(afterPromo + vatAmt + svcAmt), 500)
             : 0;
     const total = r2(afterPromo + vatAmt + svcAmt - pointsRedeemed);
@@ -657,6 +669,17 @@ function PaymentModal({
                                 </div>
                             </div>
 
+                            {rewardClaim && (
+                                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs">
+                                    <p className="font-black text-emerald-700 dark:text-emerald-400">
+                                        Reward {rewardClaim.code} included · {rewardClaim.points} pts · {fmtMoney(0, currency)}
+                                    </p>
+                                    <p className="mt-0.5 text-muted-foreground">
+                                        {rewardClaim.items.map((i) => `${i.quantity}× ${i.name}`).join(', ')} — not part of the amount due.
+                                    </p>
+                                </div>
+                            )}
+
                             {/* Payment Method Selector */}
                             <div>
                                 <label className="mb-1.5 block text-[10px] font-bold tracking-widest text-muted-foreground uppercase">Payment Method</label>
@@ -706,6 +729,8 @@ function PaymentModal({
                                 <div className="space-y-2">
                                     <select
                                         value={customerId}
+                                        disabled={customerLocked}
+                                        title={customerLocked ? 'The reward belongs to this customer' : undefined}
                                         onChange={(e) => {
                                             setCustomerId(e.target.value);
                                             const c = customers.find((x) => String(x.id) === e.target.value);
@@ -721,7 +746,7 @@ function PaymentModal({
                                         ))}
                                     </select>
 
-                                    {!needsRegisteredCustomer && (
+                                    {!needsRegisteredCustomer && !customerLocked && (
                                         <div className="relative">
                                             <User className="absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                                             <input
@@ -736,7 +761,7 @@ function PaymentModal({
                                         </div>
                                     )}
                                 </div>
-                                {selectedCustomer && (
+                                {selectedCustomer && allowPointsDiscount && (
                                     <div className="mt-3 rounded-xl border border-blue-500/25 bg-blue-500/5 p-3">
                                         <div className="flex items-center justify-between gap-3">
                                             <div>
@@ -1319,6 +1344,30 @@ export default function PosIndex() {
     const [highlightIndex, setHighlightIndex] = useState(0);
     const [activeTicket, setActiveTicket] = useState<PendingTicket | null>(null);
 
+    // ── Loyalty: a scanned reward QR (₱0 lines) and/or a member who earns points on this sale ──
+    const [rewardClaim, setRewardClaim] = useState<RewardClaimInCart | null>(null);
+    const [linkedMember, setLinkedMember] = useState<LinkedMember | null>(null);
+    const [scannerOpen, setScannerOpen] = useState(false);
+    const [scannerCode, setScannerCode] = useState<string | null>(null);
+    const hasOrder = cart.length > 0 || !!rewardClaim;
+    const openScanner = useCallback((code: string | null = null) => {
+        setScannerCode(code);
+        setScannerOpen(true);
+    }, []);
+
+    /** Members found by scan are shared by every branch, so they may not be in this branch's list yet. */
+    const customerOptions = useMemo<CustomerOption[]>(() => {
+        const extra: CustomerOption[] = [];
+        const add = (c: { id: number; name: string; customer_number: string; contact_number: string | null }, points: number) => {
+            if (!customers.some((x) => x.id === c.id) && !extra.some((x) => x.id === c.id)) {
+                extra.push({ id: c.id, name: c.name, contact_number: c.contact_number, email: null, customer_number: c.customer_number, loyalty_points: points });
+            }
+        };
+        if (rewardClaim) add(rewardClaim.customer, rewardClaim.customer.loyalty_points);
+        if (linkedMember) add(linkedMember, linkedMember.points);
+        return [...extra, ...customers];
+    }, [customers, rewardClaim, linkedMember]);
+
     const visualLayout: LayoutMode = LAYOUTS.includes(layout) ? layout : 'grid';
     const searchRef = useRef<HTMLInputElement>(null);
 
@@ -1558,6 +1607,11 @@ export default function PosIndex() {
             }
             if (e.key !== 'Enter') return;
             e.preventDefault();
+            if (isLoyaltyCode(search)) {
+                openScanner(search.trim());
+                setSearch('');
+                return;
+            }
             const parsed = parseBarcodeMultiplier(search);
             if (!parsed.term) return;
 
@@ -1611,7 +1665,7 @@ export default function PosIndex() {
                 setError(`Barcode or product "${parsed.term}" not found.`);
             }
         },
-        [search, products, handleProductClick, highlightedProduct, searchResults.length],
+        [search, products, handleProductClick, highlightedProduct, searchResults.length, openScanner],
     );
 
     const updateQty = (key: string, delta: number) => {
@@ -1638,12 +1692,14 @@ export default function PosIndex() {
 
     const removeItem = (key: string) => setCart((prev) => prev.filter((i) => i.key !== key));
     const clearCart = () => {
-        if (cart.length === 0) return;
+        if (cart.length === 0 && !rewardClaim && !linkedMember) return;
         setShowVoidConfirm(true);
     };
 
     const confirmVoidCart = () => {
         setCart([]);
+        setRewardClaim(null);
+        setLinkedMember(null);
         setActiveTicket(null);
         setLastScanned(null);
         setShowVoidConfirm(false);
@@ -1663,9 +1719,10 @@ export default function PosIndex() {
         promo_id: number | null;
         loyalty_points: number;
     }) => {
-        if (!cart.length) return;
+        if (!cart.length && !rewardClaim) return;
         setLoading(true);
         setError(null);
+        const claim = rewardClaim;
         router.post(
             routes.pos.store(),
             {
@@ -1673,7 +1730,8 @@ export default function PosIndex() {
                 payment_method: payData.payment_method,
                 payment_amount: payData.payment_amount,
                 customer_name: payData.customer_name || null,
-                customer_id: payData.customer_id,
+                customer_id: payData.customer_id ?? claim?.customer.id ?? linkedMember?.id ?? null,
+                reward_code: claim?.code ?? null,
                 due_date: payData.due_date ?? null,
                 credit_notes: payData.credit_notes ?? null,
                 discount_percent: payData.discount_percent,
@@ -1698,7 +1756,7 @@ export default function PosIndex() {
                     setReceipt({
                         receipt_number: r.receipt_number ?? '—',
                         status: 'completed',
-                        payment_method: payData.payment_method,
+                        payment_method: r.payment_method ?? payData.payment_method,
                         payment_amount: payData.payment_amount,
                         amount_paid: r.amount_paid ?? payData.payment_amount,
                         balance_due: r.balance_due ?? 0,
@@ -1713,6 +1771,8 @@ export default function PosIndex() {
                                 payData.discount_percent > 0 ? `Discount ${payData.discount_percent}%` : null,
                                 r.promo_name ? `Promo: ${r.promo_name}` : null,
                                 r.service_charge_amount > 0 ? `Service charge ${fmtMoney(r.service_charge_amount, currency)}` : null,
+                                claim ? `Reward ${claim.code}: ${claim.points} pts` : null,
+                                r.loyalty_points_earned ? `Points earned: ${r.loyalty_points_earned} (balance ${r.loyalty_balance ?? '—'})` : null,
                             ]
                                 .filter(Boolean)
                                 .join(' | ') || null,
@@ -1721,17 +1781,28 @@ export default function PosIndex() {
                         branch_name: branch?.name,
                         table_label: r.table_label ?? (activeTicket ? `Table ${activeTicket.table_number}` : null),
                         business_type: branch?.business_type,
-                        items: cart.map((i) => ({
-                            product_name: i.name,
-                            variant_name: i.variant_name,
-                            quantity: i.qty,
-                            price: i.price,
-                            unit: i.unit,
-                            total: i.price * i.qty,
-                        })),
+                        items: [
+                            ...cart.map((i) => ({
+                                product_name: i.name,
+                                variant_name: i.variant_name,
+                                quantity: i.qty,
+                                price: i.price,
+                                unit: i.unit,
+                                total: i.price * i.qty,
+                            })),
+                            ...(claim?.items ?? []).map((i) => ({
+                                product_name: i.name,
+                                variant_name: `REWARD · ${i.points} pts`,
+                                quantity: i.quantity,
+                                price: 0,
+                                total: 0,
+                            })),
+                        ],
                     });
                     setShowPayment(false);
                     setCart([]);
+                    setRewardClaim(null);
+                    setLinkedMember(null);
                     setActiveTicket(null);
                     setLastScanned(null);
                     setLoading(false);
@@ -1743,6 +1814,37 @@ export default function PosIndex() {
                 },
             },
         );
+    };
+
+    /** Reward-only order: nothing to pay, so skip the tender screen and record a ₱0 redemption. */
+    const completeRedemption = async () => {
+        if (!rewardClaim || loading) return;
+        const confirmed = await confirmDialog({
+            title: 'Complete redemption?',
+            description: `Hand over ${rewardClaim.items.map((i) => `${i.quantity}× ${i.name}`).join(', ')} to ${rewardClaim.customer.name}. ${rewardClaim.points} points will be used and the stock deducted.`,
+            confirmLabel: 'Complete redemption',
+        });
+        if (!confirmed) return;
+        handleConfirm({
+            payment_method: 'cash',
+            payment_amount: 0,
+            customer_name: rewardClaim.customer.name,
+            customer_id: rewardClaim.customer.id,
+            discount_percent: 0,
+            discount_type: null,
+            promo_id: null,
+            loyalty_points: 0,
+        });
+    };
+
+    const openTender = () => {
+        setError(null);
+        if (cart.length === 0 && rewardClaim) {
+            completeRedemption();
+            return;
+        }
+        setPaymentMethodPreset('cash');
+        setShowPayment(true);
     };
 
     // Global Hardware Scanner Listener: Catches barcode & QR scanner bursts even if search input lost focus
@@ -1771,6 +1873,12 @@ export default function PosIndex() {
                 const scannedBuffer = scannerBufferRef.current.trim();
                 scannerBufferRef.current = '';
 
+                if (isLoyaltyCode(scannedBuffer)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openScanner(scannedBuffer);
+                    return;
+                }
                 if (scannedBuffer.length >= 2) {
                     const parsed = parseBarcodeMultiplier(scannedBuffer);
                     const term = parsed.term.trim().toLowerCase();
@@ -1807,7 +1915,7 @@ export default function PosIndex() {
 
         window.addEventListener('keydown', handleGlobalScan);
         return () => window.removeEventListener('keydown', handleGlobalScan);
-    }, [products, handleProductClick, refocus]);
+    }, [products, handleProductClick, refocus, openScanner]);
 
     // ── Leaving or reloading with an unfinished sale ────────────────────────────
     const leaveConfirmed = useRef(false);
@@ -1887,20 +1995,24 @@ export default function PosIndex() {
                 return;
             }
 
+            // F6: Scan a reward QR or member card
+            if (isKey('F6')) {
+                if (!showPayment) openScanner();
+                return;
+            }
+
             // F8: Void / Clear Transaction (opens confirmation modal)
             if (isKey('F8')) {
-                if (cart.length > 0 && !showPayment) {
+                if (hasOrder && !showPayment) {
                     clearCart();
                 }
                 return;
             }
 
-            // F9: Charge / Cash Tender
+            // F9: Charge / Cash Tender (or complete a reward-only order)
             if (isKey('F9')) {
-                if (cart.length > 0 && !showPayment) {
-                    setError(null);
-                    setPaymentMethodPreset('cash');
-                    setShowPayment(true);
+                if (hasOrder && !showPayment) {
+                    openTender();
                 }
                 return;
             }
@@ -1912,6 +2024,7 @@ export default function PosIndex() {
                 setShowPayment(false);
                 setShowVoidConfirm(false);
                 setVariantFor(null);
+                setScannerOpen(false);
                 setSearch('');
                 refocus();
                 return;
@@ -1946,7 +2059,7 @@ export default function PosIndex() {
             window.removeEventListener('help', handleHelp, { capture: true });
             (window as unknown as HelpKeyWindow).onhelp = null;
         };
-    }, [cart, clearCart, showPayment, refocus, reloadRegister, setFastMode]);
+    }, [cart, clearCart, showPayment, refocus, reloadRegister, setFastMode, hasOrder, openScanner, openTender]);
 
     // Protect an unfinished sale from being lost by leaving the register
     useEffect(() => {
@@ -1989,12 +2102,6 @@ export default function PosIndex() {
         searchRef.current?.focus();
     };
 
-    const openTender = () => {
-        setError(null);
-        setPaymentMethodPreset('cash');
-        setShowPayment(true);
-    };
-
     const orderTicketProps = {
         cart,
         subtotal,
@@ -2015,6 +2122,38 @@ export default function PosIndex() {
             setCart([]);
         },
         onOpenPending: () => setPendingOpen(true),
+        rewardClaim,
+        member: linkedMember,
+        onRemoveReward: () => setRewardClaim(null),
+        onUnlinkMember: () => setLinkedMember(null),
+    };
+
+    const addRewardToOrder = async (claim: RewardClaimInCart) => {
+        if (rewardClaim && rewardClaim.code !== claim.code) {
+            const replace = await confirmDialog({
+                title: 'Replace the reward in this order?',
+                description: `Reward ${rewardClaim.code} is already in the order. Only one reward QR can be used per sale.`,
+                confirmLabel: 'Replace',
+            });
+            if (!replace) return;
+        }
+        if (linkedMember && linkedMember.id !== claim.customer.id) setLinkedMember(null);
+        setRewardClaim(claim);
+        setScannerOpen(false);
+        setError(null);
+        refocus(50);
+    };
+
+    const linkMember = (member: LinkedMember) => {
+        if (rewardClaim && rewardClaim.customer.id !== member.id) {
+            setError(`This order has a reward for ${rewardClaim.customer.name}. Remove it before linking another member.`);
+            setScannerOpen(false);
+            return;
+        }
+        setLinkedMember(member);
+        setScannerOpen(false);
+        setError(null);
+        refocus(50);
     };
 
     // Combined search input
@@ -2168,6 +2307,22 @@ export default function PosIndex() {
 
                     <button
                         type="button"
+                        onClick={() => openScanner()}
+                        className={cn(
+                            'relative flex h-9 shrink-0 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-bold whitespace-nowrap transition-colors pointer-coarse:h-10 lg:px-3',
+                            rewardClaim || linkedMember
+                                ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                                : 'border-border bg-background text-muted-foreground hover:bg-muted',
+                        )}
+                        title="Scan a reward QR or member card (F6)"
+                        aria-label="Scan reward or member card"
+                    >
+                        <Gift className="h-4 w-4" />
+                        <span className="hidden lg:inline">Rewards</span>
+                    </button>
+
+                    <button
+                        type="button"
                         onClick={() => setPendingOpen(true)}
                         className={cn(
                             'relative flex h-9 shrink-0 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-bold whitespace-nowrap transition-colors pointer-coarse:h-10 lg:px-3',
@@ -2228,6 +2383,10 @@ export default function PosIndex() {
                                 pendingCount={pending.data.count}
                                 lastScanned={lastScanned}
                                 error={error}
+                                rewardClaim={rewardClaim}
+                                member={linkedMember}
+                                onRemoveReward={() => setRewardClaim(null)}
+                                onUnlinkMember={() => setLinkedMember(null)}
                             />
                         </div>
                     </div>
@@ -2300,7 +2459,9 @@ export default function PosIndex() {
                                                 <span className="block truncate text-[10px] font-bold tracking-widest text-[var(--pos-display-accent)] uppercase">
                                                     {activeTicket
                                                         ? `Table ${activeTicket.table_number} · View order`
-                                                        : cart.length === 0
+                                                        : cart.length === 0 && rewardClaim
+                                                          ? 'Reward only · View order'
+                                                          : cart.length === 0
                                                           ? 'No items yet'
                                                           : `${cart.length} line${cart.length === 1 ? '' : 's'} · View order`}
                                                 </span>
@@ -2309,10 +2470,10 @@ export default function PosIndex() {
                                         </button>
                                         <Button
                                             onClick={openTender}
-                                            disabled={cart.length === 0}
+                                            disabled={!hasOrder}
                                             className="h-12 shrink-0 gap-2 rounded-xl px-5 text-sm font-black shadow-md disabled:opacity-40"
                                         >
-                                            <Zap className="h-4 w-4" /> Charge
+                                            <Zap className="h-4 w-4" /> {cart.length === 0 && rewardClaim ? 'Complete' : 'Charge'}
                                         </Button>
                                     </div>
                                 </div>
@@ -2380,8 +2541,18 @@ export default function PosIndex() {
 
                         <button
                             type="button"
+                            onClick={() => openScanner()}
+                            className="flex cursor-pointer items-center gap-1 rounded-md border border-transparent px-2 py-0.5 transition-colors hover:border-border hover:bg-background hover:text-foreground"
+                            title="Scan a reward QR or member card (F6)"
+                        >
+                            <kbd className="py-0.2 rounded border border-border bg-background px-1.5 font-bold text-foreground">F6</kbd>
+                            <span>Rewards</span>
+                        </button>
+
+                        <button
+                            type="button"
                             onClick={() => {
-                                if (cart.length > 0) clearCart();
+                                if (hasOrder) clearCart();
                             }}
                             className="flex cursor-pointer items-center gap-1 rounded-md border border-transparent px-2 py-0.5 transition-colors hover:border-border hover:bg-background hover:text-foreground"
                             title="Void / Clear Active Transaction (F8)"
@@ -2393,11 +2564,7 @@ export default function PosIndex() {
                         <button
                             type="button"
                             onClick={() => {
-                                if (cart.length > 0) {
-                                    setError(null);
-                                    setPaymentMethodPreset('cash');
-                                    setShowPayment(true);
-                                }
+                                if (hasOrder) openTender();
                             }}
                             className="flex cursor-pointer items-center gap-1 rounded-md border border-transparent px-2 py-0.5 transition-colors hover:border-border hover:bg-background hover:text-foreground"
                             title="Tender Cash / Pay (F9)"
@@ -2450,7 +2617,7 @@ export default function PosIndex() {
                     subtotal={subtotal}
                     settings={settings}
                     currency={currency}
-                    customers={customers}
+                    customers={customerOptions}
                     customerNameRequired={requireCustomerName}
                     promos={promos}
                     cart={cart}
@@ -2463,9 +2630,22 @@ export default function PosIndex() {
                     loading={loading}
                     serverError={error}
                     initialMethod={paymentMethodPreset}
-                    preselectedCustomerId={activeTicket?.customer?.id ?? null}
+                    preselectedCustomerId={rewardClaim?.customer.id ?? linkedMember?.id ?? activeTicket?.customer?.id ?? null}
+                    rewardClaim={rewardClaim}
                 />
             )}
+
+            <LoyaltyScanner
+                open={scannerOpen}
+                initialCode={scannerCode}
+                currency={currency}
+                onClose={() => {
+                    setScannerOpen(false);
+                    refocus(50);
+                }}
+                onAddReward={addRewardToOrder}
+                onLinkMember={linkMember}
+            />
 
             <PendingOrdersPanel
                 open={pendingOpen}

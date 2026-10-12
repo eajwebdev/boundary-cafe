@@ -74,6 +74,25 @@ export interface ActivePromo {
     expires_at: string | null;
 }
 
+/** A scanned reward QR waiting in the order (PosController::scanReward → LoyaltyRewardService::claimToPos). */
+export interface RewardClaimInCart {
+    code: string;
+    points: number;
+    expires_at: string;
+    customer: { id: number; name: string; customer_number: string; contact_number: string | null; loyalty_points: number };
+    items: { product_id: number; variant_id: number | null; name: string; quantity: number; points: number; image: string | null; retail_price: number }[];
+}
+
+/** A member identified by scanning their loyalty card or looking up their mobile number. */
+export interface LinkedMember {
+    id: number;
+    name: string;
+    customer_number: string;
+    contact_number: string | null;
+    points: number;
+    reserved_points: number;
+}
+
 export interface CustomerOption {
     id: number;
     name: string;

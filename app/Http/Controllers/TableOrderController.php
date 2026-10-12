@@ -202,7 +202,7 @@ class TableOrderController extends Controller
 
         $pickups = OnlineOrder::with('items')
             ->where('branch_id', $branchId)
-            ->where('fulfillment_type', 'pickup')
+            ->whereIn('fulfillment_type', [OnlineOrder::FULFILLMENT_PICKUP, OnlineOrder::FULFILLMENT_DINE_IN])
             ->whereIn('status', [OnlineOrder::STATUS_READY, OnlineOrder::STATUS_PREPARING, OnlineOrder::STATUS_ACCEPTED])
             ->orderBy('created_at')
             ->get()
@@ -213,6 +213,9 @@ class TableOrderController extends Controller
                 'status_label' => OnlineOrder::statusLabel($o->status),
                 'customer_name' => $o->contact_name,
                 'contact_number' => $o->contact_number,
+                'fulfillment_type' => $o->fulfillment_type,
+                'fulfillment_label' => OnlineOrder::fulfillmentLabel($o->fulfillment_type),
+                'table_number' => $o->table_number,
                 'total' => (float) $o->total,
                 'item_count' => (int) $o->items->sum('quantity'),
                 'items' => $o->items->map(fn ($i) => "{$i->quantity}× {$i->product_name}".($i->variant_name ? " ({$i->variant_name})" : ''))->values(),

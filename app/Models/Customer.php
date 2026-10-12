@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -18,6 +19,7 @@ class Customer extends Authenticatable
         'loyalty_token',
         'loyalty_enabled',
         'loyalty_points',
+        'reserved_points',
         'lifetime_points_earned',
         'lifetime_points_redeemed',
         'joined_at',
@@ -31,6 +33,7 @@ class Customer extends Authenticatable
         'notes',
         'is_active',
         'last_login_at',
+        'rewards_popup_seen_on',
     ];
 
     protected $hidden = [
@@ -43,6 +46,7 @@ class Customer extends Authenticatable
         'is_active' => 'boolean',
         'loyalty_enabled' => 'boolean',
         'loyalty_points' => 'integer',
+        'reserved_points' => 'integer',
         'lifetime_points_earned' => 'integer',
         'lifetime_points_redeemed' => 'integer',
         'joined_at' => 'date',
@@ -51,6 +55,7 @@ class Customer extends Authenticatable
         'email_verified_at' => 'datetime',
         'phone_verified_at' => 'datetime',
         'last_login_at' => 'datetime',
+        'rewards_popup_seen_on' => 'date',
     ];
 
     /** Normalise PH mobile numbers to 09XXXXXXXXX so lookups and uniqueness are reliable. */
@@ -84,14 +89,61 @@ class Customer extends Authenticatable
         return ! empty($this->attributes['password'] ?? null);
     }
 
+    /**
+     * A walk-in record created at the POS: no password and no Google/Facebook login yet.
+     * Whoever registers with its mobile number takes it over (and keeps its points).
+     */
+    public function isWalkIn(): bool
+    {
+        return ! $this->hasOnlineAccount() && ! $this->socialAccounts()->exists();
+    }
+
+    public function socialAccounts(): HasMany
+    {
+        return $this->hasMany(CustomerSocialAccount::class);
+    }
+
+    /** Customers who registered on the storefront, with a password or a Google/Facebook login. */
+    public function scopeRegisteredOnline(Builder $query): void
+    {
+        $query->where(fn (Builder $q) => $q->whereNotNull('password')->orWhereHas('socialAccounts'));
+    }
+
+    /**
+     * Customers a branch may see and serve: its own walk-ins, unassigned records and every registered
+     * customer. A storefront account is shop-wide, so it is usable at any branch, not just the one it signed up under.
+     */
+    public function scopeVisibleToBranch(Builder $query, ?int $branchId): void
+    {
+        if ($branchId === null) {
+            return;
+        }
+
+        $query->where(fn (Builder $q) => $q
+            ->where('branch_id', $branchId)
+            ->orWhereNull('branch_id')
+            ->orWhere(fn (Builder $registered) => $registered->registeredOnline()));
+    }
+
     protected static function booted(): void
     {
         static::creating(function (Customer $customer) {
             $token = (string) Str::uuid();
             $customer->loyalty_token ??= $token;
-            $customer->customer_number ??= SystemSetting::orderPrefix().'-'.strtoupper(substr(str_replace('-', '', $token), 0, 10));
+            $customer->customer_number ??= static::nextCustomerNumber();
             $customer->joined_at ??= today();
         });
+    }
+
+    /** Member numbers run in sign-up order: C-0001, C-0002 … C-9999, C-10000. */
+    public static function nextCustomerNumber(): string
+    {
+        $last = static::where('customer_number', 'like', 'C-%')
+            ->orderByRaw('LENGTH(customer_number) DESC')
+            ->orderByDesc('customer_number')
+            ->value('customer_number');
+
+        return 'C-'.str_pad((string) ((int) substr((string) $last, 2) + 1), 4, '0', STR_PAD_LEFT);
     }
 
     public function branch(): BelongsTo
@@ -112,6 +164,22 @@ class Customer extends Authenticatable
     public function loyaltyTransactions(): HasMany
     {
         return $this->hasMany(LoyaltyTransaction::class)->latest();
+    }
+
+    public function rewardClaims(): HasMany
+    {
+        return $this->hasMany(LoyaltyRewardClaim::class)->latest();
+    }
+
+    /** "0917•••4567" — safe to print on a loyalty card. */
+    public function maskedContactNumber(): ?string
+    {
+        $number = $this->contact_number;
+        if (! $number || strlen($number) < 7) {
+            return $number;
+        }
+
+        return substr($number, 0, 4).str_repeat('•', strlen($number) - 8).substr($number, -4);
     }
 
     public function addresses(): HasMany

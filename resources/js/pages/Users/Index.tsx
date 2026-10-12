@@ -20,6 +20,7 @@ import {
     List,
     Coffee,
     UtensilsCrossed,
+    Bike,
     Scissors,
     Monitor,
     Smartphone,
@@ -167,6 +168,7 @@ const roleBadgeColor: Record<string, string> = {
     manager: 'bg-amber-100  text-amber-700  dark:bg-amber-900/30  dark:text-amber-400',
     cashier: 'bg-green-100  text-green-700  dark:bg-green-900/30  dark:text-green-400',
     waiter: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
+    rider: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
 };
 
 const branchTypeBadge: Record<string, string> = {
@@ -214,7 +216,7 @@ function AccessGrid({ menus, value, onChange }: { menus: Record<string, MenuGrou
         { label: 'All access', ids: Object.values(menus).flatMap((g) => Object.keys(g)) },
         {
             label: 'Manager preset',
-            ids: ['1', '2', '3', '4', '5', '6', '11', '12', '13', '14', '15', '16', '17', '47', '18', '19', '20', '21', '22', '29'],
+            ids: ['1', '2', '3', '4', '5', '6', '11', '12', '13', '14', '15', '16', '17', '47', '18', '19', '20', '21', '22', '29', '48', '50'],
         },
         { label: 'Cashier preset', ids: ['1', '2', '4', '14', '15', '16'] },
         { label: 'Clear all', ids: [] },
@@ -661,6 +663,17 @@ function UserDrawer({
                                     <p className="mt-0.5 text-xs text-muted-foreground">
                                         This account can only take table orders. Other menus can't be granted to an order taker; change the role to
                                         give wider access.
+                                    </p>
+                                </div>
+                            </div>
+                        ) : form.role === 'rider' ? (
+                            <div className="flex items-start gap-3 rounded-xl border border-border bg-muted/30 p-4">
+                                <Bike className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                                <div>
+                                    <p className="text-sm font-semibold text-foreground">Delivery rider: Rider Dashboard only</p>
+                                    <p className="mt-0.5 text-xs text-muted-foreground">
+                                        This account sees its deliveries, a live map and the cash it holds. Other menus can't be granted to a rider;
+                                        change the role to give wider access.
                                     </p>
                                 </div>
                             </div>

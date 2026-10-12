@@ -90,7 +90,7 @@ class AuthController extends Controller
 
         // A walk-in customer created at the POS (no password yet) can claim their record and keep their points.
         $existing = Customer::where('contact_number', $request->input('contact_number'))->first();
-        $claimable = $existing && ! $existing->hasOnlineAccount();
+        $claimable = $existing && $existing->isWalkIn();
 
         $data = $request->validate([
             'name' => ['required', 'string', 'min:2', 'max:120'],

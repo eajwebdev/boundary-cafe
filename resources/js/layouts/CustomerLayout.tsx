@@ -1,16 +1,17 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Gift, Home, LogOut, ReceiptText, User } from 'lucide-react';
+import { Bell, Gift, Home, LogOut, ReceiptText, User } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { AuthTabs, LoginForm, RegisterForm } from '@/components/storefront/AuthForms';
+import RewardsPopup from '@/components/storefront/RewardsPopup';
 import { useIsDesktop } from '@/components/storefront/ui';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { useBusinessName, useRewardsName } from '@/hooks/use-business-name';
 import { useLogoUrl } from '@/hooks/use-logo';
-import type { CustomerSession } from '@/lib/customer';
+import type { CustomerSession, RewardsPopupData } from '@/lib/customer';
 import { cn } from '@/lib/utils';
 
 type AuthMode = 'login' | 'register';
@@ -62,6 +63,7 @@ export default function CustomerLayout({ children, title, headerSlot, headerEnd,
         customer: CustomerSession | null;
         flash?: { success?: string | null; error?: string | null };
         barangays?: string[];
+        rewards_popup?: RewardsPopupData | null;
     }>();
     const customer = page.props.customer ?? null;
     const path = page.url.split('?')[0];
@@ -94,6 +96,11 @@ export default function CustomerLayout({ children, title, headerSlot, headerEnd,
             document.body.classList.remove('bc-shop-body');
         };
     }, []);
+
+    // The daily rewards popup never interrupts checkout, sign-up or a reward QR on screen.
+    const rewardsPopup = page.props.rewards_popup ?? null;
+    const showRewardsPopup = !!customer && !!rewardsPopup && !hideBottomNav && !path.startsWith('/checkout') && !path.startsWith('/account/rewards');
+    const unread = customer?.unread_notifications ?? 0;
 
     const isActive = (href: string) => (href === '/' ? path === '/' : href === '/account' ? path === '/account' : path.startsWith(href));
     const maxW = wide ? 'max-w-[1320px]' : 'max-w-5xl';
@@ -172,6 +179,22 @@ export default function CustomerLayout({ children, title, headerSlot, headerEnd,
 
                         {customer ? (
                             <div className="flex shrink-0 items-center gap-1.5">
+                                <Link
+                                    href="/account/notifications"
+                                    className={cn(
+                                        'bc-press relative flex h-9 w-9 items-center justify-center rounded-full text-shop-muted hover:bg-shop-sunken hover:text-shop-ink lg:h-10 lg:w-10',
+                                        isActive('/account/notifications') && 'bg-shop-sunken text-shop-ink',
+                                    )}
+                                    aria-label={unread > 0 ? `Notifications, ${unread} new` : 'Notifications'}
+                                    title="Notifications"
+                                >
+                                    <Bell className="h-[18px] w-[18px]" />
+                                    {unread > 0 && (
+                                        <span className="absolute -top-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-shop-accent px-1 text-[10px] font-bold text-shop-on-accent tabular-nums">
+                                            {unread > 9 ? '9+' : unread}
+                                        </span>
+                                    )}
+                                </Link>
                                 <Link
                                     href="/account/rewards"
                                     className="bc-press flex h-9 items-center gap-1.5 rounded-full bg-shop-navy px-3 text-sm font-semibold text-shop-navy-ink lg:h-10"
@@ -267,6 +290,8 @@ export default function CustomerLayout({ children, title, headerSlot, headerEnd,
                     </nav>
                 )}
             </div>
+
+            {showRewardsPopup && rewardsPopup && <RewardsPopup data={rewardsPopup} firstName={customer!.first_name} />}
 
             {/* ── Login / register: dialog on desktop, bottom sheet on phones ── */}
             {isDesktop ? (

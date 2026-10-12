@@ -41,6 +41,7 @@ export interface SharedUser {
     is_manager: boolean;
     is_cashier: boolean;
     is_waiter: boolean;
+    is_rider: boolean;
     is_admin: boolean;
     can_approve: boolean;
     pos_layout: string;
