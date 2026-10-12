@@ -36,6 +36,20 @@ class LoginAuthControllerTest extends TestCase
         $this->assertAuthenticatedAs(User::where('username', 'waiter')->firstOrFail());
     }
 
+    public function test_demo_shortcut_signs_in_seeded_rider_and_opens_the_rider_dashboard(): void
+    {
+        config()->set('app.demo', true);
+        $this->seed([BranchSeeder::class, UserSeeder::class]);
+
+        $this->get(route('login'))->assertInertia(fn (Assert $page) => $page
+            ->where('demo_users', fn ($users) => collect($users)->contains(fn ($user) => $user['username'] === 'rider' && $user['role_label'] === 'Delivery Rider')));
+
+        $this->post(route('login.demo'), ['username' => 'rider'])
+            ->assertRedirect(route('rider.dashboard'));
+
+        $this->assertAuthenticatedAs(User::where('username', 'rider')->firstOrFail());
+    }
+
     public function test_demo_shortcut_is_unavailable_when_demo_is_disabled(): void
     {
         config()->set('app.demo', false);

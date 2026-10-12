@@ -23,6 +23,7 @@ class LoginAuthController extends Controller
         'cashier_tag' => User::ROLE_CASHIER,
         'cashier_mab' => User::ROLE_CASHIER,
         'waiter' => User::ROLE_WAITER,
+        'rider' => User::ROLE_RIDER,
     ];
 
     private const MAX_ATTEMPTS = 5;
@@ -51,6 +52,7 @@ class LoginAuthController extends Controller
                     User::ROLE_MANAGER => 'Store Manager',
                     User::ROLE_CASHIER => 'Cashier',
                     User::ROLE_WAITER => 'Waiter / Server',
+                    User::ROLE_RIDER => 'Delivery Rider',
                     default => ucfirst(str_replace('_', ' ', $u->role)),
                 };
 

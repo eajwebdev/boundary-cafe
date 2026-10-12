@@ -1,7 +1,7 @@
 'use client';
 
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { ArrowRight, Coffee, Eye, EyeOff, Loader2, Lock, MapPin, ShieldCheck, Sparkles, User, Zap } from 'lucide-react';
+import { ArrowRight, Bike, Coffee, Eye, EyeOff, Loader2, Lock, MapPin, ShieldCheck, Sparkles, User, Zap } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
@@ -230,6 +230,8 @@ export default function Login({
                                                 <span className="bc-login-role-icon">
                                                     {isThisLoggingIn ? (
                                                         <Loader2 className="animate-spin" aria-hidden="true" />
+                                                    ) : user.role === 'rider' ? (
+                                                        <Bike aria-hidden="true" />
                                                     ) : (
                                                         <Coffee aria-hidden="true" />
                                                     )}
