@@ -33,6 +33,7 @@ class AuthController extends Controller
         return Inertia::render('Customer/Auth', [
             'mode' => 'login',
             'barangays' => Barangay::deliverable()->ordered()->pluck('name'),
+            'socialProviders' => $this->socialProviders(),
         ]);
     }
 
@@ -45,6 +46,7 @@ class AuthController extends Controller
         return Inertia::render('Customer/Auth', [
             'mode' => 'register',
             'barangays' => Barangay::deliverable()->ordered()->pluck('name'),
+            'socialProviders' => $this->socialProviders(),
         ]);
     }
 
@@ -147,5 +149,14 @@ class AuthController extends Controller
         $request->session()->regenerateToken();
 
         return redirect('/')->with('success', 'You have been logged out.');
+    }
+
+    /** @return array{google: bool, facebook: bool} */
+    private function socialProviders(): array
+    {
+        return [
+            'google' => (bool) (config('services.google.client_id') && config('services.google.client_secret')),
+            'facebook' => (bool) (config('services.facebook.client_id') && config('services.facebook.client_secret')),
+        ];
     }
 }

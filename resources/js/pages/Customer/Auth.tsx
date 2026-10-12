@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import { ArrowLeft, Bike, Gift, MapPin } from 'lucide-react';
 import { useState } from 'react';
 
@@ -7,8 +7,10 @@ import { RouteLine } from '@/components/storefront/ui';
 import { useBusinessName, useRewardsName } from '@/hooks/use-business-name';
 import { useLogoUrl } from '@/hooks/use-logo';
 import CustomerLayout from '@/layouts/CustomerLayout';
+import { redirect as socialRedirect } from '@/routes/customer/social';
 
-export default function CustomerAuth({ mode: initialMode, barangays }: { mode: 'login' | 'register'; barangays: string[] }) {
+export default function CustomerAuth({ mode: initialMode, barangays, socialProviders }: { mode: 'login' | 'register'; barangays: string[]; socialProviders: { google: boolean; facebook: boolean } }) {
+    const { errors } = usePage<{ errors: { social?: string } }>().props;
     const logoUrl = useLogoUrl();
     const businessName = useBusinessName();
     const rewardsName = useRewardsName();
@@ -64,7 +66,17 @@ export default function CustomerAuth({ mode: initialMode, barangays }: { mode: '
                             {mode === 'login' ? 'Log in to continue your order.' : 'It takes a minute — and your first points are waiting.'}
                         </p>
                         <AuthTabs mode={mode} onChange={setMode} />
+                        {errors.social && <p role="alert" className="mt-4 rounded-2xl bg-shop-danger/10 p-3 text-sm text-shop-danger">{errors.social}</p>}
                         <div className="mt-6">{mode === 'login' ? <LoginForm /> : <RegisterForm barangays={barangays} />}</div>
+                        {(socialProviders.google || socialProviders.facebook) && (
+                            <div className="mt-6 space-y-3">
+                                <p className="text-center text-sm text-shop-muted">Or continue with</p>
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                    {socialProviders.google && <a href={socialRedirect.url('google')} className="bc-press flex h-12 items-center justify-center rounded-2xl border border-shop-line font-semibold hover:bg-shop-sunken">Google</a>}
+                                    {socialProviders.facebook && <a href={socialRedirect.url('facebook')} className="bc-press flex h-12 items-center justify-center rounded-2xl border border-shop-line font-semibold hover:bg-shop-sunken">Facebook</a>}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

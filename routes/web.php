@@ -65,6 +65,10 @@ Route::prefix('account')->name('customer.')->group(function () {
     Route::post('/login', [Customer\AuthController::class, 'login'])->middleware('throttle:10,1')->name('login.post');
     Route::get('/register', [Customer\AuthController::class, 'showRegister'])->name('register');
     Route::post('/register', [Customer\AuthController::class, 'register'])->middleware('throttle:6,1')->name('register.post');
+    Route::get('/social/complete', [Customer\SocialAuthController::class, 'showComplete'])->name('social.complete');
+    Route::post('/social/complete', [Customer\SocialAuthController::class, 'complete'])->middleware('throttle:6,1')->name('social.complete.post');
+    Route::get('/social/{provider}/redirect', [Customer\SocialAuthController::class, 'redirect'])->whereIn('provider', ['google', 'facebook'])->middleware('throttle:10,1')->name('social.redirect');
+    Route::get('/social/{provider}/callback', [Customer\SocialAuthController::class, 'callback'])->whereIn('provider', ['google', 'facebook'])->middleware('throttle:10,1')->name('social.callback');
 
     // Public aliases for the quotation pages — no sign-in.
     Route::get('/quote', fn (Request $request) => redirect()->route('quotation', $request->query()))->name('quote');

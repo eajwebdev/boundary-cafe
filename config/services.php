@@ -22,6 +22,17 @@ return [
         'key' => env('RESEND_API_KEY'),
     ],
 
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+    ],
+
+    'facebook' => [
+        'client_id' => env('FACEBOOK_CLIENT_ID'),
+        'client_secret' => env('FACEBOOK_CLIENT_SECRET'),
+        'graph_version' => env('FACEBOOK_GRAPH_VERSION', 'v25.0'),
+    ],
+
     // Used only by `php artisan eaj:product-images` to generate the EAJ menu photos.
     'openai' => [
         'key' => env('OPENAI_API_KEY'),
