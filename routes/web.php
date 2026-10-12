@@ -170,6 +170,8 @@ Route::middleware(['auth:web', 'order-taker', 'rider-only'])->group(function () 
         Route::get('/', 'index')->name('dashboard');
         Route::get('/feed', 'feed')->name('feed');
         Route::post('/position', 'position')->middleware('throttle:60,1')->name('position');
+        Route::get('/route', 'route')->middleware('throttle:40,1')->name('route');
+        Route::get('/history', 'history')->name('history');
         Route::post('/deliveries/{onlineOrder}/claim', 'claim')->name('claim');
         Route::post('/deliveries/{onlineOrder}/picked-up', 'pickUp')->name('picked-up');
         Route::post('/deliveries/{onlineOrder}/delivered', 'deliver')->name('delivered');

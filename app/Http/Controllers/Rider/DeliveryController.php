@@ -7,8 +7,10 @@ use App\Models\OnlineOrder;
 use App\Models\User;
 use App\Services\DeliveryZoneService;
 use App\Services\RiderDeliveryService;
+use App\Services\RoutingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -18,7 +20,7 @@ use Inertia\Response;
  */
 class DeliveryController extends Controller
 {
-    public function __construct(private RiderDeliveryService $deliveries, private DeliveryZoneService $zone) {}
+    public function __construct(private RiderDeliveryService $deliveries, private DeliveryZoneService $zone, private RoutingService $routing) {}
 
     public function index(Request $request): Response
     {
@@ -75,6 +77,79 @@ class DeliveryController extends Controller
         );
 
         return response()->json(['ok' => true]);
+    }
+
+    /** Road route for in-app navigation; `route` is null when routing is unavailable (the app falls back to a straight line). */
+    public function route(Request $request): JsonResponse
+    {
+        $this->rider($request);
+        $data = $request->validate([
+            'from_lat' => ['required', 'numeric', 'between:-90,90'],
+            'from_lng' => ['required', 'numeric', 'between:-180,180'],
+            'to_lat' => ['required', 'numeric', 'between:-90,90'],
+            'to_lng' => ['required', 'numeric', 'between:-180,180'],
+        ]);
+
+        return response()->json([
+            'route' => $this->routing->route((float) $data['from_lat'], (float) $data['from_lng'], (float) $data['to_lat'], (float) $data['to_lng']),
+        ]);
+    }
+
+    /**
+     * The rider's own deliveries with filters: status (delivered / in progress / cancelled) and a date
+     * range on the day the delivery finished (or was assigned, for ones still in progress).
+     */
+    public function history(Request $request): JsonResponse
+    {
+        $rider = $this->rider($request);
+        $data = $request->validate([
+            'status' => ['nullable', 'in:all,delivered,active,cancelled'],
+            'from' => ['nullable', 'date_format:Y-m-d'],
+            'to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
+        ]);
+        $status = $data['status'] ?? 'all';
+        $day = 'COALESCE(completed_at, cancelled_at, rider_assigned_at, created_at)';
+
+        $query = OnlineOrder::query()
+            ->where('rider_id', $rider->id)
+            ->when($status === 'delivered', fn ($q) => $q->where('status', OnlineOrder::STATUS_COMPLETED))
+            ->when($status === 'active', fn ($q) => $q->active())
+            ->when($status === 'cancelled', fn ($q) => $q->whereIn('status', [OnlineOrder::STATUS_CANCELLED, OnlineOrder::STATUS_REJECTED]))
+            ->when($data['from'] ?? null, fn ($q, $from) => $q->whereRaw("{$day} >= ?", [Carbon::parse($from)->startOfDay()]))
+            ->when($data['to'] ?? null, fn ($q, $to) => $q->whereRaw("{$day} <= ?", [Carbon::parse($to)->endOfDay()]));
+
+        $delivered = (clone $query)->where('status', OnlineOrder::STATUS_COMPLETED);
+        $cod = (clone $delivered)->where('payment_method', 'cod');
+
+        $page = (clone $query)->with('items')->orderByRaw("{$day} DESC")->orderByDesc('id')->paginate(20);
+
+        return response()->json([
+            'summary' => [
+                'deliveries' => (clone $query)->count(),
+                'delivered' => (clone $delivered)->count(),
+                'sales' => round((float) (clone $delivered)->sum('total'), 2),
+                'cash_collected' => round((float) (clone $cod)->sum('total'), 2),
+                'cash_handed_over' => round((float) (clone $cod)->whereNotNull('cash_remitted_at')->sum('total'), 2),
+            ],
+            'rows' => collect($page->items())->map(fn (OnlineOrder $o) => [
+                'id' => $o->id,
+                'order_number' => $o->order_number,
+                'status' => $o->status,
+                'status_label' => OnlineOrder::statusLabel($o->status),
+                'customer_name' => $o->contact_name,
+                'barangay' => $o->barangay,
+                'total' => (float) $o->total,
+                'payment_method' => $o->payment_method,
+                'cash_remitted' => $o->cash_remitted_at !== null,
+                'item_count' => (int) $o->items->sum('quantity'),
+                'cancel_reason' => $o->cancel_reason,
+                'assigned_at' => $o->rider_assigned_at?->toIso8601String(),
+                'completed_at' => $o->completed_at?->toIso8601String(),
+                'cancelled_at' => $o->cancelled_at?->toIso8601String(),
+            ])->values(),
+            'page' => $page->currentPage(),
+            'has_more' => $page->hasMorePages(),
+        ]);
     }
 
     private function rider(Request $request): User

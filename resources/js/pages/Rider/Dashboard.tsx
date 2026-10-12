@@ -5,13 +5,16 @@ import {
     CheckCircle2,
     ChevronDown,
     Clock,
+    CloudUpload,
     Crosshair,
-    ExternalLink,
+    History,
+    Inbox,
     Loader2,
     LocateFixed,
     LocateOff,
     LogOut,
     MapPin,
+    MapPinned,
     MessageSquareText,
     Navigation,
     PackageCheck,
@@ -29,32 +32,14 @@ import type { MapPoint } from '@/components/DeliveryMap';
 import { useBusinessName } from '@/hooks/use-business-name';
 import { useLogoUrl } from '@/hooks/use-logo';
 import { jsonRequest, manilaTime, pesoExact } from '@/lib/customer';
-import { distanceKm, formatKm, googleRouteUrl, planRoute, rideMinutes, roadKm, type LatLng } from '@/lib/delivery-route';
+import { distanceKm, formatKm, planRoute, rideMinutes, roadKm, type LatLng } from '@/lib/delivery-route';
 import { cn } from '@/lib/utils';
 
-const DeliveryMap = lazy(() => import('@/components/DeliveryMap'));
+import HistoryView from './HistoryView';
+import NavigationView from './NavigationView';
+import { STATUS_TONE, useActionQueue, type Delivery, type RiderAction } from './rider-shared';
 
-interface Delivery {
-    id: number;
-    order_number: string;
-    status: string;
-    status_label: string;
-    customer_name: string;
-    contact_number: string;
-    barangay: string | null;
-    address: string | null;
-    landmark: string | null;
-    notes_for_rider: string | null;
-    customer_note: string | null;
-    lat: number | null;
-    lng: number | null;
-    payment_method: string;
-    total: number;
-    collect: number;
-    estimated_ready_at: string | null;
-    created_at: string;
-    items: { name: string; variant: string | null; quantity: number; note: string | null }[];
-}
+const DeliveryMap = lazy(() => import('@/components/DeliveryMap'));
 
 interface Position {
     lat: number;
@@ -85,20 +70,13 @@ interface Props extends DashboardData {
     store: { name: string; lat: number; lng: number };
 }
 
-type Tab = 'mine' | 'available' | 'done';
+type Tab = 'stops' | 'available' | 'history';
 type GpsState = 'starting' | 'on' | 'denied' | 'unavailable';
 
 /** How often the dashboard refreshes, the fastest the phone sends its GPS, and when data counts as out of date. */
 const POLL_MS = 8000;
 const SEND_EVERY_MS = 5000;
 const STALE_AFTER_MS = 25000;
-
-const STATUS_TONE: Record<string, string> = {
-    accepted: 'bg-muted text-muted-foreground',
-    preparing: 'bg-amber-500/15 text-amber-800 dark:text-amber-200',
-    ready: 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-200',
-    out_for_delivery: 'bg-violet-500/15 text-violet-800 dark:text-violet-200',
-};
 
 /**
  * Shares the phone's GPS while this page is open. A fix that fails to upload (weak signal) is kept and
@@ -193,14 +171,15 @@ function useOnline() {
 }
 
 export default function RiderDashboard({ store, ...initial }: Props) {
-    const { auth } = usePage().props as unknown as { auth: { user: { fname: string; full_name: string } } };
+    const { auth } = usePage().props as unknown as { auth: { user: { id: number; fname: string; full_name: string } } };
     const businessName = useBusinessName();
     const logo = useLogoUrl();
     const [data, setData] = useState<DashboardData>(initial);
     const [busy, setBusy] = useState<number | null>(null);
     const [refreshing, setRefreshing] = useState(false);
-    const [tab, setTab] = useState<Tab>(initial.mine.length > 0 || initial.available.length === 0 ? 'mine' : 'available');
+    const [tab, setTab] = useState<Tab>(initial.mine.length > 0 || initial.available.length === 0 ? 'stops' : 'available');
     const [selected, setSelected] = useState<string | null>(null);
+    const [navigatingId, setNavigatingId] = useState<number | null>(null);
     const [fitNonce, setFitNonce] = useState(0);
     const [lastSync, setLastSync] = useState(() => Date.now());
     const [now, setNow] = useState(() => Date.now());
@@ -219,7 +198,7 @@ export default function RiderDashboard({ store, ...initial }: Props) {
                 if (newlyMine.length) {
                     toast.success(`New delivery for you: ${newlyMine.map((d) => d.customer_name).join(', ')}`);
                     navigator.vibrate?.([180, 90, 180]);
-                    setTab('mine');
+                    setTab('stops');
                 }
                 knownMine.current = new Set(next.mine.map((d) => d.id));
                 setData(next);
@@ -233,6 +212,7 @@ export default function RiderDashboard({ store, ...initial }: Props) {
         },
         [gps],
     );
+    const queue = useActionQueue(auth.user.id, () => refresh());
 
     useEffect(() => {
         const poll = window.setInterval(() => document.visibilityState === 'visible' && refresh(), POLL_MS);
@@ -248,27 +228,25 @@ export default function RiderDashboard({ store, ...initial }: Props) {
         };
     }, [refresh]);
 
-    const act = async (delivery: Delivery, url: string) => {
-        setBusy(delivery.id);
+    const act = async (d: Delivery, action: RiderAction, url: string, label: string) => {
+        setBusy(d.id);
         try {
-            const res = await jsonRequest<{ message: string }>(url, { method: 'POST' });
-            toast.success(res.message);
-            navigator.vibrate?.(60);
-            await refresh();
-        } catch (e) {
-            toast.error((e as Error).message);
+            if (await queue.run(d.id, action, url, label)) await refresh();
         } finally {
             setBusy(null);
         }
     };
 
+    const pickUpOrder = (d: Delivery) => act(d, 'picked-up', pickUp.url(d.id), `Picked up ${d.order_number}`);
     const markDelivered = async (d: Delivery) => {
         const confirmed = await confirmDialog({
             title: `Delivered to ${d.customer_name}?`,
             description: d.collect > 0 ? `Collect ${pesoExact(d.collect)} cash before confirming.` : 'Confirm you handed over the order.',
             confirmLabel: d.collect > 0 ? `Cash collected · ${pesoExact(d.collect)}` : 'Delivered',
         });
-        if (confirmed) await act(d, deliver.url(d.id));
+        if (!confirmed) return;
+        await act(d, 'delivered', deliver.url(d.id), `Delivered ${d.order_number}`);
+        setNavigatingId((id) => (id === d.id ? null : id));
     };
 
     // ── Route: nearest-first from where the rider is (or the café when GPS is off) ──
@@ -284,18 +262,22 @@ export default function RiderDashboard({ store, ...initial }: Props) {
         [data.available, origin],
     );
     const routeStops = plan.filter((p) => p.stop.lat !== null && p.stop.lng !== null).map((p) => p.stop as Delivery & LatLng);
-    const routeUrl = googleRouteUrl(origin, routeStops);
+    const nextStop = plan.find((p) => p.stop.status === 'out_for_delivery' || p.stop.status === 'ready')?.stop ?? plan[0]?.stop ?? null;
+    const navigating = navigatingId !== null ? (data.mine.find((d) => d.id === navigatingId) ?? null) : null;
+
+    // Close navigation when its delivery is finished or taken away.
+    useEffect(() => {
+        if (navigatingId !== null && !data.mine.some((d) => d.id === navigatingId)) setNavigatingId(null);
+    }, [data.mine, navigatingId]);
 
     const points = useMemo<MapPoint[]>(() => {
         const list: MapPoint[] = [{ id: 'store', kind: 'store', lat: store.lat, lng: store.lng, label: store.name }];
-        if (tab !== 'done') {
-            available.forEach(
-                (d) =>
-                    d.lat !== null &&
-                    d.lng !== null &&
-                    list.push({ id: `drop-${d.id}`, kind: 'available', lat: d.lat, lng: d.lng, label: `Available · ${d.customer_name}` }),
-            );
-        }
+        available.forEach(
+            (d) =>
+                d.lat !== null &&
+                d.lng !== null &&
+                list.push({ id: `drop-${d.id}`, kind: 'available', lat: d.lat, lng: d.lng, label: `Available · ${d.customer_name}` }),
+        );
         plan.forEach(
             ({ stop: d, number }) =>
                 d.lat !== null &&
@@ -304,7 +286,7 @@ export default function RiderDashboard({ store, ...initial }: Props) {
         );
         if (me) list.push({ id: 'me', kind: 'rider', lat: me.lat, lng: me.lng, label: 'You' });
         return list;
-    }, [store, available, plan, me, tab]);
+    }, [store, available, plan, me]);
 
     const lines = useMemo<[string, string][]>(() => {
         const ids = [me ? 'me' : 'store', ...routeStops.map((s) => `drop-${s.id}`)];
@@ -315,14 +297,33 @@ export default function RiderDashboard({ store, ...initial }: Props) {
         if (!id.startsWith('drop-')) return;
         const deliveryId = Number(id.slice(5));
         setSelected(id);
-        setTab(data.mine.some((d) => d.id === deliveryId) ? 'mine' : 'available');
+        setTab(data.mine.some((d) => d.id === deliveryId) ? 'stops' : 'available');
         window.setTimeout(() => document.getElementById(`delivery-${deliveryId}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 80);
     };
 
     const stale = now - lastSync > STALE_AFTER_MS;
+    const queuedCount = queue.queue.length;
+
+    if (navigating) {
+        return (
+            <>
+                <Head title={`Navigate · ${navigating.customer_name}`} />
+                <NavigationView
+                    delivery={navigating}
+                    me={me}
+                    store={store}
+                    busy={busy === navigating.id}
+                    queued={!!queue.pendingFor(navigating.id)}
+                    onClose={() => setNavigatingId(null)}
+                    onPickUp={() => pickUpOrder(navigating)}
+                    onDelivered={() => markDelivered(navigating)}
+                />
+            </>
+        );
+    }
 
     return (
-        <div className="min-h-dvh bg-muted/40">
+        <div className="min-h-dvh bg-muted/40 pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
             <Head title="My deliveries" />
 
             <header className="sticky top-0 z-[1100] border-b border-border bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur">
@@ -336,7 +337,7 @@ export default function RiderDashboard({ store, ...initial }: Props) {
                     <button
                         type="button"
                         onClick={() => refresh(true)}
-                        className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-muted"
+                        className="flex h-11 w-11 items-center justify-center rounded-full hover:bg-muted"
                         aria-label="Refresh"
                     >
                         <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
@@ -348,7 +349,7 @@ export default function RiderDashboard({ store, ...initial }: Props) {
                                 router.post('/logout');
                             }
                         }}
-                        className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-muted"
+                        className="flex h-11 w-11 items-center justify-center rounded-full hover:bg-muted"
                         aria-label="Log out"
                     >
                         <LogOut className="h-4 w-4" />
@@ -358,196 +359,196 @@ export default function RiderDashboard({ store, ...initial }: Props) {
                     <p className="flex items-center gap-2 bg-amber-500/15 px-4 py-1.5 text-xs font-semibold text-amber-800 dark:text-amber-200">
                         <WifiOff className="h-3.5 w-3.5 shrink-0" />
                         {!online
-                            ? 'No internet. Showing the last update; your taps will work once you are back online.'
+                            ? 'No internet. Your taps are saved and sent when you are back online.'
                             : `Reconnecting… last update ${manilaTime(new Date(lastSync).toISOString())}`}
                     </p>
                 )}
+                {queuedCount > 0 && (
+                    <button
+                        type="button"
+                        onClick={() => queue.flush()}
+                        className="flex w-full items-center gap-2 bg-blue-500/15 px-4 py-1.5 text-left text-xs font-semibold text-blue-800 dark:text-blue-200"
+                    >
+                        <CloudUpload className="h-3.5 w-3.5 shrink-0" />
+                        {queuedCount} update{queuedCount === 1 ? '' : 's'} waiting to send · tap to retry now
+                    </button>
+                )}
                 {gps.state === 'denied' && (
                     <p className="bg-rose-500/15 px-4 py-1.5 text-xs font-semibold text-rose-700 dark:text-rose-300">
-                        Location is blocked. Allow location for this site so the café and your customers can see you.
+                        Location is blocked. Allow location for this site so you can navigate and the café can see you.
                     </p>
                 )}
             </header>
 
-            <div className="mx-auto max-w-6xl lg:grid lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-4 lg:px-4 lg:pt-4">
-                {/* ── Map: pinned under the header on phones, a full-height column on wide screens ── */}
-                <section className="sticky top-14 z-1000 h-[38dvh] border-b border-border bg-card lg:top-18 lg:h-[calc(100dvh-5.5rem)] lg:rounded-xl lg:border">
-                    <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading map…</div>}>
-                        <DeliveryMap
-                            points={points}
-                            lines={tab === 'done' ? [] : lines}
-                            fitKey={`${points
-                                .filter((p) => p.kind !== 'rider')
-                                .map((p) => p.id)
-                                .join(',')}|${fitNonce}|${me ? 1 : 0}`}
-                            focusId={selected}
-                            onSelect={selectFromMap}
-                            className="h-full w-full lg:rounded-xl"
-                        />
-                    </Suspense>
-                    <div className="pointer-events-none absolute bottom-5 left-2 z-1000 flex flex-wrap gap-1 rounded-lg bg-background/90 px-2 py-1 text-[11px] font-semibold shadow">
-                        <Legend color="#e11d48" label="Your stops" />
-                        <Legend color="#64748b" label="Available" />
-                        <Legend color="#0f172a" label="Café" />
-                    </div>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setSelected(null);
-                            setFitNonce((n) => n + 1);
-                        }}
-                        className="absolute top-2 right-2 z-1000 flex h-10 items-center gap-1.5 rounded-lg bg-background/95 px-3 text-xs font-bold shadow"
-                        aria-label="Show all pins"
-                    >
-                        <Crosshair className="h-4 w-4" /> Show all
-                    </button>
-                </section>
+            {tab === 'history' ? (
+                <main className="mx-auto max-w-2xl px-3 pt-3">
+                    <HistoryView />
+                </main>
+            ) : (
+                <div className="mx-auto max-w-6xl lg:grid lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-4 lg:px-4 lg:pt-4">
+                    {/* ── Overview map: pinned under the header on phones, a full-height column on wide screens ── */}
+                    <section className="sticky top-14 z-1000 h-[34dvh] border-b border-border bg-card lg:top-18 lg:h-[calc(100dvh-10rem)] lg:rounded-xl lg:border">
+                        <Suspense
+                            fallback={<div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading map…</div>}
+                        >
+                            <DeliveryMap
+                                points={points}
+                                lines={lines}
+                                fitKey={`${points
+                                    .filter((p) => p.kind !== 'rider')
+                                    .map((p) => p.id)
+                                    .join(',')}|${fitNonce}|${me ? 1 : 0}`}
+                                focusId={selected}
+                                onSelect={selectFromMap}
+                                fitPadding={{ top: 56, right: 112, bottom: 40, left: 52 }}
+                                className="h-full w-full lg:rounded-xl"
+                            />
+                        </Suspense>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setSelected(null);
+                                setFitNonce((n) => n + 1);
+                            }}
+                            className="absolute top-2 right-2 z-1000 flex h-10 items-center gap-1.5 rounded-lg bg-background/95 px-3 text-xs font-bold shadow"
+                            aria-label="Show all pins"
+                        >
+                            <Crosshair className="h-4 w-4" /> Show all
+                        </button>
+                        <div className="pointer-events-none absolute top-14 right-2 z-1000 flex flex-col gap-0.5 rounded-lg bg-background/90 px-2 py-1 text-[11px] font-semibold shadow">
+                            <Legend color="#e11d48" label="Your stops" />
+                            <Legend color="#64748b" label="Available" />
+                            <Legend color="#0f172a" label="Café" />
+                        </div>
+                    </section>
 
-                <main className="space-y-3 px-3 pt-3 pb-12 lg:px-0 lg:pt-0">
-                    <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-border bg-card text-center">
-                        <Figure icon={Banknote} label="Cash to hand over" value={pesoExact(data.cash_on_hand)} strong={data.cash_on_hand > 0} />
-                        <Figure icon={Bike} label="My stops" value={String(data.mine.length)} />
-                        <Figure icon={PackageCheck} label="Delivered today" value={String(data.delivered_today.length)} />
-                    </div>
+                    <main className="space-y-3 px-3 pt-3 lg:px-0 lg:pt-0">
+                        <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-border bg-card text-center">
+                            <Figure icon={Banknote} label="Cash with you" value={pesoExact(data.cash_on_hand)} strong={data.cash_on_hand > 0} />
+                            <Figure icon={Bike} label="My stops" value={String(data.mine.length)} />
+                            <Figure icon={PackageCheck} label="Delivered today" value={String(data.delivered_today.length)} />
+                        </div>
 
-                    <div className="grid grid-cols-3 gap-1 rounded-xl bg-muted p-1" role="tablist">
-                        <TabButton active={tab === 'mine'} onClick={() => setTab('mine')} label="My stops" count={data.mine.length} />
-                        <TabButton active={tab === 'available'} onClick={() => setTab('available')} label="Available" count={data.available.length} />
-                        <TabButton active={tab === 'done'} onClick={() => setTab('done')} label="Done" count={data.delivered_today.length} />
-                    </div>
-
-                    {tab === 'mine' && (
-                        <section className="space-y-2">
-                            {plan.length === 0 ? (
-                                <EmptyState>No deliveries yet. Take one from Available, or wait for the café to give you one.</EmptyState>
-                            ) : (
-                                <>
-                                    <div className="flex items-center justify-between gap-2 px-1">
-                                        <p className="text-xs text-muted-foreground">
+                        {tab === 'stops' && (
+                            <section className="space-y-2">
+                                {plan.length === 0 ? (
+                                    <EmptyState>No deliveries yet. Take one from Available, or wait for the café to give you one.</EmptyState>
+                                ) : (
+                                    <>
+                                        {nextStop && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setNavigatingId(nextStop.id)}
+                                                className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-base font-bold text-white shadow-sm"
+                                            >
+                                                <Navigation className="h-5 w-5" /> Start navigation · {nextStop.customer_name}
+                                            </button>
+                                        )}
+                                        <p className="px-1 text-xs text-muted-foreground">
                                             Suggested order: nearest first from {me ? 'where you are' : 'the café'}.
                                         </p>
-                                        {routeUrl && (
-                                            <a
-                                                href={routeUrl}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-bold text-primary-foreground"
+                                        {plan.map(({ stop: d, number, legKm, etaMinutes }) => (
+                                            <DeliveryCard
+                                                key={d.id}
+                                                delivery={d}
+                                                badge={<StopBadge number={number} />}
+                                                meta={d.lat !== null ? `${formatKm(legKm)} · ~${etaMinutes} min` : 'No map pin: call the customer'}
+                                                selected={selected === `drop-${d.id}`}
+                                                queued={!!queue.pendingFor(d.id)}
+                                                onSelect={() => setSelected(`drop-${d.id}`)}
+                                                onNavigate={() => setNavigatingId(d.id)}
                                             >
-                                                <Navigation className="h-3.5 w-3.5" /> Navigate all
-                                            </a>
-                                        )}
-                                    </div>
-                                    {plan.map(({ stop: d, number, legKm, etaMinutes }) => (
+                                                {d.status === 'ready' && (
+                                                    <ActionButton
+                                                        busy={busy === d.id}
+                                                        onClick={() => pickUpOrder(d)}
+                                                        className="bg-primary text-primary-foreground"
+                                                    >
+                                                        <Bike className="h-4 w-4" /> Picked up
+                                                    </ActionButton>
+                                                )}
+                                                {d.status === 'out_for_delivery' && (
+                                                    <ActionButton
+                                                        busy={busy === d.id}
+                                                        onClick={() => markDelivered(d)}
+                                                        className="bg-emerald-700 text-white"
+                                                    >
+                                                        <CheckCircle2 className="h-4 w-4" />{' '}
+                                                        {d.collect > 0 ? `Delivered · ${pesoExact(d.collect)}` : 'Delivered'}
+                                                    </ActionButton>
+                                                )}
+                                                {(d.status === 'accepted' || d.status === 'preparing') && (
+                                                    <p className="flex h-12 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg bg-muted px-2 text-xs font-semibold text-muted-foreground">
+                                                        <Clock className="h-4 w-4 shrink-0" />
+                                                        <span className="truncate">
+                                                            Kitchen {d.status === 'accepted' ? 'starting' : 'preparing'}
+                                                            {d.estimated_ready_at ? ` · ~${manilaTime(d.estimated_ready_at)}` : ''}
+                                                        </span>
+                                                    </p>
+                                                )}
+                                            </DeliveryCard>
+                                        ))}
+                                    </>
+                                )}
+                            </section>
+                        )}
+
+                        {tab === 'available' && (
+                            <section className="space-y-2">
+                                {available.length === 0 ? (
+                                    <EmptyState>Nothing to take right now. New deliveries appear here automatically.</EmptyState>
+                                ) : (
+                                    available.map((d) => (
                                         <DeliveryCard
                                             key={d.id}
                                             delivery={d}
-                                            badge={<StopBadge number={number} />}
-                                            meta={d.lat !== null ? `${formatKm(legKm)} · ~${etaMinutes} min` : 'No map pin: call the customer'}
+                                            badge={
+                                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-500 text-white">
+                                                    <Plus className="h-4 w-4" />
+                                                </span>
+                                            }
+                                            meta={
+                                                d.lat !== null && d.lng !== null
+                                                    ? `${formatKm(roadKm(origin, d as LatLng))} away · ~${rideMinutes(roadKm(origin, d as LatLng))} min`
+                                                    : 'No map pin'
+                                            }
                                             selected={selected === `drop-${d.id}`}
+                                            queued={!!queue.pendingFor(d.id)}
                                             onSelect={() => setSelected(`drop-${d.id}`)}
                                         >
-                                            {d.status === 'ready' && (
-                                                <ActionButton
-                                                    busy={busy === d.id}
-                                                    onClick={() => act(d, pickUp.url(d.id))}
-                                                    className="bg-primary text-primary-foreground"
-                                                >
-                                                    <Bike className="h-4 w-4" /> Picked up · start
-                                                </ActionButton>
-                                            )}
-                                            {d.status === 'out_for_delivery' && (
-                                                <ActionButton
-                                                    busy={busy === d.id}
-                                                    onClick={() => markDelivered(d)}
-                                                    className="bg-emerald-700 text-white"
-                                                >
-                                                    <CheckCircle2 className="h-4 w-4" />{' '}
-                                                    {d.collect > 0 ? `Delivered · ${pesoExact(d.collect)}` : 'Delivered'}
-                                                </ActionButton>
-                                            )}
-                                            {(d.status === 'accepted' || d.status === 'preparing') && (
-                                                <p className="flex h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-muted text-xs font-semibold text-muted-foreground">
-                                                    <Clock className="h-4 w-4" /> Kitchen {d.status === 'accepted' ? 'starting' : 'preparing'}
-                                                    {d.estimated_ready_at ? ` · ready ~${manilaTime(d.estimated_ready_at)}` : ''}
-                                                </p>
-                                            )}
+                                            <ActionButton
+                                                busy={busy === d.id}
+                                                onClick={() => act(d, 'claim', claim.url(d.id), `Took ${d.order_number}`)}
+                                                className="border border-primary bg-primary/10 text-primary"
+                                            >
+                                                Take this delivery
+                                            </ActionButton>
                                         </DeliveryCard>
-                                    ))}
-                                </>
-                            )}
-                        </section>
-                    )}
+                                    ))
+                                )}
+                            </section>
+                        )}
+                    </main>
+                </div>
+            )}
 
-                    {tab === 'available' && (
-                        <section className="space-y-2">
-                            {available.length === 0 ? (
-                                <EmptyState>Nothing to take right now. New deliveries appear here automatically.</EmptyState>
-                            ) : (
-                                available.map((d) => (
-                                    <DeliveryCard
-                                        key={d.id}
-                                        delivery={d}
-                                        badge={
-                                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-500 text-white">
-                                                <Plus className="h-4 w-4" />
-                                            </span>
-                                        }
-                                        meta={
-                                            d.lat !== null && d.lng !== null
-                                                ? `${formatKm(roadKm(origin, d as LatLng))} away · ~${rideMinutes(roadKm(origin, d as LatLng))} min`
-                                                : 'No map pin'
-                                        }
-                                        selected={selected === `drop-${d.id}`}
-                                        onSelect={() => setSelected(`drop-${d.id}`)}
-                                    >
-                                        <ActionButton
-                                            busy={busy === d.id}
-                                            onClick={() => act(d, claim.url(d.id))}
-                                            className="border border-primary bg-primary/10 text-primary"
-                                        >
-                                            Take this delivery
-                                        </ActionButton>
-                                    </DeliveryCard>
-                                ))
-                            )}
-                        </section>
-                    )}
-
-                    {tab === 'done' &&
-                        (data.delivered_today.length === 0 ? (
-                            <EmptyState>Nothing delivered yet today.</EmptyState>
-                        ) : (
-                            <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card text-sm">
-                                {data.delivered_today.map((d) => (
-                                    <li key={d.id} className="flex items-center gap-3 px-4 py-3">
-                                        <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
-                                        <div className="min-w-0 flex-1">
-                                            <p className="truncate font-semibold">{d.customer_name}</p>
-                                            <p className="truncate text-xs text-muted-foreground">
-                                                {d.barangay} · {d.completed_at ? manilaTime(d.completed_at) : ''}
-                                            </p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="font-mono font-bold">{pesoExact(d.total)}</p>
-                                            {d.payment_method === 'cod' && (
-                                                <p
-                                                    className={cn(
-                                                        'text-[11px] font-bold',
-                                                        d.cash_remitted
-                                                            ? 'text-emerald-700 dark:text-emerald-400'
-                                                            : 'text-amber-700 dark:text-amber-400',
-                                                    )}
-                                                >
-                                                    {d.cash_remitted ? 'Handed over' : 'Cash with you'}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </li>
-                                ))}
-                            </ul>
-                        ))}
-                </main>
-            </div>
+            {/* ── Bottom tabs: within thumb reach ── */}
+            <nav
+                className="fixed inset-x-0 bottom-0 z-[1100] border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
+                aria-label="Rider sections"
+            >
+                <div className="mx-auto grid h-16 max-w-2xl grid-cols-3">
+                    <BottomTab active={tab === 'stops'} onClick={() => setTab('stops')} icon={MapPinned} label="My stops" count={data.mine.length} />
+                    <BottomTab
+                        active={tab === 'available'}
+                        onClick={() => setTab('available')}
+                        icon={Inbox}
+                        label="Available"
+                        count={data.available.length}
+                    />
+                    <BottomTab active={tab === 'history'} onClick={() => setTab('history')} icon={History} label="History" />
+                </div>
+            </nav>
         </div>
     );
 }
@@ -570,34 +571,48 @@ function GpsBadge({ state, failing }: { state: GpsState; failing: boolean }) {
     );
 }
 
+function BottomTab({
+    active,
+    onClick,
+    icon: Icon,
+    label,
+    count,
+}: {
+    active: boolean;
+    onClick: () => void;
+    icon: React.ElementType;
+    label: string;
+    count?: number;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            aria-current={active ? 'page' : undefined}
+            className={cn(
+                'relative flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold',
+                active ? 'text-primary' : 'text-muted-foreground',
+            )}
+        >
+            <span className={cn('flex h-8 w-14 items-center justify-center rounded-full', active && 'bg-primary/12')}>
+                <Icon className="h-5 w-5" />
+            </span>
+            {label}
+            {count !== undefined && count > 0 && (
+                <span className="absolute top-1.5 left-1/2 ml-3 min-w-5 rounded-full bg-primary px-1 text-center text-[10px] leading-5 font-bold text-primary-foreground">
+                    {count}
+                </span>
+            )}
+        </button>
+    );
+}
+
 function Legend({ color, label }: { color: string; label: string }) {
     return (
         <span className="flex items-center gap-1">
             <span className="h-2.5 w-2.5 rounded-full border border-white" style={{ background: color }} />
             {label}
         </span>
-    );
-}
-
-function TabButton({ active, onClick, label, count }: { active: boolean; onClick: () => void; label: string; count: number }) {
-    return (
-        <button
-            type="button"
-            role="tab"
-            aria-selected={active}
-            onClick={onClick}
-            className={cn(
-                'flex h-10 items-center justify-center gap-1.5 rounded-lg text-sm font-semibold',
-                active ? 'bg-card shadow-sm' : 'text-muted-foreground',
-            )}
-        >
-            {label}
-            <span
-                className={cn('min-w-5 rounded-full px-1.5 text-[11px] font-bold', active ? 'bg-primary text-primary-foreground' : 'bg-background')}
-            >
-                {count}
-            </span>
-        </button>
     );
 }
 
@@ -636,7 +651,7 @@ function ActionButton({ busy, onClick, className, children }: { busy: boolean; o
                 onClick();
             }}
             className={cn(
-                'flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-lg px-2 text-sm font-bold disabled:opacity-60',
+                'flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-lg px-2 text-sm font-bold disabled:opacity-60',
                 className,
             )}
         >
@@ -652,20 +667,22 @@ function DeliveryCard({
     badge,
     meta,
     selected,
+    queued,
     onSelect,
+    onNavigate,
     children,
 }: {
     delivery: Delivery;
     badge: React.ReactNode;
     meta: string;
     selected: boolean;
+    queued: boolean;
     onSelect: () => void;
+    onNavigate?: () => void;
     children: React.ReactNode;
 }) {
     const [open, setOpen] = useState(false);
     const itemCount = d.items.reduce((sum, i) => sum + i.quantity, 0);
-    const directions =
-        d.lat !== null && d.lng !== null ? `https://www.google.com/maps/dir/?api=1&destination=${d.lat},${d.lng}&travelmode=driving` : null;
     const hasNotes = !!d.customer_note || d.items.some((i) => i.note);
 
     return (
@@ -673,7 +690,7 @@ function DeliveryCard({
             id={`delivery-${d.id}`}
             onClick={onSelect}
             className={cn(
-                'scroll-mt-[calc(38dvh+4.5rem)] rounded-xl border bg-card p-3 transition-shadow lg:scroll-mt-24',
+                'scroll-mt-[calc(34dvh+4.5rem)] rounded-xl border bg-card p-3 transition-shadow lg:scroll-mt-24',
                 selected ? 'border-primary ring-2 ring-primary/30' : 'border-border',
             )}
         >
@@ -691,6 +708,11 @@ function DeliveryCard({
                         <span className={cn('rounded px-1.5 py-0.5 text-[11px] font-bold', STATUS_TONE[d.status] ?? 'bg-muted')}>
                             {d.status_label}
                         </span>
+                        {queued && (
+                            <span className="flex items-center gap-1 rounded bg-blue-500/15 px-1.5 py-0.5 text-[11px] font-bold text-blue-800 dark:text-blue-200">
+                                <CloudUpload className="h-3 w-3" /> Saved · sends when online
+                            </span>
+                        )}
                         <span className="text-[11px] text-muted-foreground">
                             {itemCount} item{itemCount === 1 ? '' : 's'} · <span className="font-mono">{d.order_number}</span>
                         </span>
@@ -705,22 +727,23 @@ function DeliveryCard({
                 <a
                     href={`tel:${d.contact_number}`}
                     onClick={(e) => e.stopPropagation()}
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border"
+                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-border"
                     aria-label={`Call ${d.customer_name}`}
                 >
                     <Phone className="h-4 w-4" />
                 </a>
-                {directions && (
-                    <a
-                        href={directions}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border"
-                        aria-label="Directions in Google Maps"
+                {onNavigate && (
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onNavigate();
+                        }}
+                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-blue-600/40 bg-blue-600/10 text-blue-700 dark:text-blue-300"
+                        aria-label={`Navigate to ${d.customer_name}`}
                     >
-                        <ExternalLink className="h-4 w-4" />
-                    </a>
+                        <Navigation className="h-4 w-4" />
+                    </button>
                 )}
                 <button
                     type="button"
@@ -729,13 +752,19 @@ function DeliveryCard({
                         setOpen((v) => !v);
                     }}
                     aria-expanded={open}
-                    className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border"
+                    className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-border"
                     aria-label="Order details"
                 >
                     <ChevronDown className={cn('h-4 w-4 transition-transform', open && 'rotate-180')} />
                     {hasNotes && <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-amber-500" />}
                 </button>
-                {children}
+                {queued ? (
+                    <p className="flex h-12 min-w-0 flex-1 items-center justify-center rounded-lg bg-blue-500/10 px-2 text-xs font-bold text-blue-800 dark:text-blue-200">
+                        Waiting for signal…
+                    </p>
+                ) : (
+                    children
+                )}
             </div>
 
             {open && (

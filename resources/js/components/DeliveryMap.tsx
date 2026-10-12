@@ -1,8 +1,12 @@
-import 'leaflet/dist/leaflet.css';
+import 'maplibre-gl/dist/maplibre-gl.css';
 
-import L from 'leaflet';
-import { useEffect, useMemo } from 'react';
-import { MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap } from 'react-leaflet';
+import type { GeoJSONSource } from 'maplibre-gl';
+import { LngLatBounds, Map as MapLibreMap, Marker, NavigationControl, Popup, setWorkerUrl } from 'maplibre-gl';
+// MapLibre decodes tiles in a web worker. Vite bundles that worker into its own file; tell MapLibre where it is.
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+import { useEffect, useRef } from 'react';
+
+import { applyBrandColors, MAP_STYLE_URL } from '@/lib/map-style';
 
 /** One pin on a delivery map. */
 export interface MapPoint {
@@ -20,13 +24,19 @@ export interface MapPoint {
 
 interface Props {
     points: MapPoint[];
-    /** Draw a dashed line through pins in order, e.g. the rider and their stops. */
+    /** Draw a dashed line between pins, e.g. the rider and their stops. */
     lines?: [string, string][];
     /** The map re-frames itself when this changes, not on every live update, so it does not jump while someone pans. */
     fitKey?: string;
     /** Pin to fly to and enlarge (e.g. the delivery card the rider tapped). */
     focusId?: string | null;
     onSelect?: (id: string) => void;
+    /** Room to keep around the pins when framing them, e.g. extra space under overlaid buttons. */
+    fitPadding?: number | { top: number; right: number; bottom: number; left: number };
+    /** A road route to draw as a solid line, as [lng, lat] pairs (in-app navigation). */
+    routeGeometry?: [number, number][] | null;
+    /** Keep the camera on this point (navigation mode); framing all pins is skipped while set. */
+    follow?: { lat: number; lng: number; zoom?: number } | null;
     className?: string;
 }
 
@@ -37,7 +47,14 @@ const PIN_STYLE: Record<MapPoint['kind'], { bg: string; glyph: string }> = {
     available: { bg: '#64748b', glyph: '<path d="M12 5v14M5 12h14"/>' },
 };
 
-function pinIcon(point: MapPoint, focused: boolean): L.DivIcon {
+setWorkerUrl(maplibreWorkerUrl);
+
+const DEFAULT_CENTER: [number, number] = [122.9264, 9.7355]; // Mabinay, [lng, lat]
+const ROUTE_SOURCE = 'bc-route';
+const ROAD_SOURCE = 'bc-road';
+
+/** Markup for a pin: a white-ringed disc with an icon or stop number; a soft pulse for live riders and the focused pin. */
+function pinHtml(point: MapPoint, focused: boolean): string {
     const { bg, glyph } = PIN_STYLE[point.kind];
     const size = focused ? 44 : 34;
     const pulse =
@@ -49,88 +66,219 @@ function pinIcon(point: MapPoint, focused: boolean): L.DivIcon {
             ? `<span style="color:#fff;font:800 ${focused ? 17 : 14}px system-ui,sans-serif">${point.number}</span>`
             : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${glyph}</svg>`;
 
-    return L.divIcon({
-        className: '',
-        iconSize: [size, size],
-        iconAnchor: [size / 2, size / 2],
-        html: `<span style="position:relative;display:flex;width:${size}px;height:${size}px;align-items:center;justify-content:center;border-radius:9999px;background:${bg};border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);opacity:${point.stale ? 0.45 : 1}">${pulse}${inner}</span>`,
-    });
+    return `<span style="position:relative;display:flex;width:${size}px;height:${size}px;align-items:center;justify-content:center;border-radius:9999px;background:${bg};border:3px solid #fff;box-shadow:0 3px 10px rgba(15,23,42,.35);opacity:${point.stale ? 0.45 : 1};cursor:pointer">${pulse}${inner}</span>`;
 }
 
-function FitToPoints({ points, fitKey }: { points: MapPoint[]; fitKey: string }) {
-    const map = useMap();
+/**
+ * Delivery map (MapLibre GL + OpenFreeMap vector tiles, in the café's colours) with the store, riders and
+ * drop-off pins. Load it lazily: the map engine is large and only map screens need it.
+ */
+export default function DeliveryMap({
+    points,
+    lines = [],
+    fitKey,
+    focusId,
+    onSelect,
+    fitPadding = 48,
+    routeGeometry = null,
+    follow = null,
+    className,
+}: Props) {
+    const container = useRef<HTMLDivElement>(null);
+    const map = useRef<MapLibreMap | null>(null);
+    const markers = useRef(new Map<string, { marker: Marker; html: string }>());
+    const ready = useRef(false);
+    const latest = useRef({ points, lines, onSelect, routeGeometry });
+    latest.current = { points, lines, onSelect, routeGeometry };
+    const key = fitKey ?? points.map((p) => p.id).join('|');
 
+    // ── Create the map once ──
     useEffect(() => {
-        if (points.length === 0) return;
+        if (!container.current) return;
+        const first = latest.current.points[0];
+        const instance = new MapLibreMap({
+            container: container.current,
+            style: MAP_STYLE_URL,
+            center: first ? [first.lng, first.lat] : DEFAULT_CENTER,
+            zoom: 14,
+            attributionControl: { compact: true },
+            dragRotate: false,
+            pitchWithRotate: false,
+            cooperativeGestures: false,
+        });
+        instance.addControl(new NavigationControl({ showCompass: false }), 'top-left');
+        instance.touchZoomRotate.disableRotation();
+        instance.on('style.load', () => applyBrandColors(instance));
+        instance.on('load', () => {
+            // Road route: a white casing under a solid blue line, drawn below the dashed overview line.
+            instance.addSource(ROAD_SOURCE, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+            instance.addLayer({
+                id: `${ROAD_SOURCE}-casing`,
+                type: 'line',
+                source: ROAD_SOURCE,
+                layout: { 'line-cap': 'round', 'line-join': 'round' },
+                paint: { 'line-color': '#ffffff', 'line-width': 9, 'line-opacity': 0.95 },
+            });
+            instance.addLayer({
+                id: ROAD_SOURCE,
+                type: 'line',
+                source: ROAD_SOURCE,
+                layout: { 'line-cap': 'round', 'line-join': 'round' },
+                paint: { 'line-color': '#2563eb', 'line-width': 5.5 },
+            });
+            instance.addSource(ROUTE_SOURCE, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+            instance.addLayer({
+                id: ROUTE_SOURCE,
+                type: 'line',
+                source: ROUTE_SOURCE,
+                layout: { 'line-cap': 'round', 'line-join': 'round' },
+                paint: { 'line-color': '#7c3aed', 'line-width': 3.5, 'line-opacity': 0.85, 'line-dasharray': [1.2, 2] },
+            });
+            ready.current = true;
+            drawRoute();
+            drawRoad();
+        });
+        map.current = instance;
+
+        const resize = new ResizeObserver(() => instance.resize());
+        resize.observe(container.current);
+        const pins = markers.current;
+
+        return () => {
+            resize.disconnect();
+            pins.forEach(({ marker }) => marker.remove());
+            pins.clear();
+            ready.current = false;
+            instance.remove();
+            map.current = null;
+        };
+    }, []);
+
+    function drawRoute() {
+        const instance = map.current;
+        if (!instance || !ready.current) return;
+        const byId = new Map(latest.current.points.map((p) => [p.id, p]));
+        const features = latest.current.lines.flatMap(([from, to]) => {
+            const a = byId.get(from);
+            const b = byId.get(to);
+            return a && b
+                ? [
+                      {
+                          type: 'Feature' as const,
+                          properties: {},
+                          geometry: {
+                              type: 'LineString' as const,
+                              coordinates: [
+                                  [a.lng, a.lat],
+                                  [b.lng, b.lat],
+                              ],
+                          },
+                      },
+                  ]
+                : [];
+        });
+        (instance.getSource(ROUTE_SOURCE) as GeoJSONSource | undefined)?.setData({ type: 'FeatureCollection', features });
+    }
+
+    function drawRoad() {
+        const instance = map.current;
+        if (!instance || !ready.current) return;
+        const coordinates = latest.current.routeGeometry ?? [];
+        (instance.getSource(ROAD_SOURCE) as GeoJSONSource | undefined)?.setData({
+            type: 'FeatureCollection',
+            features: coordinates.length > 1 ? [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates } }] : [],
+        });
+    }
+
+    useEffect(drawRoad, [routeGeometry]);
+
+    // ── Navigation: keep the camera on the rider ──
+    const followLat = follow?.lat;
+    const followLng = follow?.lng;
+    const followZoom = follow?.zoom ?? 17;
+    useEffect(() => {
+        const instance = map.current;
+        if (!instance || followLat === undefined || followLng === undefined) return;
+        instance.easeTo({ center: [followLng, followLat], zoom: followZoom, duration: 700 });
+    }, [followLat, followLng, followZoom]);
+
+    // ── Pins: add, move, restyle or remove as the data changes ──
+    useEffect(() => {
+        const instance = map.current;
+        if (!instance) return;
+        const seen = new Set<string>();
+
+        points.forEach((point) => {
+            seen.add(point.id);
+            const html = pinHtml(point, point.id === focusId);
+            const existing = markers.current.get(point.id);
+            if (existing) {
+                existing.marker.setLngLat([point.lng, point.lat]);
+                if (existing.html !== html) {
+                    existing.marker.getElement().innerHTML = html;
+                    existing.html = html;
+                }
+                existing.marker.getPopup()?.setText(point.label);
+                return;
+            }
+
+            const element = document.createElement('div');
+            element.innerHTML = html;
+            element.setAttribute('role', 'button');
+            element.setAttribute('aria-label', point.label);
+            element.addEventListener('click', (event) => {
+                event.stopPropagation();
+                latest.current.onSelect?.(point.id);
+            });
+            const popup = new Popup({ offset: 22, closeButton: false, closeOnClick: false }).setText(point.label);
+            element.addEventListener('mouseenter', () => popup.setLngLat(marker.getLngLat()).addTo(instance));
+            element.addEventListener('mouseleave', () => popup.remove());
+            const marker = new Marker({ element }).setLngLat([point.lng, point.lat]).setPopup(popup).addTo(instance);
+            markers.current.set(point.id, { marker, html });
+        });
+
+        markers.current.forEach(({ marker }, id) => {
+            if (!seen.has(id)) {
+                marker.remove();
+                markers.current.delete(id);
+            }
+        });
+
+        // Keep riders and the focused pin above the rest.
+        markers.current.forEach(({ marker }, id) => {
+            const kind = points.find((p) => p.id === id)?.kind;
+            marker.getElement().style.zIndex = id === focusId ? '3' : kind === 'rider' ? '2' : '1';
+        });
+
+        drawRoute();
+    }, [points, lines, focusId]);
+
+    // ── Re-frame only when the set of pins changes, not when a rider moves ──
+    useEffect(() => {
+        const instance = map.current;
+        if (!instance || points.length === 0 || follow) return;
         if (points.length === 1) {
-            map.setView([points[0].lat, points[0].lng], 15);
+            instance.jumpTo({ center: [points[0].lng, points[0].lat], zoom: 15 });
             return;
         }
-        map.fitBounds(L.latLngBounds(points.map((p) => [p.lat, p.lng] as [number, number])), { padding: [36, 36], maxZoom: 16 });
-        // Re-frame only when the set of pins changes, not when a rider moves.
+        const bounds = new LngLatBounds();
+        points.forEach((p) => bounds.extend([p.lng, p.lat]));
+        instance.fitBounds(bounds, { padding: fitPadding, maxZoom: 16, duration: 0 });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [fitKey, map]);
+    }, [key]);
 
-    return null;
-}
-
-function FlyToFocus({ point }: { point: MapPoint | undefined }) {
-    const map = useMap();
-
+    // ── Fly to the pin the user tapped ──
     useEffect(() => {
-        if (point) map.flyTo([point.lat, point.lng], Math.max(map.getZoom(), 16), { duration: 0.6 });
-        // Fly only when the focused pin changes, not when the rider's position updates.
+        const instance = map.current;
+        const point = focusId ? points.find((p) => p.id === focusId) : undefined;
+        if (instance && point) instance.flyTo({ center: [point.lng, point.lat], zoom: Math.max(instance.getZoom(), 16), duration: 600 });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [point?.id, map]);
-
-    return null;
-}
-
-/** OpenStreetMap with the store, riders and drop-off pins. Load it lazily: Leaflet is heavy. */
-export default function DeliveryMap({ points, lines = [], fitKey, focusId, onSelect, className }: Props) {
-    const byId = useMemo(() => new Map(points.map((p) => [p.id, p])), [points]);
-    const first = points[0];
-    const key = fitKey ?? points.map((p) => p.id).join('|');
+    }, [focusId]);
 
     return (
         <>
             <style>{'@keyframes bc-ping{0%{transform:scale(.8);opacity:.35}100%{transform:scale(1.9);opacity:0}}'}</style>
-            <MapContainer center={first ? [first.lat, first.lng] : [9.7355, 122.9264]} zoom={14} className={className} scrollWheelZoom={false}>
-                <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    maxZoom={19}
-                />
-                <FitToPoints points={points} fitKey={key} />
-                <FlyToFocus point={focusId ? byId.get(focusId) : undefined} />
-                {lines.map(([from, to]) => {
-                    const a = byId.get(from);
-                    const b = byId.get(to);
-                    return a && b ? (
-                        <Polyline
-                            key={`${from}-${to}`}
-                            positions={[
-                                [a.lat, a.lng],
-                                [b.lat, b.lng],
-                            ]}
-                            pathOptions={{ color: '#7c3aed', weight: 3, dashArray: '6 8', opacity: 0.8 }}
-                        />
-                    ) : null;
-                })}
-                {points.map((p) => (
-                    <Marker
-                        key={p.id}
-                        position={[p.lat, p.lng]}
-                        icon={pinIcon(p, p.id === focusId)}
-                        zIndexOffset={p.id === focusId ? 2000 : p.kind === 'rider' ? 1000 : 0}
-                        eventHandlers={onSelect ? { click: () => onSelect(p.id) } : undefined}
-                    >
-                        <Tooltip direction="top" offset={[0, -18]}>
-                            {p.label}
-                        </Tooltip>
-                    </Marker>
-                ))}
-            </MapContainer>
+            <div ref={container} className={className} />
         </>
     );
 }

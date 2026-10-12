@@ -41,6 +41,13 @@ return [
         'redirect' => env('FACEBOOK_REDIRECT_URI', '/account/auth/facebook/callback'),
     ],
 
+    // Road routes for the rider's in-app navigation (an OSRM server). The default public server is a
+    // free demo with a fair-use policy; point ROUTING_URL at your own OSRM for heavy use.
+    'routing' => [
+        'url' => env('ROUTING_URL', 'https://router.project-osrm.org'),
+        'profile' => env('ROUTING_PROFILE', 'driving'),
+    ],
+
     'ses' => [
         'key' => env('AWS_ACCESS_KEY_ID'),
         'secret' => env('AWS_SECRET_ACCESS_KEY'),

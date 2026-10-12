@@ -94,8 +94,16 @@
     ['Purchasing & Suppliers', 'Purchase orders, goods receiving (GRN) and a supplier directory.'],
   ];
 
-  Object.keys(Q.addonText || {}).forEach(function (id) { Object.assign(ADDON_INFO[id], Q.addonText[id]); });
+  Object.keys(Q.addonText || {}).forEach(function (id) { if (ADDON_INFO[id]) Object.assign(ADDON_INFO[id], Q.addonText[id]); });
   if (Q.freeModules) FREE_MODULES = Q.freeModules;
+
+  // An add-on the page lists but this script does not describe (e.g. a newer page with an older cached
+  // script) is left out, so the rest of the quote still works instead of the whole page failing.
+  Q.addons = Q.addons.filter(function (addon) {
+    if (ADDON_INFO[addon.id]) return true;
+    if (window.console) console.warn('Quote: no description for add-on "' + addon.id + '", so it is hidden.');
+    return false;
+  });
 
   function featureText(feature) {
     return (Q.featureText && Q.featureText[feature]) || feature;
