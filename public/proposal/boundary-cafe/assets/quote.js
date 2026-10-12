@@ -157,7 +157,8 @@
   };
 
   // ── State ──────────────────────────────────────────────
-  var state = { plan: 'advance', branches: 1, months: Q.hasMonths ? (Q.defaultMonths || 12) : 1, addons: new Set() };
+  // Opens on Standard unless the page sets defaultPlan; a shared link's ?plan= still wins.
+  var state = { plan: PLAN_INFO[Q.defaultPlan] ? Q.defaultPlan : 'standard', branches: 1, months: Q.hasMonths ? (Q.defaultMonths || 12) : 1, addons: new Set() };
 
   function readStateFromUrl() {
     var params = new URLSearchParams(window.location.search);
