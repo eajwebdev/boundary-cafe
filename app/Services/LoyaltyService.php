@@ -346,7 +346,7 @@ class LoyaltyService
 
         Customer::where('loyalty_points', '>', 0)
             ->whereDoesntHave('loyaltyTransactions', fn ($q) => $q
-                ->whereIn('type', [LoyaltyTransaction::TYPE_EARN, LoyaltyTransaction::TYPE_BONUS, LoyaltyTransaction::TYPE_ADJUSTMENT])
+                ->whereIn('type', [...LoyaltyTransaction::ISSUED_TYPES, LoyaltyTransaction::TYPE_ADJUSTMENT])
                 ->where('created_at', '>=', $cutoff))
             ->where('created_at', '<', $cutoff)
             ->pluck('id')

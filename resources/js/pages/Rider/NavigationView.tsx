@@ -239,7 +239,8 @@ export default function NavigationView({
                     <DeliveryMap
                         points={points}
                         routeGeometry={
-                            route?.geometry ??
+                            // Start the line at the rider: the router snaps to the nearest road, which may be a short walk away.
+                            (route && me ? [[me.lng, me.lat] as [number, number], ...route.geometry] : null) ??
                             (me && destination
                                 ? [
                                       [me.lng, me.lat],

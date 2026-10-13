@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { useBusinessName, useRewardsName } from '@/hooks/use-business-name';
 import { useLogoUrl } from '@/hooks/use-logo';
+import { useServiceArea } from '@/hooks/use-service-area';
 import type { CustomerSession, RewardsPopupData } from '@/lib/customer';
 import { cn } from '@/lib/utils';
 
@@ -52,6 +53,7 @@ const NAV = [
 ] as const;
 
 export default function CustomerLayout({ children, title, headerSlot, headerEnd, subHeader, topStrip, hideBottomNav, wide, barangays }: Props) {
+    const area = useServiceArea();
     const logoUrl = useLogoUrl();
     const businessName = useBusinessName();
     const rewardsName = useRewardsName();
@@ -119,7 +121,7 @@ export default function CustomerLayout({ children, title, headerSlot, headerEnd,
     const authDesc =
         mode === 'login'
             ? `Log in to order, follow your delivery and collect ${rewardsName}.`
-            : 'Order for delivery or pickup anywhere in Mabinay, and earn points on every order.';
+            : `Order for delivery or pickup anywhere in ${area.town}, and earn points on every order.`;
 
     return (
         <AuthSheetContext.Provider value={{ requireAuth, customer }}>

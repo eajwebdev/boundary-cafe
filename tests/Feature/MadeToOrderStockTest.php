@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\CashSession;
 use App\Models\Product;
 use App\Models\ProductStock;
+use App\Models\SystemSetting;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -51,6 +52,7 @@ class MadeToOrderStockTest extends TestCase
 
     public function test_selling_a_made_to_order_item_deducts_its_recipe_ingredients(): void
     {
+        SystemSetting::set('inventory.ingredient_tracking', true); // this test is about recipe ingredients
         $cashier = User::where('username', 'cashier_mab')->firstOrFail();
         CashSession::create(['user_id' => $cashier->id, 'branch_id' => $cashier->branch_id, 'opening_cash' => 0, 'status' => 'open', 'opened_at' => now()]);
         $latte = Product::where('name', 'Spanish Latte')->with('recipeIngredients')->firstOrFail();

@@ -6,12 +6,12 @@ use App\Models\Barangay;
 use App\Models\SystemSetting;
 
 /**
- * Mabinay-only delivery zone.
+ * The delivery zone around the online-ordering town (the online.service_area setting).
  *
  * A delivery address is accepted only when BOTH:
  *   1. the pin is inside the drawn boundary polygon (or, if none is saved,
- *      within the fallback radius of the Mabinay centre), and
- *   2. the selected barangay is a deliverable Mabinay barangay.
+ *      within the fallback radius of the zone centre), and
+ *   2. the selected barangay is a deliverable barangay.
  */
 class DeliveryZoneService
 {
@@ -70,10 +70,10 @@ class DeliveryZoneService
             return ['ok' => false, 'message' => 'Please pin your delivery location on the map.'];
         }
         if (! $this->containsPoint($lat, $lng)) {
-            return ['ok' => false, 'message' => 'Sorry, we only deliver within Mabinay.'];
+            return ['ok' => false, 'message' => 'Sorry, we only deliver within '.SystemSetting::serviceArea()['town'].'.'];
         }
         if (! Barangay::isDeliverable($barangay)) {
-            return ['ok' => false, 'message' => 'Please choose a Mabinay barangay we deliver to.'];
+            return ['ok' => false, 'message' => 'Please choose a '.SystemSetting::serviceArea()['town'].' barangay we deliver to.'];
         }
 
         return ['ok' => true, 'message' => null];

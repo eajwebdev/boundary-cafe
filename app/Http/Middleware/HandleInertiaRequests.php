@@ -8,6 +8,7 @@ use App\Models\CustomerSocialAccount;
 use App\Models\Promo;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Services\DailyMissionService;
 use App\Services\LoyaltyRewardService;
 use App\Services\LoyaltyService;
 use Illuminate\Http\Request;
@@ -205,6 +206,9 @@ class HandleInertiaRequests extends Middleware
                 'unread_notifications' => $c->unreadNotifications()->count(),
             ] : null,
 
+            // ── Where online orders are delivered, e.g. Mabinay, Negros Oriental (customer copy) ──
+            'service_area' => fn () => SystemSetting::serviceArea(),
+
             // ── "Continue with Google / Facebook" buttons (only providers with credentials) ──
             'social_login' => CustomerSocialAccount::enabledProviders(),
 
@@ -235,10 +239,10 @@ class HandleInertiaRequests extends Middleware
     }
 
     /**
-     * Rewards to show in the once-a-day popup, or null when it was already shown today,
-     * the programme is off, or there is nothing in the reward catalog.
+     * Rewards (and today's mission) to show in the once-a-day popup, or null when it was already shown today,
+     * the programme is off, or there is neither a reward catalog nor a mission.
      *
-     * @return array{points: int, affordable: array<int, array<string, mixed>>, next: array<string, mixed>|null}|null
+     * @return array{points: int, mission: array<string, mixed>|null, affordable: array<int, array<string, mixed>>, next: array<string, mixed>|null}|null
      */
     private function rewardsPopup(?Customer $customer): ?array
     {
@@ -253,7 +257,8 @@ class HandleInertiaRequests extends Middleware
 
         $rewards = app(LoyaltyRewardService::class);
         $catalog = $rewards->catalog()->map(fn ($reward) => $rewards->rewardToFrontend($reward));
-        if ($catalog->isEmpty()) {
+        $mission = app(DailyMissionService::class)->forCustomer($customer, assign: false);
+        if ($catalog->isEmpty() && ! $mission) {
             return null;
         }
 
@@ -261,6 +266,7 @@ class HandleInertiaRequests extends Middleware
 
         return [
             'points' => $points,
+            'mission' => $mission,
             'affordable' => $catalog->filter(fn ($reward) => $reward['points_cost'] <= $points)->sortByDesc('points_cost')->take(6)->values()->all(),
             'next' => $catalog->filter(fn ($reward) => $reward['points_cost'] > $points)->sortBy('points_cost')->first(),
         ];

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Barangay;
 use App\Models\OnlineOrder;
 use App\Models\SystemSetting;
+use App\Services\DailyMissionService;
 use App\Services\LoyaltyService;
 use App\Services\OnlineOrderService;
 use Illuminate\Support\Facades\Auth;
@@ -17,7 +18,7 @@ use Inertia\Response;
  */
 class StorefrontController extends Controller
 {
-    public function __construct(private OnlineOrderService $online, private LoyaltyService $loyalty) {}
+    public function __construct(private OnlineOrderService $online, private LoyaltyService $loyalty, private DailyMissionService $missions) {}
 
     public function index(): Response
     {
@@ -52,6 +53,7 @@ class StorefrontController extends Controller
                 'points_per_increment' => $this->loyalty->rules($branch?->id)['points_per_increment'],
                 'birthday_bonus' => $this->loyalty->rules($branch?->id)['birthday_bonus'],
             ],
+            'mission' => $customer ? $this->missions->forCustomer($customer) : null,
             'activeOrder' => $activeOrder ? [
                 'order_number' => $activeOrder->order_number,
                 'status' => $activeOrder->status,

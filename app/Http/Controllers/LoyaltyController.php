@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Customer;
 use App\Models\LoyaltyTransaction;
 use App\Notifications\LoyaltyActivity;
+use App\Services\DailyMissionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -42,7 +43,7 @@ class LoyaltyController extends Controller
      * or mobile number. Members are shared by every branch. Identifying a member never spends
      * points — that needs the separate reward QR.
      */
-    public function lookup(Request $request): JsonResponse
+    public function lookup(Request $request, DailyMissionService $missions): JsonResponse
     {
         $data = $request->validate(['code' => ['required', 'string', 'max:200']]);
         $code = trim($data['code']);
@@ -65,6 +66,7 @@ class LoyaltyController extends Controller
             'contact_number' => $customer->contact_number,
             'points' => $customer->loyalty_points,
             'reserved_points' => $customer->reserved_points,
+            'mission' => $missions->forCustomer($customer),
         ]);
     }
 

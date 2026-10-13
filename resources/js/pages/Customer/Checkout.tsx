@@ -24,6 +24,7 @@ import MapThumb from '@/components/storefront/MapThumb';
 import { Price, RouteLine, ShopButton, Skeleton } from '@/components/storefront/ui';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { useBranchLabel, useRewardsName } from '@/hooks/use-business-name';
+import { useServiceArea } from '@/hooks/use-service-area';
 import CustomerLayout from '@/layouts/CustomerLayout';
 import type { CustomerSession, DeliveryZone, Fulfillment, SavedAddress, StoreStatus } from '@/lib/customer';
 import { FULFILLMENT_ICON, FULFILLMENT_LABEL, FULFILLMENTS, fulfillmentEnabled, jsonRequest, pickFulfillment, useCart } from '@/lib/customer';
@@ -100,6 +101,7 @@ export default function Checkout() {
 }
 
 function CheckoutBody() {
+    const area = useServiceArea();
     const { props } = usePage<PageProps>();
     const { addresses, zone, barangays, store, contact, customer } = props;
     const cart = useCart(customer.id);
@@ -377,7 +379,7 @@ function CheckoutBody() {
                                     )}
                                     <div>
                                         <p className="font-semibold">{branchLabel}</p>
-                                        <p className="text-sm text-shop-muted">{store.branch?.address ?? 'Mabinay, Negros Oriental'}</p>
+                                        <p className="text-sm text-shop-muted">{store.branch?.address ?? `${area.town}, ${area.province}`}</p>
                                         {fulfillment === 'dine_in' && (
                                             <p className="mt-1 text-sm text-shop-muted">
                                                 We&apos;ll bring your order to your table — no need to line up.
@@ -721,7 +723,7 @@ function CheckoutBody() {
                 >
                     <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-shop-line" aria-hidden />
                     <SheetTitle className="font-display text-2xl font-bold">Deliver to</SheetTitle>
-                    <SheetDescription className="mb-4 text-shop-muted">Choose one of your saved Mabinay addresses.</SheetDescription>
+                    <SheetDescription className="mb-4 text-shop-muted">Choose one of your saved {area.town} addresses.</SheetDescription>
                     <div className="space-y-2">
                         {addresses.map((a) => (
                             <button

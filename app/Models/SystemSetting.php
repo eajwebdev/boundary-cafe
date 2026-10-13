@@ -298,7 +298,10 @@ class SystemSetting extends Model
             ['key' => 'loyalty.tiers_enabled',    'value' => 'true',  'type' => 'boolean', 'group' => 'loyalty', 'label' => 'Enable membership tiers', 'description' => 'Higher tiers earn points faster'],
             ['key' => 'loyalty.tiers',            'value' => '[{"name":"Bronze","min":0,"multiplier":1},{"name":"Silver","min":500,"multiplier":1.25},{"name":"Gold","min":1500,"multiplier":1.5}]', 'type' => 'json', 'group' => 'loyalty', 'label' => 'Membership tiers', 'description' => 'Tier name, lifetime points needed and earn multiplier'],
             ['key' => 'loyalty.birthday_bonus',   'value' => '50',    'type' => 'integer', 'group' => 'loyalty', 'label' => 'Birthday bonus points', 'description' => 'Awarded once a year on the first purchase in the birthday month (0 = off)'],
-            ['key' => 'loyalty.spend_increment',  'value' => '100',   'type' => 'decimal', 'group' => 'loyalty', 'label' => 'Spend increment', 'description' => 'Every ₱X of eligible spend earns the points below'],
+            ['key' => 'loyalty.missions_enabled', 'value' => 'true',  'type' => 'boolean', 'group' => 'loyalty', 'label' => 'Daily missions', 'description' => 'Each day a random share of members gets one task valid only that day'],
+            ['key' => 'loyalty.missions_share',   'value' => '50',    'type' => 'integer', 'group' => 'loyalty', 'label' => 'Members who get a mission each day (%)', 'description' => 'Picked at random every day'],
+            ['key' => 'loyalty.missions',         'value' => '[{"type":"spend","target":260,"points":10,"category_id":null},{"type":"spend","target":350,"points":15,"category_id":null},{"type":"spend","target":500,"points":25,"category_id":null},{"type":"items","target":3,"points":10,"category_id":null},{"type":"items","target":5,"points":20,"category_id":null}]', 'type' => 'json', 'group' => 'loyalty', 'label' => 'Mission list', 'description' => 'One is picked at random for each chosen member'],
+            ['key' => 'loyalty.spend_increment',  'value' => '100',  'type' => 'decimal', 'group' => 'loyalty', 'label' => 'Spend increment', 'description' => 'Every ₱X of eligible spend earns the points below'],
             ['key' => 'loyalty.points_per_increment', 'value' => '5', 'type' => 'integer', 'group' => 'loyalty', 'label' => 'Points per increment'],
             ['key' => 'loyalty.allow_peso_discount', 'value' => 'false', 'type' => 'boolean', 'group' => 'loyalty', 'label' => 'Allow points as a peso discount', 'description' => 'Off: points are spent only on reward items claimed in-store'],
             ['key' => 'loyalty.claim_expiry_minutes', 'value' => '120', 'type' => 'integer', 'group' => 'loyalty', 'label' => 'Reward QR valid for (minutes)'],
@@ -306,10 +309,12 @@ class SystemSetting extends Model
             ['key' => 'loyalty.earn_channels',    'value' => '["counter","dine_in","online"]', 'type' => 'json', 'group' => 'loyalty', 'label' => 'Transactions that earn points'],
             ['key' => 'loyalty.excluded_category_ids', 'value' => '[]', 'type' => 'json', 'group' => 'loyalty', 'label' => 'Categories that do not earn points'],
 
-            // ── Online ordering (customer app, Mabinay only) ───────
-            ['key' => 'online.enabled',           'value' => 'true',  'type' => 'boolean', 'group' => 'online', 'label' => 'Accept online orders'],
+            // ── Online ordering (customer app, one branch and town) ─
+            ['key' => 'online.service_area',      'value' => 'Mabinay', 'type' => 'string', 'group' => 'online', 'label' => 'Delivery town / city', 'description' => 'Shown to customers, e.g. "Delivering across Mabinay"'],
+            ['key' => 'online.service_province',  'value' => 'Negros Oriental', 'type' => 'string', 'group' => 'online', 'label' => 'Delivery province'],
+            ['key' => 'online.enabled',          'value' => 'true',  'type' => 'boolean', 'group' => 'online', 'label' => 'Accept online orders', 'description' => 'Off: customers can still browse the menu online but cannot place orders.'],
             ['key' => 'online.branch_code',       'value' => 'BC-MAB', 'type' => 'string',  'group' => 'online', 'label' => 'Branch that fulfils online orders'],
-            ['key' => 'online.delivery_enabled',  'value' => 'true',  'type' => 'boolean', 'group' => 'online', 'label' => 'Offer delivery'],
+            ['key' => 'online.delivery_enabled',  'value' => 'true',  'type' => 'boolean', 'group' => 'online', 'label' => 'Offer delivery', 'description' => 'Off: online customers can only order takeout or dine-in.'],
             ['key' => 'online.pickup_enabled',    'value' => 'true',  'type' => 'boolean', 'group' => 'online', 'label' => 'Offer takeout (pickup)'],
             ['key' => 'online.dine_in_enabled',   'value' => 'true',  'type' => 'boolean', 'group' => 'online', 'label' => 'Offer dine-in', 'description' => 'Customers inside the café can order from their phone'],
             ['key' => 'online.delivery_fee',      'value' => '49',    'type' => 'decimal', 'group' => 'online', 'label' => 'Delivery fee (₱)'],
@@ -330,6 +335,7 @@ class SystemSetting extends Model
             // ── Inventory ─────────────────────────────────────────
             ['key' => 'inventory.low_stock_threshold', 'value' => '5',                'type' => 'integer', 'group' => 'inventory', 'label' => 'Low stock alert threshold'],
             ['key' => 'inventory.near_expiry_days',  'value' => '30',               'type' => 'integer', 'group' => 'inventory', 'label' => 'Near expiry warning (days)'],
+            ['key' => 'inventory.ingredient_tracking', 'value' => 'false', 'type' => 'boolean', 'group' => 'inventory', 'label' => 'Ingredient calculations (recipes)', 'description' => 'On: made-to-order items deduct their recipe ingredients and show as sold out when an ingredient runs out. Off: they are always available; only counted items (e.g. cakes) track stock.'],
             ['key' => 'inventory.auto_grn_on_delivery', 'value' => 'false',          'type' => 'boolean', 'group' => 'inventory', 'label' => 'Auto-create GRN on order delivery'],
 
             // ── Cash management ───────────────────────────────────
@@ -489,6 +495,28 @@ class SystemSetting extends Model
     public static function requireCashSession(?int $branchId = null): bool
     {
         return (bool) static::get('pos.require_cash_session', $branchId, false);
+    }
+
+    /**
+     * Whether made-to-order items deduct their recipe ingredients (and can sell out because of them).
+     * Off by default; a branch can override it.
+     */
+    /**
+     * The town and province online orders are delivered in, e.g. Mabinay, Negros Oriental.
+     *
+     * @return array{town: string, province: string}
+     */
+    public static function serviceArea(): array
+    {
+        return [
+            'town' => trim((string) static::get('online.service_area', null, 'Mabinay')) ?: 'Mabinay',
+            'province' => trim((string) static::get('online.service_province', null, 'Negros Oriental')) ?: 'Negros Oriental',
+        ];
+    }
+
+    public static function ingredientTracking(?int $branchId = null): bool
+    {
+        return (bool) static::get('inventory.ingredient_tracking', $branchId, false);
     }
 
     public static function allowNegativeStock(?int $branchId = null): bool

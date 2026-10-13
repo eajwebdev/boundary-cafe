@@ -24,6 +24,7 @@ class SaleItem extends Model
         'reward_points',
         'retail_price',           // menu price at the time — reference value of a reward
         'unit_cost',
+        'ingredients_deducted',   // made-to-order: whether recipe ingredients were deducted on sale
         'quantity',
         'price',
         'total',
@@ -38,6 +39,7 @@ class SaleItem extends Model
         'reward_points' => 'integer',
         'retail_price' => 'decimal:2',
         'unit_cost' => 'decimal:2',
+        'ingredients_deducted' => 'boolean',
     ];
 
     protected $attributes = [
@@ -56,13 +58,20 @@ class SaleItem extends Model
 
         // Freeze what the item cost when it was sold, so later price changes do not rewrite past margins.
         static::creating(function (SaleItem $item) {
-            if ($item->unit_cost !== null || ! $item->product_id) {
+            if (! $item->product_id) {
                 return;
             }
             $branchId = Sale::whereKey($item->sale_id)->value('branch_id');
             $product = Product::find($item->product_id);
-            if ($branchId && $product) {
+            if (! $branchId || ! $product) {
+                return;
+            }
+            if ($item->unit_cost === null) {
                 $item->unit_cost = app(ProductCostService::class)->unitCost($product, (int) $branchId, $item->product_variant_id);
+            }
+            // Same rule SaleService::deductProductStock() just applied, so a void restores exactly what was taken.
+            if ($product->product_type === 'made_to_order' && $item->ingredients_deducted === null) {
+                $item->ingredients_deducted = SystemSetting::ingredientTracking((int) $branchId) && $product->recipeIngredients()->exists();
             }
         });
     }

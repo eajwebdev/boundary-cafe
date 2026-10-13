@@ -1,9 +1,10 @@
 import { Link, router } from '@inertiajs/react';
-import { Award, Cake, ChevronRight, Download, Gift, Lock, QrCode, Store, TrendingUp } from 'lucide-react';
+import { Award, Cake, ChevronRight, Download, Gift, Lock, QrCode, Store, Target, TrendingUp } from 'lucide-react';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+import MissionCard, { type CustomerMission } from '@/components/storefront/MissionCard';
 import { Pill, ProductImage, QtyControl, RouteLine, ShopButton } from '@/components/storefront/ui';
 import { useBusinessName, useRewardsName } from '@/hooks/use-business-name';
 import { useLogoUrl } from '@/hooks/use-logo';
@@ -42,6 +43,8 @@ interface Props {
         enabled: boolean;
         joined_at: string | null;
     };
+    mission: CustomerMission | null;
+    missionsRunning: boolean;
     tier: { enabled: boolean; name: string; multiplier: number; next: { name: string; min: number; points_needed: number } | null; progress: number };
     rules: {
         spend_increment: number;
@@ -73,6 +76,7 @@ const TYPE_LABEL: Record<string, string> = {
     reversal: 'Returned',
     adjustment: 'Adjustment',
     bonus: 'Birthday bonus',
+    mission: 'Daily mission',
     expire: 'Expired',
 };
 
@@ -86,7 +90,7 @@ const CLAIM_TONE: Record<string, 'success' | 'warning' | 'danger' | 'neutral' | 
 
 type HistoryTab = 'points' | 'purchases' | 'redemptions';
 
-export default function Rewards({ card, tier, rules, catalog, claims, purchases, transactions }: Props) {
+export default function Rewards({ card, mission, missionsRunning, tier, rules, catalog, claims, purchases, transactions }: Props) {
     const rewardsName = useRewardsName();
     const businessName = useBusinessName();
     const logoUrl = useLogoUrl();
@@ -104,7 +108,8 @@ export default function Rewards({ card, tier, rules, catalog, claims, purchases,
 
     // Arriving from the daily popup's "Claim rewards": bring the reward list into view.
     useEffect(() => {
-        if (window.location.hash === '#claim') document.getElementById('claim')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const target = window.location.hash.slice(1);
+        if (target === 'claim' || target === 'mission') document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, []);
 
     const setQty = (reward: RewardItem, qty: number) =>
@@ -157,6 +162,37 @@ export default function Rewards({ card, tier, rules, catalog, claims, purchases,
             <div className="mx-auto max-w-5xl px-4 pt-5 lg:px-6 lg:pt-8">
                 <h1 className="font-display text-[30px] leading-none font-bold">{rewardsName}</h1>
                 <p className="mt-1.5 text-shop-muted">{earnRule(rules)} — at every branch, dine-in, pickup or delivery.</p>
+
+                <div className="mt-5 lg:max-w-xl">
+                    {mission ? (
+                        <div id="mission" className="scroll-mt-20">
+                            <MissionCard mission={mission} />
+                            {!mission.completed && (
+                                <p className="mt-2 px-1 text-sm text-shop-muted">
+                                    Every purchase today counts — online or at the counter (show your card). The bonus is added automatically.
+                                </p>
+                            )}
+                        </div>
+                    ) : (
+                        missionsRunning &&
+                        card.enabled && (
+                            <section
+                                id="mission"
+                                className="flex scroll-mt-20 items-start gap-3 rounded-2xl bg-shop-surface p-4 ring-1 ring-shop-line"
+                            >
+                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-shop-sunken text-shop-muted">
+                                    <Target className="h-5 w-5" />
+                                </span>
+                                <div className="min-w-0">
+                                    <p className="font-semibold">No mission for you today</p>
+                                    <p className="text-sm text-shop-muted">
+                                        Each day, members are picked at random for a bonus-points mission. Check back tomorrow!
+                                    </p>
+                                </div>
+                            </section>
+                        )
+                    )}
+                </div>
 
                 <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
                     {/* ── Left: card, tier ─────────────────────────────── */}

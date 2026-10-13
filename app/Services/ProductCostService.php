@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\SystemSetting;
 
 /**
  * What one unit of a product costs the cafe at a branch: a variant's capital, the cost of a
@@ -22,7 +23,7 @@ class ProductCostService
             }
         }
 
-        if ($product->product_type === 'made_to_order') {
+        if ($product->product_type === 'made_to_order' && SystemSetting::ingredientTracking($branchId)) {
             $product->loadMissing(['recipeIngredients.ingredient.stocks' => fn ($q) => $q->where('branch_id', $branchId)]);
             if ($product->recipeIngredients->isNotEmpty()) {
                 return round((float) $product->recipeIngredients->sum(

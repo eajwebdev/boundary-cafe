@@ -45,8 +45,12 @@ class SystemSettingsController extends Controller
 
     // Groups that administrators are allowed to access at global scope (null branch).
     private const ADMIN_GLOBAL_GROUPS = [
-        'general', 'tax', 'pos', 'receipt', 'inventory', 'cash', 'notification', 'quotation',
+        'general', 'tax', 'pos', 'receipt', 'inventory', 'cash', 'notification', 'quotation', 'online',
     ];
+
+    // Online ordering has its own page (menu 43) with fees, hours and the delivery zone; System Settings
+    // shows only its master switches.
+    private const SETTINGS_PAGE_ONLINE_KEYS = ['online.enabled', 'online.delivery_enabled'];
 
     // Groups that only exist at global scope (no per-branch overrides).
     private const GLOBAL_ONLY_GROUPS = [
@@ -57,6 +61,8 @@ class SystemSettingsController extends Controller
     private const GLOBAL_ONLY_KEYS = [
         'general.color_theme',  // one palette for staff screens, POS, waiter app and the online store
         'general.logo',         // one business logo everywhere, including the login page and online store
+        'online.enabled',       // one online store for the whole business
+        'online.delivery_enabled',
     ];
 
     // ── Index ─────────────────────────────────────────────────────────────────
@@ -103,8 +109,9 @@ class SystemSettingsController extends Controller
                 continue;
             }
 
-            // Online ordering (menu 43) and loyalty (menu 44) have their own dedicated pages.
-            if (in_array($group, ['online', 'loyalty'], true)) {
+            // Online ordering (menu 43) and loyalty (menu 44) have their own dedicated pages;
+            // only the online ordering master switches are shown here.
+            if ($group === 'loyalty' || ($group === 'online' && ! in_array($key, self::SETTINGS_PAGE_ONLINE_KEYS, true))) {
                 continue;
             }
 
@@ -192,6 +199,9 @@ class SystemSettingsController extends Controller
             }
             if ($def->is_readonly) {
                 continue;
+            }
+            if ($def->group === 'online' && ! in_array($key, self::SETTINGS_PAGE_ONLINE_KEYS, true)) {
+                continue; // edited (with validation) on the Online Ordering page
             }
             if ($branchId && in_array($def->group, self::GLOBAL_ONLY_GROUPS, true)) {
                 continue;

@@ -1,6 +1,7 @@
 import { Bike, ShoppingBag, UtensilsCrossed } from 'lucide-react';
 import type { ElementType } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { CustomerMission } from '@/components/storefront/MissionCard';
 
 // ─── Fulfilment: Dine-in (ordering from inside the café), Takeout, Delivery ───
 
@@ -72,6 +73,7 @@ export interface RewardItem {
 /** What the once-a-day rewards popup shows (HandleInertiaRequests::rewardsPopup). */
 export interface RewardsPopupData {
     points: number;
+    mission: CustomerMission | null;
     affordable: RewardItem[];
     next: RewardItem | null;
 }
@@ -311,7 +313,11 @@ export function useCart(customerId: number | null | undefined) {
     const setQuantity = useCallback(
         (k: string, quantity: number) => {
             const current = readCart(key);
-            persist(quantity <= 0 ? current.filter((l) => l.key !== k) : current.map((l) => (l.key === k ? { ...l, quantity: Math.min(50, quantity) } : l)));
+            persist(
+                quantity <= 0
+                    ? current.filter((l) => l.key !== k)
+                    : current.map((l) => (l.key === k ? { ...l, quantity: Math.min(50, quantity) } : l)),
+            );
         },
         [key, persist],
     );

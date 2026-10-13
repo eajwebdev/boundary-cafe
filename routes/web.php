@@ -18,6 +18,7 @@ use App\Http\Controllers\LoginAuthController;
 use App\Http\Controllers\LogsController;
 use App\Http\Controllers\LoyaltyClaimController;
 use App\Http\Controllers\LoyaltyController;
+use App\Http\Controllers\LoyaltyMissionController;
 use App\Http\Controllers\LoyaltyProgramController;
 use App\Http\Controllers\LoyaltyReportController;
 use App\Http\Controllers\LoyaltyRewardController;
@@ -216,7 +217,10 @@ Route::middleware(['auth:web', 'order-taker', 'rider-only'])->group(function () 
     Route::middleware('access:43')->prefix('delivery-zone')->name('delivery-zone.')->controller(DeliveryZoneController::class)->group(function () {
         Route::get('/', 'index')->name('index');
         Route::put('/', 'update')->name('update');
+        Route::post('/barangays', 'storeBarangays')->name('barangays.store');
+        Route::patch('/towns', 'setTown')->name('towns.update');
         Route::patch('/barangays/{barangay}', 'toggleBarangay')->name('barangays.toggle');
+        Route::delete('/barangays/{barangay}', 'destroyBarangay')->name('barangays.destroy');
     });
 
     // Store Settings: close the store for the day — ID 48
@@ -230,6 +234,7 @@ Route::middleware(['auth:web', 'order-taker', 'rider-only'])->group(function () 
     Route::middleware('access:44')->prefix('loyalty-program')->name('loyalty-program.')->group(function () {
         Route::get('/', [LoyaltyProgramController::class, 'index'])->name('index');
         Route::put('/', [LoyaltyProgramController::class, 'update'])->name('update');
+        Route::put('/missions', [LoyaltyMissionController::class, 'update'])->name('missions.update');
 
         Route::get('/rewards', [LoyaltyRewardController::class, 'index'])->name('rewards.index');
         Route::post('/rewards', [LoyaltyRewardController::class, 'store'])->name('rewards.store');

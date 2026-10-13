@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { Bell, Cake, CheckCircle2, Clock, Coins, Gift, RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { Bell, Cake, CheckCircle2, Clock, Coins, Gift, RotateCcw, SlidersHorizontal, Target, Trophy } from 'lucide-react';
 
 import { RouteLine } from '@/components/storefront/ui';
 import CustomerLayout from '@/layouts/CustomerLayout';
@@ -35,6 +35,8 @@ const KIND_ICON: Record<string, React.ElementType> = {
     points_returned: RotateCcw,
     points_expired: Clock,
     points_adjusted: SlidersHorizontal,
+    mission_assigned: Target,
+    mission_completed: Trophy,
 };
 
 export default function Notifications({ notifications }: Props) {
@@ -54,7 +56,10 @@ export default function Notifications({ notifications }: Props) {
                             </span>
                             <p className="font-semibold">Nothing yet</p>
                             <p className="max-w-xs text-sm text-shop-muted">After your next order we’ll let you know how many points you earned.</p>
-                            <Link href="/" className="bc-press mt-1 rounded-full bg-shop-accent px-5 py-2.5 text-sm font-semibold text-shop-on-accent">
+                            <Link
+                                href="/"
+                                className="bc-press mt-1 rounded-full bg-shop-accent px-5 py-2.5 text-sm font-semibold text-shop-on-accent"
+                            >
                                 Order now
                             </Link>
                         </div>
@@ -77,7 +82,12 @@ export default function Notifications({ notifications }: Props) {
                                             <div className="flex items-start justify-between gap-3">
                                                 <p className="font-semibold">
                                                     {n.title}
-                                                    {n.unread && <span className="ml-2 inline-block h-2 w-2 rounded-full bg-shop-accent align-middle" aria-label="New" />}
+                                                    {n.unread && (
+                                                        <span
+                                                            className="ml-2 inline-block h-2 w-2 rounded-full bg-shop-accent align-middle"
+                                                            aria-label="New"
+                                                        />
+                                                    )}
                                                 </p>
                                                 {n.points !== 0 && (
                                                     <span
@@ -107,14 +117,20 @@ export default function Notifications({ notifications }: Props) {
                 {(notifications.prev_page_url || notifications.next_page_url) && (
                     <div className="mt-4 flex justify-between">
                         {notifications.prev_page_url ? (
-                            <Link href={notifications.prev_page_url} className="bc-press rounded-full px-4 py-2 text-sm font-semibold hover:bg-shop-sunken">
+                            <Link
+                                href={notifications.prev_page_url}
+                                className="bc-press rounded-full px-4 py-2 text-sm font-semibold hover:bg-shop-sunken"
+                            >
                                 ← Newer
                             </Link>
                         ) : (
                             <span />
                         )}
                         {notifications.next_page_url && (
-                            <Link href={notifications.next_page_url} className="bc-press rounded-full px-4 py-2 text-sm font-semibold hover:bg-shop-sunken">
+                            <Link
+                                href={notifications.next_page_url}
+                                className="bc-press rounded-full px-4 py-2 text-sm font-semibold hover:bg-shop-sunken"
+                            >
                                 Older →
                             </Link>
                         )}

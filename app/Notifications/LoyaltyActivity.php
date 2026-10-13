@@ -28,6 +28,10 @@ class LoyaltyActivity extends Notification
 
     public const POINTS_ADJUSTED = 'points_adjusted';
 
+    public const MISSION_ASSIGNED = 'mission_assigned';
+
+    public const MISSION_COMPLETED = 'mission_completed';
+
     public function __construct(
         public string $kind,
         public string $title,

@@ -40,12 +40,28 @@ interface Props {
     className?: string;
 }
 
-const PIN_STYLE: Record<MapPoint['kind'], { bg: string; glyph: string }> = {
-    store: { bg: '#0f172a', glyph: '<path d="M3 9l1-5h16l1 5M4 9v11h16V9M9 20v-6h6v6" />' },
-    rider: { bg: '#7c3aed', glyph: '<circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17l4-7h5l3 7M10 10l-2-4h3" />' },
-    drop: { bg: '#e11d48', glyph: '<path d="M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>' },
-    available: { bg: '#64748b', glyph: '<path d="M12 5v14M5 12h14"/>' },
+/**
+ * Pin artwork. Icons are Lucide's (ISC licence, already used across the app): motorbike for the rider,
+ * house for a customer, package for an order nobody has taken, coffee for the café.
+ */
+const ICON: Record<string, string> = {
+    motorbike:
+        '<path d="m18 14-1-3"/><path d="m3 9 6 2a2 2 0 0 1 2-2h2a2 2 0 0 1 1.99 1.81"/><path d="M8 17h3a1 1 0 0 0 1-1 6 6 0 0 1 6-6 1 1 0 0 0 1-1v-.75A5 5 0 0 0 17 5"/><circle cx="19" cy="17" r="3"/><circle cx="5" cy="17" r="3"/>',
+    house: '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+    coffee: '<path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/>',
+    package:
+        '<path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><polyline points="3.29 7 12 12 20.71 7"/><path d="m7.5 4.27 9 5.15"/>',
 };
+
+const PIN_STYLE: Record<MapPoint['kind'], { bg: string; icon: string }> = {
+    store: { bg: '#0f172a', icon: ICON.coffee },
+    rider: { bg: '#7c3aed', icon: ICON.motorbike },
+    drop: { bg: '#e11d48', icon: ICON.house },
+    available: { bg: '#64748b', icon: ICON.package },
+};
+
+/** Teardrop location pin (tip at the bottom centre, which is where it points on the map). */
+const TEARDROP = 'M18 45c-1.3 0-2.1-1-3.1-2.4C9.4 35.2 2 27.6 2 18 2 9.2 9.2 2 18 2s16 7.2 16 16c0 9.6-7.4 17.2-12.9 24.6-1 1.4-1.8 2.4-3.1 2.4z';
 
 setWorkerUrl(maplibreWorkerUrl);
 
@@ -53,20 +69,32 @@ const DEFAULT_CENTER: [number, number] = [122.9264, 9.7355]; // Mabinay, [lng, l
 const ROUTE_SOURCE = 'bc-route';
 const ROAD_SOURCE = 'bc-road';
 
-/** Markup for a pin: a white-ringed disc with an icon or stop number; a soft pulse for live riders and the focused pin. */
+/**
+ * Markup for a pin. The rider is a round badge (it moves; a soft pulse while live). Everything else is a
+ * teardrop location pin whose tip marks the exact spot, showing a stop number or an icon.
+ */
 function pinHtml(point: MapPoint, focused: boolean): string {
-    const { bg, glyph } = PIN_STYLE[point.kind];
-    const size = focused ? 44 : 34;
-    const pulse =
-        (point.kind === 'rider' && !point.stale) || focused
-            ? `<span style="position:absolute;inset:-6px;border-radius:9999px;background:${bg};opacity:.25;animation:bc-ping 1.6s ease-out infinite"></span>`
-            : '';
+    const { bg, icon } = PIN_STYLE[point.kind];
+    const fade = point.stale ? 0.45 : 1;
+
+    if (point.kind === 'rider') {
+        const size = focused ? 48 : 40;
+        const pulse = point.stale
+            ? ''
+            : `<span style="position:absolute;inset:-7px;border-radius:9999px;background:${bg};opacity:.28;animation:bc-ping 1.6s ease-out infinite"></span>`;
+        return `<span style="position:relative;display:flex;width:${size}px;height:${size}px;align-items:center;justify-content:center;border-radius:9999px;background:${bg};border:3px solid #fff;box-shadow:0 4px 12px rgba(76,29,149,.45);opacity:${fade};cursor:pointer">${pulse}<svg width="${focused ? 26 : 22}" height="${focused ? 26 : 22}" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:relative">${icon}</svg></span>`;
+    }
+
+    const scale = focused ? 1.25 : 1;
     const inner =
         point.number !== undefined
-            ? `<span style="color:#fff;font:800 ${focused ? 17 : 14}px system-ui,sans-serif">${point.number}</span>`
-            : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${glyph}</svg>`;
+            ? `<text x="18" y="23.5" text-anchor="middle" fill="#fff" style="font:800 15px system-ui,sans-serif">${point.number}</text>`
+            : `<svg x="8.5" y="8.5" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>`;
+    const halo = focused
+        ? `<span style="position:absolute;left:50%;bottom:-6px;width:22px;height:8px;margin-left:-11px;border-radius:9999px;background:${bg};opacity:.35;animation:bc-ping 1.6s ease-out infinite"></span>`
+        : '';
 
-    return `<span style="position:relative;display:flex;width:${size}px;height:${size}px;align-items:center;justify-content:center;border-radius:9999px;background:${bg};border:3px solid #fff;box-shadow:0 3px 10px rgba(15,23,42,.35);opacity:${point.stale ? 0.45 : 1};cursor:pointer">${pulse}${inner}</span>`;
+    return `<span style="position:relative;display:block;width:36px;height:46px;transform:scale(${scale});transform-origin:50% 100%;transition:transform .15s;opacity:${fade};cursor:pointer;filter:drop-shadow(0 3px 4px rgba(15,23,42,.35))">${halo}<svg width="36" height="46" viewBox="0 0 36 46" style="position:relative;display:block"><path d="${TEARDROP}" fill="${bg}" stroke="#fff" stroke-width="2.5"/>${inner}</svg></span>`;
 }
 
 /**
@@ -230,10 +258,14 @@ export default function DeliveryMap({
                 event.stopPropagation();
                 latest.current.onSelect?.(point.id);
             });
-            const popup = new Popup({ offset: 22, closeButton: false, closeOnClick: false }).setText(point.label);
+            const popup = new Popup({ offset: point.kind === 'rider' ? 24 : [0, -44], closeButton: false, closeOnClick: false }).setText(point.label);
             element.addEventListener('mouseenter', () => popup.setLngLat(marker.getLngLat()).addTo(instance));
             element.addEventListener('mouseleave', () => popup.remove());
-            const marker = new Marker({ element }).setLngLat([point.lng, point.lat]).setPopup(popup).addTo(instance);
+            // Round rider badges sit centred on the position; teardrop pins stand on their tip.
+            const marker = new Marker({ element, anchor: point.kind === 'rider' ? 'center' : 'bottom' })
+                .setLngLat([point.lng, point.lat])
+                .setPopup(popup)
+                .addTo(instance);
             markers.current.set(point.id, { marker, html });
         });
 

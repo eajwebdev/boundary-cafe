@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { jsonRequest } from '@/lib/customer';
 import { cn } from '@/lib/utils';
+import MissionNote from './MissionNote';
 import type { LinkedMember, RewardClaimInCart } from './posTypes';
 import { fmtMoney } from './ReceiptTemplate';
 
@@ -81,6 +82,7 @@ export default function LoyaltyScanner({
                     contact_number: string | null;
                     points: number;
                     reserved_points: number;
+                    mission: LinkedMember['mission'];
                 }>('/loyalty/lookup', { method: 'POST', body: { code: value } });
                 setResult({ kind: 'member', member: res });
             }
@@ -154,7 +156,12 @@ export default function LoyaltyScanner({
     const rewardValue = result?.kind === 'reward' ? result.claim.items.reduce((s, i) => s + i.retail_price * i.quantity, 0) : 0;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-xs sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="Scan loyalty QR">
+        <div
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-xs sm:items-center sm:p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Scan loyalty QR"
+        >
             <div className="flex max-h-[94dvh] w-full animate-in flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-2xl duration-150 zoom-in-95 fade-in sm:max-w-lg sm:rounded-2xl">
                 <div className="flex shrink-0 items-center justify-between border-b border-border bg-muted/20 px-5 py-3.5">
                     <div className="flex items-center gap-2">
@@ -214,7 +221,9 @@ export default function LoyaltyScanner({
                             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                                 <div className="h-48 w-48 rounded-3xl border-4 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
                             </div>
-                            {cameraError && <p className="absolute inset-x-0 bottom-0 bg-black/70 p-2 text-center text-xs text-white">{cameraError}</p>}
+                            {cameraError && (
+                                <p className="absolute inset-x-0 bottom-0 bg-black/70 p-2 text-center text-xs text-white">{cameraError}</p>
+                            )}
                         </div>
                     )}
                     {!cameraSupported && (
@@ -224,7 +233,10 @@ export default function LoyaltyScanner({
                     )}
 
                     {error && (
-                        <div role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
+                        <div
+                            role="alert"
+                            className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
+                        >
                             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                             <span>{error}</span>
                         </div>
@@ -246,20 +258,24 @@ export default function LoyaltyScanner({
                             </div>
                             <ul className="divide-y divide-border/60 rounded-xl border border-border bg-background">
                                 {result.claim.items.map((item) => (
-                                    <li key={`${item.product_id}-${item.variant_id ?? 'base'}`} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
+                                    <li
+                                        key={`${item.product_id}-${item.variant_id ?? 'base'}`}
+                                        className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
+                                    >
                                         <span className="min-w-0 truncate font-bold">
                                             {item.quantity}× {item.name}
                                         </span>
                                         <span className="shrink-0 text-right text-xs text-muted-foreground tabular-nums">
-                                            {item.points} pts · <span className="line-through">{fmtMoney(item.retail_price * item.quantity, currency)}</span>{' '}
+                                            {item.points} pts ·{' '}
+                                            <span className="line-through">{fmtMoney(item.retail_price * item.quantity, currency)}</span>{' '}
                                             <span className="font-black text-emerald-600">{fmtMoney(0, currency)}</span>
                                         </span>
                                     </li>
                                 ))}
                             </ul>
                             <p className="text-[11px] text-muted-foreground">
-                                {result.claim.points} points were already set aside by the customer · menu value {fmtMoney(rewardValue, currency)}. The
-                                points are used up only when this sale is completed.
+                                {result.claim.points} points were already set aside by the customer · menu value {fmtMoney(rewardValue, currency)}.
+                                The points are used up only when this sale is completed.
                             </p>
                             <Button className="h-12 w-full gap-2 text-base font-black" onClick={() => onAddReward(result.claim)}>
                                 <Gift className="h-5 w-5" /> Add reward to order
@@ -278,7 +294,9 @@ export default function LoyaltyScanner({
                                     <p className="font-mono text-[11px] text-muted-foreground">{result.member.customer_number}</p>
                                 </div>
                                 <span className="shrink-0 text-right">
-                                    <span className="block font-mono text-xl font-black text-foreground tabular-nums">{result.member.points.toLocaleString()}</span>
+                                    <span className="block font-mono text-xl font-black text-foreground tabular-nums">
+                                        {result.member.points.toLocaleString()}
+                                    </span>
                                     <span className="text-[10px] font-bold text-muted-foreground uppercase">live points</span>
                                 </span>
                             </div>
@@ -287,6 +305,7 @@ export default function LoyaltyScanner({
                                     {result.member.reserved_points} more points are held for a reward — ask the customer to show its QR.
                                 </p>
                             )}
+                            {result.member.mission && <MissionNote mission={result.member.mission} />}
                             <Button
                                 variant="secondary"
                                 className={cn('h-12 w-full gap-2 text-base font-black')}

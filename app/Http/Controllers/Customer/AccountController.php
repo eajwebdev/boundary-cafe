@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\CustomerAddress;
 use App\Models\CustomerSocialAccount;
 use App\Models\LoyaltyTransaction;
+use App\Services\DailyMissionService;
 use App\Services\DeliveryZoneService;
 use App\Services\LoyaltyRewardService;
 use App\Services\LoyaltyService;
@@ -106,7 +107,7 @@ class AccountController extends Controller
         return back()->with('success', 'Password changed.');
     }
 
-    public function rewards(LoyaltyRewardService $rewards): Response
+    public function rewards(LoyaltyRewardService $rewards, DailyMissionService $missions): Response
     {
         $rewards->expireStale($this->customer());
         $customer = $this->customer()->refresh();
@@ -127,6 +128,8 @@ class AccountController extends Controller
                 'joined_at' => $customer->joined_at?->format('M Y'),
             ],
             'tier' => $this->loyalty->tierFor($customer, $branchId),
+            'mission' => $missions->forCustomer($customer),
+            'missionsRunning' => $missions->isRunning(),
             'rules' => $this->loyalty->rules($branchId),
             // Rewards are claimed in-store at any branch, so the catalog is not filtered by branch here.
             'catalog' => $rewards->catalog()->map(fn ($reward) => $rewards->rewardToFrontend($reward, $branchId))->values(),

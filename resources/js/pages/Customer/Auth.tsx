@@ -6,9 +6,11 @@ import { AuthTabs, LoginForm, RegisterForm } from '@/components/storefront/AuthF
 import { RouteLine } from '@/components/storefront/ui';
 import { useBusinessName, useRewardsName } from '@/hooks/use-business-name';
 import { useLogoUrl } from '@/hooks/use-logo';
+import { useServiceArea } from '@/hooks/use-service-area';
 import CustomerLayout from '@/layouts/CustomerLayout';
 
 export default function CustomerAuth({ mode: initialMode, barangays }: { mode: 'login' | 'register'; barangays: string[] }) {
+    const area = useServiceArea();
     const logoUrl = useLogoUrl();
     const businessName = useBusinessName();
     const rewardsName = useRewardsName();
@@ -30,7 +32,7 @@ export default function CustomerAuth({ mode: initialMode, barangays }: { mode: '
                                 hatid sa inyong pinto.
                             </h2>
                             <p className="mt-4 max-w-sm text-white/75">
-                                Order {businessName} favourites for delivery anywhere in Mabinay, or pick them up fresh from our café.
+                                Order {businessName} favourites for delivery anywhere in {area.town}, or pick them up fresh from our café.
                             </p>
                         </div>
                         <ul className="relative z-10 space-y-3 text-sm">
@@ -41,7 +43,7 @@ export default function CustomerAuth({ mode: initialMode, barangays }: { mode: '
                                 <Gift className="h-5 w-5 text-shop-accent" /> Earn {rewardsName} on every order
                             </li>
                             <li className="flex items-center gap-3">
-                                <MapPin className="h-5 w-5 text-shop-accent" /> Delivering across Mabinay, Negros Oriental
+                                <MapPin className="h-5 w-5 text-shop-accent" /> Delivering across {area.town}, {area.province}
                             </li>
                         </ul>
                         <img

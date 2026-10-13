@@ -6,6 +6,7 @@ import { ArrowLeft, Crosshair, Loader2, LocateFixed, MapPin, Navigation } from '
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Circle, MapContainer, Polygon, TileLayer, useMapEvents } from 'react-leaflet';
 
+import { useServiceArea } from '@/hooks/use-service-area';
 import type { DeliveryZone, SavedAddress } from '@/lib/customer';
 import { jsonRequest } from '@/lib/customer';
 import { cn, themeAccent } from '@/lib/utils';
@@ -62,6 +63,7 @@ interface Props {
 }
 
 export default function AddressPicker({ zone, barangays, initial, onClose, onSaved }: Props) {
+    const area = useServiceArea();
     const accent = themeAccent();
     const start = initial ? { lat: initial.lat, lng: initial.lng } : zone.center;
     const mapRef = useRef<LeafletMap | null>(null);
@@ -180,7 +182,7 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
         );
     }
 
-    const municipality = geo.municipality || initial?.municipality || 'Mabinay';
+    const municipality = geo.municipality || initial?.municipality || area.town;
     const province = geo.province || initial?.province || 'Negros Oriental';
     const locality = [form.barangay, municipality, province].filter(Boolean).join(', ') + (form.zip_code ? ` ${form.zip_code}` : '');
     const landmarkOk = form.landmark.trim().length >= 3;
@@ -292,8 +294,8 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
                                 type="button"
                                 onClick={() => flyTo(zone.center.lat, zone.center.lng, 15)}
                                 className="flex h-12 w-12 items-center justify-center rounded-full bg-shop-surface shadow-lg ring-1 ring-shop-line"
-                                aria-label="Back to Mabinay"
-                                title="Back to Mabinay"
+                                aria-label={`Back to ${area.town}`}
+                                title={`Back to ${area.town}`}
                             >
                                 <Crosshair className="h-5 w-5" />
                             </button>
@@ -324,7 +326,8 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
                                     {geo.loading || moving
                                         ? 'Finding address…'
                                         : geo.barangay
-                                          ? [geo.barangay, geo.municipality, geo.province].filter(Boolean).join(', ') + (geo.zip_code ? ` ${geo.zip_code}` : '')
+                                          ? [geo.barangay, geo.municipality, geo.province].filter(Boolean).join(', ') +
+                                            (geo.zip_code ? ` ${geo.zip_code}` : '')
                                           : geo.label || 'Pinned location'}
                                 </p>
                                 <p className="text-xs text-shop-muted">
@@ -334,7 +337,7 @@ export default function AddressPicker({ zone, barangays, initial, onClose, onSav
                         </div>
                         {!inZone && (
                             <p className="rounded-xl bg-shop-danger-soft px-3 py-2 text-sm font-medium text-shop-danger">
-                                Sorry, we only deliver within Mabinay. Move the pin inside the dashed area.
+                                Sorry, we only deliver within {area.town}. Move the pin inside the dashed area.
                             </p>
                         )}
                         {(locError || errors.lat) && <p className="text-sm text-shop-danger">{errors.lat ?? locError}</p>}

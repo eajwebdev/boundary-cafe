@@ -40,6 +40,7 @@ const peso = (n: number) => '₱' + n.toLocaleString('en-PH', { minimumFractionD
 const TYPE_LABEL: Record<string, string> = {
     earn: 'Earned',
     bonus: 'Birthday',
+    mission: 'Mission',
     redeem: 'Redeemed',
     reserve: 'Held',
     release: 'Returned',
@@ -53,7 +54,8 @@ export default function LoyaltyReports({ filters, branches, points, rewards, by_
     const [to, setTo] = useState(filters.to);
     const [branchId, setBranchId] = useState(filters.branch_id?.toString() ?? '');
 
-    const apply = () => router.get('/loyalty-program/reports', { from, to, branch_id: branchId || undefined }, { preserveScroll: true, preserveState: true });
+    const apply = () =>
+        router.get('/loyalty-program/reports', { from, to, branch_id: branchId || undefined }, { preserveScroll: true, preserveState: true });
 
     return (
         <AdminLayout title="Loyalty Reports">
@@ -91,8 +93,8 @@ export default function LoyaltyReports({ filters, branches, points, rewards, by_
                             <Row label="Claims expired unused" value={rewards.expired_claims.toLocaleString()} />
                         </div>
                         <p className="text-xs text-muted-foreground">
-                            Retail value is the menu price at the time of the claim. Cost uses the item&apos;s capital, or its recipe cost for made-to-order
-                            items. How these are booked (loyalty liability, marketing, deferred revenue) is up to your accountant.
+                            Retail value is the menu price at the time of the claim. Cost uses the item&apos;s capital, or its recipe cost for
+                            made-to-order items. How these are booked (loyalty liability, marketing, deferred revenue) is up to your accountant.
                         </p>
                     </Panel>
 
@@ -201,7 +203,9 @@ export default function LoyaltyReports({ filters, branches, points, rewards, by_
                                     ) : (
                                         ledger.map((t) => (
                                             <tr key={t.id}>
-                                                <td className="px-4 py-2 text-xs whitespace-nowrap text-muted-foreground">{fmtDate(t.created_at, 'MMM d, h:mm a')}</td>
+                                                <td className="px-4 py-2 text-xs whitespace-nowrap text-muted-foreground">
+                                                    {fmtDate(t.created_at, 'MMM d, h:mm a')}
+                                                </td>
                                                 <td className="px-4 py-2">
                                                     {t.customer ? (
                                                         <Link href={`/customers/${t.customer.id}`} className="font-semibold hover:text-primary">
@@ -212,17 +216,26 @@ export default function LoyaltyReports({ filters, branches, points, rewards, by_
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-2">
-                                                    <StatusPill tone={t.points > 0 ? 'success' : t.points < 0 ? 'warning' : 'muted'}>{TYPE_LABEL[t.type] ?? t.type}</StatusPill>
+                                                    <StatusPill tone={t.points > 0 ? 'success' : t.points < 0 ? 'warning' : 'muted'}>
+                                                        {TYPE_LABEL[t.type] ?? t.type}
+                                                    </StatusPill>
                                                 </td>
                                                 <td className="max-w-80 truncate px-4 py-2 text-xs text-muted-foreground" title={t.reason ?? ''}>
                                                     {t.reason}
                                                 </td>
                                                 <td className="px-4 py-2 text-xs text-muted-foreground">{t.branch ?? '—'}</td>
-                                                <td className={cn('px-4 py-2 text-right font-bold tabular-nums', t.points > 0 ? 'text-emerald-600' : 'text-foreground')}>
+                                                <td
+                                                    className={cn(
+                                                        'px-4 py-2 text-right font-bold tabular-nums',
+                                                        t.points > 0 ? 'text-emerald-600' : 'text-foreground',
+                                                    )}
+                                                >
                                                     {t.points > 0 ? '+' : ''}
                                                     {t.points.toLocaleString()}
                                                 </td>
-                                                <td className="px-4 py-2 text-right text-muted-foreground tabular-nums">{t.balance_after.toLocaleString()}</td>
+                                                <td className="px-4 py-2 text-right text-muted-foreground tabular-nums">
+                                                    {t.balance_after.toLocaleString()}
+                                                </td>
                                             </tr>
                                         ))
                                     )}

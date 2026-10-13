@@ -60,7 +60,12 @@ export default function ProductDetail({ product, open, onOpenChange, onAdd, disa
                 <fieldset>
                     <legend className="mb-3 flex w-full items-center justify-between">
                         <span className="font-display text-lg font-semibold">Choose one</span>
-                        <span className={cn('rounded-full px-2.5 py-1 text-xs font-semibold', variant ? 'bg-shop-success-soft text-shop-success' : 'bg-shop-accent-soft text-shop-accent-ink')}>
+                        <span
+                            className={cn(
+                                'rounded-full px-2.5 py-1 text-xs font-semibold',
+                                variant ? 'bg-shop-success-soft text-shop-success' : 'bg-shop-accent-soft text-shop-accent-ink',
+                            )}
+                        >
                             {variant ? 'Done' : 'Required'}
                         </span>
                     </legend>
@@ -76,12 +81,26 @@ export default function ProductDetail({ product, open, onOpenChange, onAdd, disa
                                         v.sold_out && 'cursor-not-allowed opacity-50',
                                     )}
                                 >
-                                    <input type="radio" name="variant" className="sr-only" checked={checked} disabled={v.sold_out} onChange={() => setVariantId(v.id)} />
-                                    <span className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2', checked ? 'border-shop-accent bg-shop-accent' : 'border-shop-line')}>
+                                    <input
+                                        type="radio"
+                                        name="variant"
+                                        className="sr-only"
+                                        checked={checked}
+                                        disabled={v.sold_out}
+                                        onChange={() => setVariantId(v.id)}
+                                    />
+                                    <span
+                                        className={cn(
+                                            'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2',
+                                            checked ? 'border-shop-accent bg-shop-accent' : 'border-shop-line',
+                                        )}
+                                    >
                                         {checked && <Check className="h-3 w-3 text-shop-on-accent" strokeWidth={3} />}
                                     </span>
                                     <span className="flex-1 font-medium">{v.name}</span>
-                                    <span className="text-sm text-shop-muted tabular-nums">{v.sold_out ? 'Sold out' : v.extra_price > 0 ? `+₱${v.extra_price}` : 'Included'}</span>
+                                    <span className="text-sm text-shop-muted tabular-nums">
+                                        {v.sold_out ? 'Sold out' : v.extra_price > 0 ? `+₱${v.extra_price}` : 'Included'}
+                                    </span>
                                 </label>
                             );
                         })}
@@ -90,7 +109,7 @@ export default function ProductDetail({ product, open, onOpenChange, onAdd, disa
             )}
 
             <div>
-                <label htmlFor="item-note" className="font-display mb-2 block text-lg font-semibold">
+                <label htmlFor="item-note" className="mb-2 block font-display text-lg font-semibold">
                     Special instructions <span className="text-sm font-normal text-shop-muted">(optional)</span>
                 </label>
                 <textarea
@@ -135,9 +154,17 @@ export default function ProductDetail({ product, open, onOpenChange, onAdd, disa
                 type="button"
                 disabled={blocked}
                 onClick={add}
-                className="bc-press flex h-14 flex-1 cursor-pointer items-center justify-between rounded-2xl bg-shop-accent px-5 text-base font-bold text-shop-on-accent shadow-shop-md disabled:cursor-not-allowed disabled:bg-shop-sunken disabled:text-shop-muted disabled:shadow-none"
+                className="bc-press shadow-shop-md flex h-14 flex-1 cursor-pointer items-center justify-between rounded-2xl bg-shop-accent px-5 text-base font-bold text-shop-on-accent disabled:cursor-not-allowed disabled:bg-shop-sunken disabled:text-shop-muted disabled:shadow-none"
             >
-                <span>{product.sold_out ? 'Sold out' : disabled ? (disabledReason ?? 'Unavailable') : needsVariant ? 'Choose an option' : 'Add to order'}</span>
+                <span>
+                    {product.sold_out
+                        ? 'Sold out'
+                        : disabled
+                          ? (disabledReason ?? 'Unavailable')
+                          : needsVariant
+                            ? 'Choose an option'
+                            : 'Add to order'}
+                </span>
                 {!blocked && <Price value={unit * qty} />}
             </button>
         </div>
@@ -146,9 +173,9 @@ export default function ProductDetail({ product, open, onOpenChange, onAdd, disa
     const heading = (
         <div>
             <p className="text-xs font-semibold tracking-[0.14em] text-shop-accent-ink uppercase">{product.category}</p>
-            <h2 className="font-display mt-1 text-[28px] leading-tight font-bold">{product.name}</h2>
-            <p className="mt-2 text-base leading-relaxed text-shop-muted">{product.description ?? 'Made fresh when you order it at our Mabinay kitchen.'}</p>
-            <p className="font-display mt-3 text-2xl font-bold">
+            <h2 className="mt-1 font-display text-[28px] leading-tight font-bold">{product.name}</h2>
+            <p className="mt-2 text-base leading-relaxed text-shop-muted">{product.description ?? 'Made fresh in our kitchen when you order it.'}</p>
+            <p className="mt-3 font-display text-2xl font-bold">
                 <Price value={product.price} />
             </p>
         </div>
@@ -157,13 +184,21 @@ export default function ProductDetail({ product, open, onOpenChange, onAdd, disa
     if (isDesktop) {
         return (
             <Dialog open={open} onOpenChange={onOpenChange}>
-                <DialogContent showCloseButton={false} className="bc-shop grid max-h-[86dvh] gap-0 overflow-hidden rounded-[28px] border-shop-line bg-shop-surface p-0 sm:max-w-4xl md:grid-cols-[1fr_1.05fr]">
+                <DialogContent
+                    showCloseButton={false}
+                    className="bc-shop grid max-h-[86dvh] gap-0 overflow-hidden rounded-[28px] border-shop-line bg-shop-surface p-0 sm:max-w-4xl md:grid-cols-[1fr_1.05fr]"
+                >
                     <DialogTitle className="sr-only">{product.name}</DialogTitle>
                     <DialogDescription className="sr-only">Choose options and add to your order</DialogDescription>
                     <ProductImage src={product.image} alt={product.name} className="aspect-square h-full w-full md:aspect-auto" />
                     <div className="flex min-h-0 flex-col">
                         <div className="flex justify-end p-3 pb-0">
-                            <button type="button" onClick={() => onOpenChange(false)} className="bc-press flex h-10 w-10 cursor-pointer items-center justify-center rounded-full hover:bg-shop-sunken" aria-label="Close">
+                            <button
+                                type="button"
+                                onClick={() => onOpenChange(false)}
+                                className="bc-press flex h-10 w-10 cursor-pointer items-center justify-center rounded-full hover:bg-shop-sunken"
+                                aria-label="Close"
+                            >
                                 <X className="h-5 w-5" />
                             </button>
                         </div>
@@ -180,7 +215,11 @@ export default function ProductDetail({ product, open, onOpenChange, onAdd, disa
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent side="bottom" showCloseButton={false} className="bc-shop flex max-h-[92dvh] flex-col gap-0 overflow-hidden rounded-t-[28px] border-shop-line bg-shop-surface p-0 sm:mx-auto sm:max-w-xl">
+            <SheetContent
+                side="bottom"
+                showCloseButton={false}
+                className="bc-shop flex max-h-[92dvh] flex-col gap-0 overflow-hidden rounded-t-[28px] border-shop-line bg-shop-surface p-0 sm:mx-auto sm:max-w-xl"
+            >
                 <SheetTitle className="sr-only">{product.name}</SheetTitle>
                 <SheetDescription className="sr-only">Choose options and add to your order</SheetDescription>
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -190,7 +229,7 @@ export default function ProductDetail({ product, open, onOpenChange, onAdd, disa
                         <button
                             type="button"
                             onClick={() => onOpenChange(false)}
-                            className="bc-press absolute top-3 right-3 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-shop-surface/95 shadow-shop-md"
+                            className="bc-press shadow-shop-md absolute top-3 right-3 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-shop-surface/95"
                             aria-label="Close"
                         >
                             <X className="h-5 w-5" />

@@ -587,7 +587,7 @@ class DashboardService
         $tx = LoyaltyTransaction::query()
             ->when($this->branchId, fn ($q) => $q->where('branch_id', $this->branchId))
             ->whereBetween('created_at', [$this->from, $this->to]);
-        $issued = (int) (clone $tx)->whereIn('type', [LoyaltyTransaction::TYPE_EARN, LoyaltyTransaction::TYPE_BONUS])->sum('points');
+        $issued = (int) (clone $tx)->whereIn('type', LoyaltyTransaction::ISSUED_TYPES)->sum('points');
         $redeemed = (int) abs((clone $tx)->where('type', LoyaltyTransaction::TYPE_REDEEM)->sum('points'));
 
         $outstanding = (int) Customer::where('loyalty_enabled', true)->sum('loyalty_points');

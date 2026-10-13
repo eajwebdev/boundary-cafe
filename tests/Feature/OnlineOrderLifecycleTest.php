@@ -33,6 +33,8 @@ class OnlineOrderLifecycleTest extends TestCase
         $this->seed(DatabaseSeeder::class);
         SystemSetting::set('online.store_hours', ['open' => '00:00', 'close' => '23:59', 'days' => [0, 1, 2, 3, 4, 5, 6]]);
         SystemSetting::set('online.min_order', 0);
+        // These tests follow orders through recipe-ingredient deduction (the "on" setting).
+        SystemSetting::set('inventory.ingredient_tracking', true);
         $this->joy = Customer::where('contact_number', '09171234567')->firstOrFail();
         $this->staff = User::where('username', 'cashier_mab')->firstOrFail();
     }

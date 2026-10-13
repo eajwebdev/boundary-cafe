@@ -25,6 +25,12 @@ class LoyaltyTransaction extends Model
 
     public const TYPE_EXPIRE = 'expire';
 
+    /** Bonus points for completing a daily mission. */
+    public const TYPE_MISSION = 'mission';
+
+    /** Ledger types that put new points into circulation. */
+    public const ISSUED_TYPES = [self::TYPE_EARN, self::TYPE_BONUS, self::TYPE_MISSION];
+
     protected $fillable = [
         'customer_id', 'branch_id', 'sale_id', 'reward_claim_id', 'user_id', 'type',
         'points', 'balance_after', 'reason', 'meta',

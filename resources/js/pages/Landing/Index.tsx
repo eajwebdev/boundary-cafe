@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { CartSheet } from '@/components/storefront/CartPanel';
 import type { NavSection } from '@/components/storefront/CategoryNav';
 import { CategoryChips, CategoryRail, CategoryTiles } from '@/components/storefront/CategoryNav';
+import MissionCard, { type CustomerMission } from '@/components/storefront/MissionCard';
 import ProductCard from '@/components/storefront/ProductCard';
 import ProductDetail from '@/components/storefront/ProductDetail';
 import PromoRail from '@/components/storefront/PromoRail';
@@ -13,6 +14,7 @@ import { Pill, Price, useIsDesktop } from '@/components/storefront/ui';
 import ShopAutoSkeleton from '@/components/ui/auto-skeleton';
 import { useBranchLabel, useBusinessName, useRewardsName, useTagline } from '@/hooks/use-business-name';
 import { useLogoUrl } from '@/hooks/use-logo';
+import { useServiceArea } from '@/hooks/use-service-area';
 import CustomerLayout, { useCustomerAuth } from '@/layouts/CustomerLayout';
 import type { CustomerSession, MenuProduct, StoreStatus, StorefrontPromo } from '@/lib/customer';
 import type { Fulfillment as CustomerFulfillment } from '@/lib/customer';
@@ -41,6 +43,7 @@ interface PageProps {
     storefrontPromos: StorefrontPromo[];
     loyaltyRules: { enabled: boolean; spend_increment: number; points_per_increment: number; birthday_bonus: number };
     activeOrder: { order_number: string; status: string; status_label: string; total: number } | null;
+    mission: CustomerMission | null;
     customer: CustomerSession | null;
     barangays: string[];
     [key: string]: unknown;
@@ -205,9 +208,10 @@ function AnnouncementStrip({ onPickup }: { onPickup: () => void }) {
 
 /** Where the order is going: a compact chip in the desktop header, a full-width row under the header on phones. */
 function AddressChip({ variant = 'chip' }: { variant?: 'chip' | 'bar' }) {
+    const area = useServiceArea();
     const { props } = usePage<PageProps>();
     const { requireAuth } = useCustomerAuth();
-    const place = props.customer?.barangay ? `${props.customer.barangay}, Mabinay` : 'Mabinay, Negros Oriental';
+    const place = props.customer?.barangay ? `${props.customer.barangay}, ${area.town}` : `${area.town}, ${area.province}`;
     const inner =
         variant === 'bar' ? (
             <>
@@ -353,7 +357,7 @@ interface BodyProps {
 
 function StorefrontBody({ cart, query, onQuery, fulfillment, onFulfillment, cartOpen, onCartOpen }: BodyProps) {
     const { props } = usePage<PageProps>();
-    const { store, categories, products, storefrontPromos, loyaltyRules, activeOrder, customer } = props;
+    const { store, categories, products, storefrontPromos, loyaltyRules, activeOrder, mission, customer } = props;
     const { requireAuth } = useCustomerAuth();
     const businessName = useBusinessName();
     const tagline = useTagline();
@@ -613,6 +617,11 @@ function StorefrontBody({ cart, query, onQuery, fulfillment, onFulfillment, cart
                 {/* ── Main ─────────────────────────────────────────── */}
                 <div className="min-w-0">
                     <StatusStrip isOpen={isOpen} status={store.status} activeOrder={activeOrder} />
+                    {mission && (
+                        <div className="px-4 pt-4 lg:px-0 lg:pt-0 lg:pb-4">
+                            <MissionCard mission={mission} link="/account/rewards#mission" />
+                        </div>
+                    )}
                     {/* A desktop search swaps the discovery blocks for results */}
                     <div className={cn(searching && 'lg:hidden')}>
                         <Hero
@@ -830,6 +839,7 @@ function Hero({
     images: { main: string | null; accent: string | null };
     onJoin: () => void;
 }) {
+    const area = useServiceArea();
     const s = store.settings;
     const branchLabel = useBranchLabel(store.branch?.location);
     const businessName = useBusinessName();
@@ -843,7 +853,7 @@ function Hero({
                 </p>
                 <div className="mt-1 flex items-center gap-3 sm:block sm:max-w-[60%]">
                     <h1 className="min-w-0 flex-1 font-display text-[clamp(1.3rem,6.4vw,1.75rem)] leading-[1.08] font-extrabold text-balance sm:text-[clamp(1.75rem,4.4vw,2.25rem)]">
-                        {customer ? `What’s your ${businessName} order today?` : `${businessName} favourites, delivered in Mabinay.`}
+                        {customer ? `What’s your ${businessName} order today?` : `${businessName} favourites, delivered in ${area.town}.`}
                     </h1>
                     {/* Plate: beside the headline on phones, out on the right edge from tablets up */}
                     {images.main && (
@@ -1037,6 +1047,7 @@ function WelcomeBar({
     onJoin: () => void;
     onDismiss: () => void;
 }) {
+    const area = useServiceArea();
     const logoUrl = useLogoUrl();
     const rewardsName = useRewardsName();
     const perk = !settings.delivery_enabled
@@ -1063,7 +1074,7 @@ function WelcomeBar({
                             Welcome! Earn <span className={highlight}>points on every order</span> with {rewardsName}.
                         </>
                     ) : (
-                        'Welcome! Order online for delivery or pickup in Mabinay.'
+                        `Welcome! Order online for delivery or pickup in ${area.town}.`
                     )}
                 </p>
                 <button
@@ -1087,11 +1098,12 @@ function WelcomeBar({
 }
 
 function StoreCard({ store }: { store: PageProps['store'] }) {
+    const area = useServiceArea();
     const branchLabel = useBranchLabel(store.branch?.location);
     return (
         <div className="rounded-2xl bg-shop-surface p-4 ring-1 ring-shop-line">
             <p className="font-display font-semibold">{branchLabel}</p>
-            <p className="mt-0.5 text-sm text-shop-muted">{store.branch?.address ?? 'Mabinay, Negros Oriental'}</p>
+            <p className="mt-0.5 text-sm text-shop-muted">{store.branch?.address ?? `${area.town}, ${area.province}`}</p>
             <ul className="mt-3 space-y-1.5 text-sm">
                 <li className="flex items-center gap-2">
                     <Clock3 className="h-4 w-4 text-shop-muted" /> {store.status.opens_at} – {store.status.closes_at}

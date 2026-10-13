@@ -52,7 +52,8 @@ class CustomerAddress extends Model
 
     public static function formatLocality(?string $barangay, ?string $municipality, ?string $province, ?string $zipCode): string
     {
-        $line = collect([$barangay, $municipality ?: 'Mabinay', $province ?: 'Negros Oriental'])->filter()->implode(', ');
+        $area = SystemSetting::serviceArea();
+        $line = collect([$barangay, $municipality ?: $area['town'], $province ?: $area['province']])->filter()->implode(', ');
 
         return trim($line.' '.($zipCode ?? ''));
     }

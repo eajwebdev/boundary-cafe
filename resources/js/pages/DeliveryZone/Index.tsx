@@ -1,6 +1,6 @@
 import { router, useForm } from '@inertiajs/react';
 import type { Map as LeafletMap } from 'leaflet';
-import { Bike, Clock, Crosshair, Gift, Loader2, MapPin, PencilLine, Save, ShoppingBag, Store, Timer, Trash2, Undo2 } from 'lucide-react';
+import { Bike, Clock, Crosshair, Gift, Loader2, MapPin, PencilLine, Plus, Save, ShoppingBag, Store, Timer, Trash2, Undo2, X } from 'lucide-react';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -12,12 +12,22 @@ import { cn } from '@/lib/utils';
 
 const ZoneEditorMap = lazy(() => import('./ZoneEditorMap'));
 
+interface Barangay {
+    id: number;
+    name: string;
+    municipality: string;
+    province: string;
+    is_deliverable: boolean;
+}
+
 interface Props {
     zone: { center: { lat: number; lng: number }; radius_km: number; uses_polygon: boolean; polygon: [number, number][] };
-    barangays: { id: number; name: string; is_deliverable: boolean }[];
+    barangays: Barangay[];
     settings: {
         enabled: boolean;
         branch_code: string;
+        service_area: string;
+        service_province: string;
         delivery_enabled: boolean;
         pickup_enabled: boolean;
         dine_in_enabled: boolean;
@@ -44,6 +54,8 @@ export default function DeliveryZone({ zone, barangays, settings, status, branch
     const form = useForm({
         enabled: settings.enabled,
         branch_code: settings.branch_code,
+        service_area: settings.service_area,
+        service_province: settings.service_province,
         delivery_enabled: settings.delivery_enabled,
         pickup_enabled: settings.pickup_enabled,
         dine_in_enabled: settings.dine_in_enabled,
@@ -163,7 +175,7 @@ export default function DeliveryZone({ zone, barangays, settings, status, branch
                                         if (c) set('center', { lat: Number(c.lat.toFixed(7)), lng: Number(c.lng.toFixed(7)) });
                                     }}
                                     className="flex h-8 items-center gap-1.5 rounded-lg border border-border px-2.5 text-xs font-semibold"
-                                    title="Use the middle of the map as the Mabinay centre"
+                                    title="Use the middle of the map as the delivery zone centre"
                                 >
                                     <Crosshair className="h-4 w-4" /> Set centre here
                                 </button>
@@ -220,9 +232,9 @@ export default function DeliveryZone({ zone, barangays, settings, status, branch
                             </Field>
                         </div>
                         <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
-                            Tip: OpenStreetMap has no mapped boundary for Mabinay, so trace the municipal border with “Draw boundary” (click each
-                            corner, then save) and tick “Use drawn boundary”. Until then the radius around the centre is used together with the
-                            barangay check.
+                            Tip: trace the {d.service_area} border with “Draw boundary” (click each corner, then save) and tick “Use drawn boundary”.
+                            Until then the radius around the centre is used together with the barangay check. Moving online ordering to another
+                            branch? Pick it below, set its town, move the centre and switch on that town’s barangays.
                         </p>
                     </section>
 
@@ -232,7 +244,11 @@ export default function DeliveryZone({ zone, barangays, settings, status, branch
                             <Toggle label="Accept online orders" checked={d.enabled} onChange={(v) => set('enabled', v)} />
                             <Toggle label="Offer delivery" checked={d.delivery_enabled} onChange={(v) => set('delivery_enabled', v)} />
                             <Toggle label="Offer takeout (pickup)" checked={d.pickup_enabled} onChange={(v) => set('pickup_enabled', v)} />
-                            <Toggle label="Offer dine-in (order from the table)" checked={d.dine_in_enabled} onChange={(v) => set('dine_in_enabled', v)} />
+                            <Toggle
+                                label="Offer dine-in (order from the table)"
+                                checked={d.dine_in_enabled}
+                                onChange={(v) => set('dine_in_enabled', v)}
+                            />
                             <Field label="Fulfilling branch">
                                 <select className={inputCls} value={d.branch_code} onChange={(e) => set('branch_code', e.target.value)}>
                                     {branches.map((b) => (
@@ -243,6 +259,25 @@ export default function DeliveryZone({ zone, barangays, settings, status, branch
                                 </select>
                             </Field>
                             <div className="grid grid-cols-2 gap-3">
+                                <Field label="Delivery town / city">
+                                    <input
+                                        className={inputCls}
+                                        value={d.service_area}
+                                        maxLength={60}
+                                        onChange={(e) => set('service_area', e.target.value)}
+                                    />
+                                </Field>
+                                <Field label="Province">
+                                    <input
+                                        className={inputCls}
+                                        value={d.service_province}
+                                        maxLength={60}
+                                        onChange={(e) => set('service_province', e.target.value)}
+                                    />
+                                </Field>
+                                <p className="col-span-2 -mt-1 text-[11px] text-muted-foreground">
+                                    Customers see “Delivering across {d.service_area || '…'}, {d.service_province || '…'}”.
+                                </p>
                                 <Field label="Delivery fee (₱)">
                                     <input
                                         className={inputCls}
@@ -343,36 +378,7 @@ export default function DeliveryZone({ zone, barangays, settings, status, branch
                 </div>
             </form>
 
-            {/* Barangays */}
-            <Panel
-                icon={MapPin}
-                title="Mabinay barangays"
-                actions={
-                    <span className="text-[11px] font-semibold text-muted-foreground">
-                        {deliverable} of {barangays.length} deliverable · tap to switch
-                    </span>
-                }
-                className="mt-4"
-            >
-                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
-                    {barangays.map((b) => (
-                        <button
-                            key={b.id}
-                            type="button"
-                            onClick={() => router.patch(`/delivery-zone/barangays/${b.id}`, {}, { preserveScroll: true })}
-                            className={cn(
-                                'flex h-9 items-center justify-between gap-2 rounded-lg border px-2.5 text-left text-xs font-semibold',
-                                b.is_deliverable
-                                    ? 'border-emerald-400/60 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
-                                    : 'border-border text-muted-foreground line-through',
-                            )}
-                        >
-                            <span className="truncate">{b.name}</span>
-                            <span className={cn('h-2 w-2 shrink-0 rounded-full', b.is_deliverable ? 'bg-emerald-500' : 'bg-zinc-400')} />
-                        </button>
-                    ))}
-                </div>
-            </Panel>
+            <BarangaysPanel barangays={barangays} town={settings.service_area} province={settings.service_province} />
         </AdminLayout>
     );
 }
@@ -387,5 +393,149 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
             <span>{label}</span>
             <Switch checked={checked} onCheckedChange={onChange} />
         </label>
+    );
+}
+
+/**
+ * Barangays customers can pick, grouped by town. Tap one to switch it on or off, switch a whole town at
+ * once (e.g. stop Mabinay when ordering moves to Tagukon), add a new town's barangays, or remove a mistake.
+ */
+function BarangaysPanel({ barangays, town, province }: { barangays: Barangay[]; town: string; province: string }) {
+    const add = useForm({ municipality: town, province, names: '', is_deliverable: true });
+    const towns = Object.entries(
+        barangays.reduce<Record<string, Barangay[]>>((groups, b) => {
+            (groups[b.municipality] ??= []).push(b);
+            return groups;
+        }, {}),
+    );
+    const deliverable = barangays.filter((b) => b.is_deliverable).length;
+    const addCount = add.data.names.split(/[\n,]+/).filter((n) => n.trim()).length;
+
+    return (
+        <Panel
+            icon={MapPin}
+            title="Barangays we deliver to"
+            actions={
+                <span className="text-[11px] font-semibold text-muted-foreground">
+                    {deliverable} of {barangays.length} deliverable · tap to switch
+                </span>
+            }
+            className="mt-4"
+        >
+            {towns.map(([name, list]) => {
+                const on = list.filter((b) => b.is_deliverable).length;
+                return (
+                    <div key={name} className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-bold">
+                                {name} <span className="font-normal text-muted-foreground">· {list[0]?.province}</span>
+                            </p>
+                            <span className="text-[11px] text-muted-foreground tabular-nums">
+                                {on} of {list.length} on
+                            </span>
+                            <div className="ml-auto flex gap-1.5">
+                                {[true, false].map((value) => (
+                                    <button
+                                        key={String(value)}
+                                        type="button"
+                                        disabled={value ? on === list.length : on === 0}
+                                        onClick={() =>
+                                            router.patch(
+                                                '/delivery-zone/towns',
+                                                { municipality: name, is_deliverable: value },
+                                                { preserveScroll: true },
+                                            )
+                                        }
+                                        className="h-7 rounded-lg border border-border px-2.5 text-[11px] font-semibold hover:bg-muted disabled:opacity-40"
+                                    >
+                                        {value ? 'All on' : 'All off'}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
+                            {list.map((b) => (
+                                <div
+                                    key={b.id}
+                                    className={cn(
+                                        'flex h-9 items-center rounded-lg border text-xs font-semibold',
+                                        b.is_deliverable
+                                            ? 'border-emerald-400/60 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
+                                            : 'border-border text-muted-foreground',
+                                    )}
+                                >
+                                    <button
+                                        type="button"
+                                        onClick={() => router.patch(`/delivery-zone/barangays/${b.id}`, {}, { preserveScroll: true })}
+                                        className="flex h-full min-w-0 flex-1 items-center justify-between gap-2 pl-2.5 text-left"
+                                        aria-label={`${b.name}: ${b.is_deliverable ? 'deliverable' : 'not deliverable'}, tap to switch`}
+                                    >
+                                        <span className={cn('truncate', !b.is_deliverable && 'line-through')}>{b.name}</span>
+                                        <span className={cn('h-2 w-2 shrink-0 rounded-full', b.is_deliverable ? 'bg-emerald-500' : 'bg-zinc-400')} />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            if (await confirmDialog({ title: `Remove ${b.name}?`, confirmLabel: 'Remove', tone: 'danger' }))
+                                                router.delete(`/delivery-zone/barangays/${b.id}`, {
+                                                    preserveScroll: true,
+                                                    onError: (errors) => toast.error(String(Object.values(errors)[0])),
+                                                });
+                                        }}
+                                        className="flex h-full w-7 shrink-0 items-center justify-center rounded-r-lg opacity-50 hover:bg-destructive/10 hover:text-destructive hover:opacity-100"
+                                        aria-label={`Remove ${b.name}`}
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            })}
+
+            <form
+                className="space-y-2.5 rounded-lg border border-dashed border-border p-3"
+                onSubmit={(e) => {
+                    e.preventDefault();
+                    add.post('/delivery-zone/barangays', { preserveScroll: true, onSuccess: () => add.setData('names', '') });
+                }}
+            >
+                <p className="flex items-center gap-1.5 text-sm font-bold">
+                    <Plus className="h-4 w-4 text-primary" /> Add barangays
+                </p>
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                    <Field label="Town / city">
+                        <input className={inputCls} value={add.data.municipality} onChange={(e) => add.setData('municipality', e.target.value)} />
+                    </Field>
+                    <Field label="Province">
+                        <input className={inputCls} value={add.data.province} onChange={(e) => add.setData('province', e.target.value)} />
+                    </Field>
+                </div>
+                <Field label="Barangay names — one per line or separated by commas">
+                    <textarea
+                        className={cn(inputCls, 'h-24 py-2')}
+                        value={add.data.names}
+                        onChange={(e) => add.setData('names', e.target.value)}
+                        placeholder={'Tagukon\nTapi\nBarangay 1 (Poblacion)'}
+                    />
+                </Field>
+                {Object.values(add.errors).map((error) => (
+                    <p key={error} className="text-xs text-destructive">
+                        {error}
+                    </p>
+                ))}
+                <div className="flex flex-wrap items-center gap-3">
+                    <Toggle label="Deliverable right away" checked={add.data.is_deliverable} onChange={(v) => add.setData('is_deliverable', v)} />
+                    <button
+                        type="submit"
+                        disabled={add.processing || addCount === 0 || !add.data.municipality.trim()}
+                        className="ml-auto flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground disabled:opacity-50"
+                    >
+                        {add.processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add {addCount || ''}
+                    </button>
+                </div>
+            </form>
+        </Panel>
     );
 }

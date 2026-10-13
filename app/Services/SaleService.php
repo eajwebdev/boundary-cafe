@@ -31,7 +31,11 @@ class SaleService
     /** Recorded on a sale that only fulfils a loyalty reward (nothing to pay). */
     public const REWARD_PAYMENT_METHOD = 'reward';
 
-    public function __construct(private LoyaltyService $loyalty, private LoyaltyRewardService $rewards) {}
+    public function __construct(
+        private LoyaltyService $loyalty,
+        private LoyaltyRewardService $rewards,
+        private DailyMissionService $missions,
+    ) {}
 
     /**
      * Charge a cart at the POS (optionally settling a pending table order).
@@ -170,6 +174,7 @@ class SaleService
             // A reward-only visit is not a purchase: nothing to earn, no birthday bonus.
             if ($customer && $saleItems !== []) {
                 $this->loyalty->applyToSale($sale, $customer, $user, $loyalty['points_to_redeem'], $loyalty['points_to_earn']);
+                $this->missions->recordSale($sale, $user);
             }
             $customer?->refresh();
 
@@ -290,6 +295,7 @@ class SaleService
             $this->loyalty->attachReservationToSale($order, $sale);
             if ($order->customer) {
                 $this->loyalty->earn($sale, $order->customer, $user, (int) $order->loyalty_points_to_earn);
+                $this->missions->recordSale($sale, $user);
             }
 
             $order->update(['sale_id' => $sale->id, 'payment_status' => 'paid']);
@@ -476,7 +482,11 @@ class SaleService
                 }
                 $cs->decrement('stock', $needed);
             }
-        } elseif ($product->product_type === 'made_to_order' && $product->recipeIngredients->isNotEmpty()) {
+        } elseif ($product->product_type === 'made_to_order') {
+            // Made-to-order items keep no stock of their own; with ingredient calculations off nothing is deducted.
+            if (! SystemSetting::ingredientTracking($branchId) || $product->recipeIngredients->isEmpty()) {
+                return;
+            }
             foreach ($product->recipeIngredients as $recipe) {
                 $ing = $recipe->ingredient;
                 $ingStock = $ing?->stocks->firstWhere('branch_id', $branchId);
@@ -521,6 +531,10 @@ class SaleService
                     $bi->componentProduct?->stocks->firstWhere('branch_id', $branchId)?->increment('stock', $bi->quantity * $item->quantity);
                 }
             } elseif ($product->product_type === 'made_to_order' && $product->recipeIngredients->isNotEmpty()) {
+                // Give back only what this sale actually took (null = an older sale, which always deducted).
+                if ($item->ingredients_deducted === false) {
+                    continue;
+                }
                 foreach ($product->recipeIngredients as $recipe) {
                     $recipe->ingredient?->stocks->firstWhere('branch_id', $branchId)?->increment('stock', $recipe->quantityNeededFor($item->quantity));
                 }

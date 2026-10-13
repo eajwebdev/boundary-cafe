@@ -5,6 +5,7 @@ import { useId } from 'react';
 import { Field, formatPhone, inputCls } from '@/components/storefront/AuthForms';
 import { ShopButton } from '@/components/storefront/ui';
 import { useBusinessName, useRewardsName } from '@/hooks/use-business-name';
+import { useServiceArea } from '@/hooks/use-service-area';
 import CustomerLayout from '@/layouts/CustomerLayout';
 
 interface Props {
@@ -14,6 +15,7 @@ interface Props {
 
 /** After the first Google/Facebook sign-in: confirm name, add the PH mobile number and barangay, accept the terms. */
 export default function CompleteRegistration({ profile, barangays }: Props) {
+    const area = useServiceArea();
     const id = useId();
     const businessName = useBusinessName();
     const rewardsName = useRewardsName();
@@ -112,7 +114,7 @@ export default function CompleteRegistration({ profile, barangays }: Props) {
                             </Field>
                         )}
                         <div className="grid gap-4 sm:grid-cols-2">
-                            <Field label="Barangay in Mabinay" error={e.barangay} htmlFor={`${id}-brgy`}>
+                            <Field label={`Barangay in ${area.town}`} error={e.barangay} htmlFor={`${id}-brgy`}>
                                 <select
                                     id={`${id}-brgy`}
                                     className={inputCls}

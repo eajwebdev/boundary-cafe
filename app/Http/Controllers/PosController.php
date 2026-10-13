@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\Promo;
 use App\Models\Sale;
 use App\Models\SystemSetting;
+use App\Services\DailyMissionService;
 use App\Services\LoyaltyRewardService;
 use App\Services\LoyaltyService;
 use App\Services\SaleService;
@@ -479,6 +480,7 @@ class PosController extends Controller
             $sale->onlineOrder?->update(['payment_status' => 'refunded']);
 
             $sale->update(['status' => 'voided', 'notes' => trim(($sale->notes ?? '').' | Voided: '.($request->input('reason', 'No reason provided')))]);
+            app(DailyMissionService::class)->saleVoided($sale, $user);
         });
 
         return back()->with('success', 'Sale voided and stock restored.');

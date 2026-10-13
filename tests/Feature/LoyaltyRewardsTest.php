@@ -237,6 +237,7 @@ class LoyaltyRewardsTest extends TestCase
 
     public function test_the_cashier_scans_a_reward_qr_and_completes_it_as_a_zero_sale(): void
     {
+        SystemSetting::set('inventory.ingredient_tracking', true); // this test is about recipe ingredients
         $claim = $this->claimBurgers(2);
         $bun = ProductStock::where('branch_id', $this->mabinay->id)->whereHas('product', fn ($q) => $q->where('name', 'Burger Bun'))->firstOrFail();
         $bunsBefore = (float) $bun->stock;
@@ -339,6 +340,7 @@ class LoyaltyRewardsTest extends TestCase
 
     public function test_voiding_a_reward_sale_returns_the_points_and_the_stock(): void
     {
+        SystemSetting::set('inventory.ingredient_tracking', true); // this test is about recipe ingredients
         $claim = $this->claimBurgers(2);
         $this->redeemAtPos($claim)->assertSessionHasNoErrors();
         $sale = Sale::latest('id')->firstOrFail();

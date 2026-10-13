@@ -110,7 +110,7 @@ class AuthController extends Controller
             'contact_number.regex' => 'Enter a valid PH mobile number, e.g. 0917 123 4567.',
             'contact_number.unique' => 'This mobile number already has an account. Please log in instead.',
             'email.unique' => 'This email already has an account. Please log in instead.',
-            'barangay.exists' => 'We currently deliver only within Mabinay. Please choose your barangay.',
+            'barangay.exists' => 'We currently deliver only within '.SystemSetting::serviceArea()['town'].'. Please choose your barangay.',
             'terms.accepted' => 'Please agree to the terms to continue.',
         ]);
 

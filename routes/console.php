@@ -11,3 +11,5 @@ Artisan::command('inspire', function () {
 // Unused reward QRs give their points back once they expire (they are also expired on the spot when scanned or viewed).
 Schedule::command('loyalty:expire-claims')->everyFiveMinutes()->withoutOverlapping();
 Schedule::command('loyalty:expire-points')->dailyAt('02:00')->withoutOverlapping();
+// Today's daily missions go out just after midnight (the first storefront visit hands them out if this did not run).
+Schedule::command('loyalty:assign-missions')->dailyAt('00:05')->withoutOverlapping();

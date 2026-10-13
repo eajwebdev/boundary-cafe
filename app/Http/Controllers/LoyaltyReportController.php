@@ -42,7 +42,7 @@ class LoyaltyReportController extends Controller
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId));
 
         $points = [
-            'issued' => (int) $ledger()->whereIn('type', [LoyaltyTransaction::TYPE_EARN, LoyaltyTransaction::TYPE_BONUS])->sum('points'),
+            'issued' => (int) $ledger()->whereIn('type', LoyaltyTransaction::ISSUED_TYPES)->sum('points'),
             'adjusted' => (int) $ledger()->where('type', LoyaltyTransaction::TYPE_ADJUSTMENT)->sum('points'),
             'redeemed_rewards' => (int) $redeemedClaims()->sum('points'),
             'redeemed_discount' => (int) abs($ledger()->where('type', LoyaltyTransaction::TYPE_REDEEM)->whereNull('reward_claim_id')->sum('points')),
@@ -59,7 +59,7 @@ class LoyaltyReportController extends Controller
         ];
 
         $branches = Branch::orderBy('name')->get(['id', 'name']);
-        $issuedByBranch = $ledger()->whereIn('type', [LoyaltyTransaction::TYPE_EARN, LoyaltyTransaction::TYPE_BONUS])
+        $issuedByBranch = $ledger()->whereIn('type', LoyaltyTransaction::ISSUED_TYPES)
             ->selectRaw('branch_id, SUM(points) as points')->groupBy('branch_id')->pluck('points', 'branch_id');
         $claimsByBranch = $redeemedClaims()
             ->selectRaw('branch_id, COUNT(*) as claims, SUM(points) as points, SUM(retail_value) as retail, SUM(cost_value) as cost')

@@ -26,6 +26,9 @@ use RuntimeException;
  */
 class OnlineOrderService
 {
+    /** Availability reported for items that never sell out on their own (e.g. made to order). */
+    private const UNLIMITED = 999;
+
     public function __construct(
         private LoyaltyService $loyalty,
         private SaleService $sales,
@@ -219,7 +222,12 @@ class OnlineOrderService
                 return $bi->quantity > 0 ? floor($stock / $bi->quantity) : 0;
             })->min();
         }
-        if ($p->product_type === 'made_to_order' && $p->recipeIngredients->isNotEmpty()) {
+        if ($p->product_type === 'made_to_order') {
+            // Without ingredient calculations a made-to-order item never sells out on its own.
+            if (! SystemSetting::ingredientTracking($branchId) || $p->recipeIngredients->isEmpty()) {
+                return (float) self::UNLIMITED;
+            }
+
             return (float) $p->recipeIngredients->map(function ($r) use ($branchId) {
                 $stock = (float) ($r->ingredient?->stocks->firstWhere('branch_id', $branchId)?->stock ?? 0);
 

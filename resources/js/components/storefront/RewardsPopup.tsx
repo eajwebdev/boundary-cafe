@@ -2,6 +2,7 @@ import { router } from '@inertiajs/react';
 import { Gift, Sparkles } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
+import MissionCard from '@/components/storefront/MissionCard';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { useRewardsName } from '@/hooks/use-business-name';
 import type { RewardsPopupData } from '@/lib/customer';
@@ -44,11 +45,13 @@ export default function RewardsPopup({ data, firstName }: { data: RewardsPopupDa
                         {greeting}, {firstName}!
                     </DialogTitle>
                     <DialogDescription className="mt-1 text-white/75">
-                        You have <span className="font-display text-xl font-bold text-white tabular-nums">{data.points.toLocaleString()}</span> points.
+                        You have <span className="font-display text-xl font-bold text-white tabular-nums">{data.points.toLocaleString()}</span>{' '}
+                        points.
                     </DialogDescription>
                 </div>
 
                 <div className="space-y-4 px-6 pt-5 pb-6">
+                    {data.mission && !data.mission.completed && <MissionCard mission={data.mission} />}
                     {hasAffordable ? (
                         <>
                             <p className="text-sm font-semibold">You can get these today — claim at any of our branches:</p>

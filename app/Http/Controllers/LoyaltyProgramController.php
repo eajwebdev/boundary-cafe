@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\LoyaltyRewardClaim;
 use App\Models\LoyaltyTransaction;
 use App\Models\SystemSetting;
+use App\Services\DailyMissionService;
 use App\Services\LoyaltyService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,7 +28,7 @@ class LoyaltyProgramController extends Controller
         'claim_expiry_minutes', 'points_expiry_months', 'tiers_enabled', 'birthday_bonus',
     ];
 
-    public function __construct(private LoyaltyService $loyalty) {}
+    public function __construct(private LoyaltyService $loyalty, private DailyMissionService $missions) {}
 
     public function index(): Response
     {
@@ -56,10 +57,15 @@ class LoyaltyProgramController extends Controller
                 'outstanding_points' => $outstanding,
                 'reserved_points' => (int) $members->sum('reserved_points'),
                 'pending_claims' => LoyaltyRewardClaim::reserved()->where('expires_at', '>', now())->count(),
-                'issued_30d' => (int) LoyaltyTransaction::whereIn('type', [LoyaltyTransaction::TYPE_EARN, LoyaltyTransaction::TYPE_BONUS])->where('created_at', '>=', $since)->sum('points'),
+                'issued_30d' => (int) LoyaltyTransaction::whereIn('type', LoyaltyTransaction::ISSUED_TYPES)->where('created_at', '>=', $since)->sum('points'),
                 'redeemed_30d' => (int) (clone $redeemed30d)->sum('points'),
                 'rewards_value_30d' => round((float) (clone $redeemed30d)->sum('retail_value'), 2),
                 'tier_counts' => $tierCounts,
+            ],
+            'missions' => [
+                ...$this->missions->settings(),
+                'max' => DailyMissionService::MAX_MISSIONS,
+                'stats' => $this->missions->stats(),
             ],
             'top_members' => $members->sortByDesc('lifetime_points_earned')->take(10)->map(fn ($m) => [
                 'id' => $m->id,

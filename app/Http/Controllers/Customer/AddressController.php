@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Customer;
 use App\Http\Controllers\Controller;
 use App\Models\Barangay;
 use App\Models\CustomerAddress;
+use App\Models\SystemSetting;
 use App\Services\DeliveryZoneService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -97,19 +98,21 @@ class AddressController extends Controller
             'formatted_address' => ['nullable', 'string', 'max:255'],
             'is_default' => ['nullable', 'boolean'],
         ], [
-            'barangay.exists' => 'We only deliver to Mabinay barangays.',
+            'barangay.exists' => 'We only deliver to '.SystemSetting::serviceArea()['town'].' barangays.',
             'landmark.required' => 'Add a landmark so our rider can find you, e.g. "Blue gate beside the chapel".',
             'zip_code.regex' => 'ZIP codes have 4 digits, e.g. 6207.',
         ]);
 
         // City and province always come from the barangay list, so they stay consistent.
-        $barangay = Barangay::where('name', $data['barangay'])->first();
-        $data['municipality'] = $barangay?->municipality ?? 'Mabinay';
-        $data['province'] = $barangay?->province ?? 'Negros Oriental';
+        // The same name can exist in two towns (e.g. Inapoy): prefer the one we deliver to.
+        $barangay = Barangay::where('name', $data['barangay'])->orderByDesc('is_deliverable')->first();
+        $area = SystemSetting::serviceArea();
+        $data['municipality'] = $barangay?->municipality ?? $area['town'];
+        $data['province'] = $barangay?->province ?? $area['province'];
         $data['zip_code'] = ($data['zip_code'] ?? null) ?: $barangay?->zip_code;
 
         if (! $this->zone->containsPoint((float) $data['lat'], (float) $data['lng'])) {
-            throw ValidationException::withMessages(['lat' => 'Sorry, we only deliver within Mabinay. Move the pin inside the delivery area.']);
+            throw ValidationException::withMessages(['lat' => "Sorry, we only deliver within {$area['town']}. Move the pin inside the delivery area."]);
         }
 
         return $data;

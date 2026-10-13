@@ -9,6 +9,7 @@ use App\Models\ProductStock;
 use App\Models\RecipeIngredient;
 use App\Models\Sale;
 use App\Models\Supplier;
+use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -106,6 +107,7 @@ class ProfitAnalyticsTest extends TestCase
 
     public function test_a_made_to_order_line_is_costed_from_its_recipe(): void
     {
+        SystemSetting::set('inventory.ingredient_tracking', true); // this test is about recipe ingredients
         $beans = Product::create(['name' => 'Beans', 'product_type' => 'standard', 'status' => 'active']);
         $milk = Product::create(['name' => 'Milk', 'product_type' => 'standard', 'status' => 'active']);
         $this->capital($beans, $this->branchA, 2);    // per gram
